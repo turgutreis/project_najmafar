@@ -27492,18 +27492,46 @@ function updateScannerUI(planet, dist) {
 // src/systems/universe.ts
 async function checkUniverseData() {
   try {
-    const res = await fetch("universe_data.json");
-    if (res.ok) {
-      const data = await res.json();
+    let data = null;
+    if (typeof window.api !== "undefined" && window.api.loadUniverseData) {
+      try {
+        const res = await window.api.loadUniverseData();
+        if (res && res.success && res.data) {
+          data = res.data;
+        }
+      } catch (err) {
+        console.warn("Najmafar: IPC universe load failed, falling back to fetch", err);
+      }
+    }
+    if (!data) {
+      try {
+        const res = await fetch("./universe_data.json");
+        if (res.ok) {
+          data = await res.json();
+        } else {
+          const resAlt = await fetch("universe_data.json");
+          if (resAlt.ok) {
+            data = await resAlt.json();
+          }
+        }
+      } catch (fetchErr) {
+        console.warn("Najmafar: Fetch universe load failed", fetchErr);
+      }
+    }
+    if (data && data.systems && data.systems.length > 0) {
       STATE.universe = data;
-      console.log("Najmafar: Quantum Universe Data loaded successfully!", data.name, data.systems.length);
+      const sysCount = data.systems.length;
+      const univName = data.name || "Najmafar Quanten-Galaxie";
+      console.log("Najmafar: Quantum Universe Data loaded successfully!", univName, sysCount);
       const statusDiv = document.getElementById("generation-status");
       if (statusDiv) {
-        statusDiv.innerText = `\uD83C\uDF0C Quanten-Universum aktiv: ${data.systems.length} Systeme geladen.`;
+        statusDiv.innerText = `\uD83C\uDF0C Quanten-Universum aktiv: ${sysCount} Systeme geladen.`;
         statusDiv.style.color = "#10b981";
       }
       clearActiveSystem();
       spawnPlanetsAndAsteroids();
+    } else {
+      console.warn("Najmafar: No systems found in universe_data.json");
     }
   } catch (e) {
     console.warn("Najmafar: Failed to load universe_data.json, fallback generation active.", e);

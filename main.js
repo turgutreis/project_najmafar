@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const { exec } = require('child_process');
 
 function createWindow() {
@@ -62,6 +63,20 @@ ipcMain.handle('generate-universe', async (event, apiKey, useQpu) => {
             }
         });
     });
+});
+
+// IPC Handler to Load Universe Data reliably from disk
+ipcMain.handle('load-universe-data', async () => {
+    try {
+        const filePath = path.join(__dirname, 'universe_data.json');
+        if (fs.existsSync(filePath)) {
+            const raw = fs.readFileSync(filePath, 'utf-8');
+            return { success: true, data: JSON.parse(raw) };
+        }
+        return { success: false, error: 'universe_data.json not found on disk' };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
 });
 
 // IPC Listener to Close App

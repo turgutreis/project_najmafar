@@ -8,20 +8,53 @@ import { addLogEntry } from '../ui/hud';
 
 export async function checkUniverseData() {
     try {
-        const res = await fetch('universe_data.json');
-        if (res.ok) {
-            const data = await res.json();
+        let data: any = null;
+
+        // 1. If running in Electron, load directly from filesystem via IPC (instant & 100% reliable)
+        if (typeof (window as any).api !== 'undefined' && (window as any).api.loadUniverseData) {
+            try {
+                const res = await (window as any).api.loadUniverseData();
+                if (res && res.success && res.data) {
+                    data = res.data;
+                }
+            } catch (err) {
+                console.warn("Najmafar: IPC universe load failed, falling back to fetch", err);
+            }
+        }
+
+        // 2. Browser / Fallback fetch
+        if (!data) {
+            try {
+                const res = await fetch('./universe_data.json');
+                if (res.ok) {
+                    data = await res.json();
+                } else {
+                    const resAlt = await fetch('universe_data.json');
+                    if (resAlt.ok) {
+                        data = await resAlt.json();
+                    }
+                }
+            } catch (fetchErr) {
+                console.warn("Najmafar: Fetch universe load failed", fetchErr);
+            }
+        }
+
+        if (data && data.systems && data.systems.length > 0) {
             STATE.universe = data;
-            console.log("Najmafar: Quantum Universe Data loaded successfully!", data.name, data.systems.length);
+            const sysCount = data.systems.length;
+            const univName = data.name || "Najmafar Quanten-Galaxie";
+            console.log("Najmafar: Quantum Universe Data loaded successfully!", univName, sysCount);
 
             const statusDiv = document.getElementById('generation-status');
             if (statusDiv) {
-                statusDiv.innerText = `🌌 Quanten-Universum aktiv: ${data.systems.length} Systeme geladen.`;
+                statusDiv.innerText = `🌌 Quanten-Universum aktiv: ${sysCount} Systeme geladen.`;
                 statusDiv.style.color = "#10b981";
             }
 
             clearActiveSystem();
             spawnPlanetsAndAsteroids();
+        } else {
+            console.warn("Najmafar: No systems found in universe_data.json");
         }
     } catch (e) {
         console.warn("Najmafar: Failed to load universe_data.json, fallback generation active.", e);
@@ -203,7 +236,7 @@ export function spawnPlanetsAndAsteroids() {
         const orbitSpeed = 0.045 / Math.sqrt(p.distance);
         const pColorCss = p.color.replace("0x", "#");
         const generated = generatePlanetAttributes(p);
-        
+
         let finalSpecies = p.species || generated.species;
         if (p.type === 'Habitable') {
             if (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0) {
