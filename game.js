@@ -2072,19 +2072,18 @@ function updateCollisions(dt) {
                 // Bounce direction (away from planet center)
                 _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
 
-                // 1. Force position correction: snap to surface immediately to prevent glitching inside
-                STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, colDistance + 0.15);
+                // 1. Force position correction: snap cleanly outside the collider radius
+                STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, colDistance + 0.6);
                 STATE.playerGroup.position.copy(STATE.playerPosition);
 
-                // 2. Reflect velocity
-                const dot = STATE.playerVelocity.dot(_bounceDir);
-                if (dot < 0) {
-                    STATE.playerVelocity.reflect(_bounceDir).multiplyScalar(0.4); // 40% rebound velocity
-                }
+                // 2. Elastic Repulsion Reflex: propel ship outward into safe orbit so it NEVER gets stuck
+                const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
+                const bounceForce = Math.max(16, Math.abs(currentOutwardSpeed) * 0.8 + 12);
+                STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
 
                 // 3. Trigger damage and logs only on cooldown
                 if (STATE.collisionCooldown === 0) {
-                    STATE.collisionCooldown = 1.0; // 1 second damage cooldown
+                    STATE.collisionCooldown = 1.2; // 1.2s collision damage immunity
 
                     // Hull damage (Chitin armor reduces damage by 50%)
                     const damage = STATE.mutations.armor.purchased ? 10 : 20;
@@ -2092,15 +2091,17 @@ function updateCollisions(dt) {
 
                     playCrashSound(); // Heavy crash sound effect
 
-                    // Skyrocket crew stress (balanced: mid-point 15)
-                    STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + 15));
+                    // Crew stress with neuro-therapist dampening
+                    const stressMult = (STATE.crewBuffs ? STATE.crewBuffs.stressDampening : 1.0);
+                    const stressAmount = (STATE.mutations.o2.purchased ? 7.5 : 15) * stressMult;
+                    STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + stressAmount));
 
                     if (STATE.mutations.armor.purchased) {
-                        addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall.`);
+                        addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall & stößt Schiff elastisch ab.`);
                     } else {
-                        addLogEntry("SYSTEM", `WARNUNG: Harte Kollision mit ${source.name}!`);
+                        addLogEntry("SYSTEM", `WARNUNG: Kollision mit ${source.name}! Organischer Abstoß-Reflex schleudert Schiff in den Orbit.`);
                     }
-                    addLogEntry("CREW", encryptCrewMessage("Capt. Miller", "Wir stürzen ab! Das ganze verdammte Schiff bebt!"));
+                    addLogEntry("CREW", encryptCrewMessage("Capt. Miller", "Wir prallen ab! Das ganze Schiff bebt!"));
                 }
             }
         }
@@ -2360,14 +2361,22 @@ function updateCrewSimulation(dt) {
         loneTxt.innerText = `${Math.round(STATE.loneliness)}% (${loneState})`;
     }
 
-    // Passive decay of bioEnergy over time
-    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.40 * dt);
+    // Emergency Bio-Photosynthesis Trickle (Absorbs cosmic background radiation when energy is critically low)
+    if (STATE.bioEnergy < 15) {
+        const regenRate = STATE.bioEnergy <= 0 ? 1.5 : 0.8;
+        STATE.bioEnergy = Math.min(15, STATE.bioEnergy + regenRate * dt);
+    }
 
-    // Core damages if no energy left
+    // Passive decay of bioEnergy over time (stops decaying below 15)
+    if (STATE.bioEnergy > 15) {
+        STATE.bioEnergy = Math.max(15, STATE.bioEnergy - 0.35 * dt);
+    }
+
+    // Core damages only if completely starved
     if (STATE.bioEnergy <= 0) {
-        STATE.health = Math.max(0, STATE.health - 2 * dt);
-        if (Math.random() < 0.005) {
-            addLogEntry("SYSTEM", "Kritischer Nahrungsmangel. Organismus verhungert (-2 Kernintegrität).");
+        STATE.health = Math.max(0, STATE.health - 1.2 * dt);
+        if (Math.random() < 0.004) {
+            addLogEntry("SYSTEM", "Kritischer Nahrungsmangel. Organismus verhungert (-1.2 Kernintegrität).");
         }
     }
 
@@ -3144,16 +3153,19 @@ function pollGamepadControls(dt) {
     if (STATE.keys.s) _inputDir.z += 1;
     if (STATE.keys.a) _inputDir.x -= 1;
     if (STATE.keys.d) _inputDir.x += 1;
+    
+    if (_inputDir.lengthSq() === 0) {
+        _inputDir.set(stickX, 0, stickY);
+    }
 
-    const isThrusting = _inputDir.lengthSq() > 0 || Math.abs(stickX) > 0 || Math.abs(stickY) > 0;
+    const isThrusting = _inputDir.lengthSq() > 0;
     if (isThrusting) {
-        if (_inputDir.lengthSq() === 0) {
-            _inputDir.set(stickX, 0, stickY);
-        }
         _inputDir.normalize();
 
         const thrustMult = (STATE.crewBuffs ? STATE.crewBuffs.thrust : 1.0);
-        const thrust = STATE.thrustStrength * thrustMult * dt;
+        // Ensure limp-mode maneuvering (50% thrust) even at low energy so the player is never immobilized
+        const energyFactor = STATE.bioEnergy > 0 ? 1.0 : 0.5;
+        const thrust = STATE.thrustStrength * thrustMult * energyFactor * dt;
         STATE.playerVelocity.x += _inputDir.x * thrust;
         STATE.playerVelocity.z += _inputDir.z * thrust;
 
@@ -3170,6 +3182,8 @@ function pollGamepadControls(dt) {
         if (typeof spawnEngineParticle === 'function') {
             spawnEngineParticle();
         }
+    } else {
+        setThrusterSound(false);
     }
 
     // 2. Left Trigger (Button 6) = Hold Telepathic Calming Field
