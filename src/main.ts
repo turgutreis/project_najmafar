@@ -90,8 +90,8 @@ function animate(time: number) {
 }
 
 function init() {
-    const container = document.getElementById('webgl-container');
-    if (!container) return;
+    console.log("Najmafar: Initializing 3D engine and game systems...");
+    const container = document.getElementById('webgl-container') || document.getElementById('game-container') || document.body;
 
     // 1. Three.js Scene Setup
     initScene(container);
@@ -115,6 +115,7 @@ function init() {
 
     // 6. Start Render Loop
     requestAnimationFrame(animate);
+    console.log("Najmafar: Game engine running!");
 }
 
 function setupMenuListeners() {

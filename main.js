@@ -20,6 +20,10 @@ function createWindow() {
 
     win.loadFile('index.html');
     win.setMenuBarVisibility(false);
+
+    win.webContents.on('console-message', (event, level, message) => {
+        console.log(`[Renderer] ${message}`);
+    });
 }
 
 app.whenReady().then(() => {

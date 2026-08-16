@@ -5,7 +5,9 @@ export let camera: THREE.PerspectiveCamera;
 export let renderer: THREE.WebGLRenderer;
 export let starfield: THREE.Points;
 
-export function initScene(container: HTMLElement) {
+export function initScene(container?: HTMLElement) {
+    const target = container || document.getElementById('webgl-container') || document.getElementById('game-container') || document.body;
+
     // Scene
     scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x030712, 0.003);
@@ -19,7 +21,7 @@ export function initScene(container: HTMLElement) {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setClearColor(0x030712);
-    container.appendChild(renderer.domElement);
+    target.appendChild(renderer.domElement);
 
     // Lights
     const ambientLight = new THREE.AmbientLight(0x0f172a, 1.5);

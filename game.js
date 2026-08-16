@@ -26330,6 +26330,7 @@ var camera;
 var renderer;
 var starfield;
 function initScene(container) {
+  const target = container || document.getElementById("webgl-container") || document.getElementById("game-container") || document.body;
   scene = new Scene;
   scene.fog = new FogExp2(198418, 0.003);
   camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -26338,7 +26339,7 @@ function initScene(container) {
   renderer = new WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(198418);
-  container.appendChild(renderer.domElement);
+  target.appendChild(renderer.domElement);
   const ambientLight = new AmbientLight(988970, 1.5);
   scene.add(ambientLight);
   const dirLight = new DirectionalLight(3718648, 1);
@@ -29434,9 +29435,8 @@ function animate(time) {
   requestAnimationFrame(animate);
 }
 function init() {
-  const container = document.getElementById("webgl-container");
-  if (!container)
-    return;
+  console.log("Najmafar: Initializing 3D engine and game systems...");
+  const container = document.getElementById("webgl-container") || document.getElementById("game-container") || document.body;
   initScene(container);
   createPlayerMesh();
   initTrajectory();
@@ -29448,6 +29448,7 @@ function init() {
   checkUniverseData();
   setupMenuListeners();
   requestAnimationFrame(animate);
+  console.log("Najmafar: Game engine running!");
 }
 function setupMenuListeners() {
   const startBtn = document.getElementById("start-game-btn");
