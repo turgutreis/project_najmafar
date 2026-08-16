@@ -77,6 +77,7 @@ const bgMusic = new Audio('assets/The Ur-Quan Masters - Space.mp3');
 bgMusic.loop = true;
 bgMusic.volume = 0.35;
 let musicPlaying = false;
+let musicUserMuted = false;
 
 // --- STORY SYSTEM ---
 const STORY_LOGS = [
@@ -1299,16 +1300,24 @@ function setupControls() {
         btn.addEventListener('click', toggleTelepathy);
     }
 
-    // Music Toggle Button
+    // Music Toggle Buttons (HUD & Main Menu)
     const musicBtn = document.getElementById('music-toggle-btn');
     if (musicBtn) {
-        musicBtn.addEventListener('click', toggleMusic);
+        musicBtn.addEventListener('click', () => toggleMusic());
     }
 
-    // Auto-start music on first interaction (required by browsers)
-    const startAudioOnInteraction = () => {
-        if (!musicPlaying) {
+    const menuMusicBtn = document.getElementById('menu-music-toggle-btn');
+    if (menuMusicBtn) {
+        menuMusicBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             toggleMusic();
+        });
+    }
+
+    // Auto-start music on first interaction (only if not explicitly muted by user)
+    const startAudioOnInteraction = () => {
+        if (!musicPlaying && !musicUserMuted) {
+            toggleMusic(true);
         }
         window.removeEventListener('click', startAudioOnInteraction);
         window.removeEventListener('keydown', startAudioOnInteraction);
@@ -1395,29 +1404,53 @@ function updateMutationUI() {
     });
 }
 
-function toggleMusic() {
-    const musicBtn = document.getElementById('music-toggle-btn');
-    if (!musicPlaying) {
+function toggleMusic(explicitState = null) {
+    const shouldPlay = explicitState !== null ? explicitState : !musicPlaying;
+
+    if (shouldPlay) {
+        musicUserMuted = false;
         bgMusic.play()
             .then(() => {
                 musicPlaying = true;
-                if (musicBtn) {
-                    musicBtn.classList.add('playing');
-                    musicBtn.innerText = "🔊 Musik: An (Star Control 2)";
-                }
+                updateMusicButtonsUI();
                 addLogEntry("SYSTEM", "Hintergrundmusik aktiviert: Star Control 2 Space Theme.");
             })
             .catch(err => {
                 console.log("Audio play blocked by browser. Click page to start.", err);
             });
     } else {
+        musicUserMuted = true;
         bgMusic.pause();
         musicPlaying = false;
-        if (musicBtn) {
+        updateMusicButtonsUI();
+        addLogEntry("SYSTEM", "Hintergrundmusik pausiert.");
+    }
+}
+
+function updateMusicButtonsUI() {
+    const musicBtn = document.getElementById('music-toggle-btn');
+    const menuMusicBtn = document.getElementById('menu-music-toggle-btn');
+
+    if (musicBtn) {
+        if (musicPlaying) {
+            musicBtn.classList.add('playing');
+            musicBtn.innerText = "🔊 Musik: An (Star Control 2)";
+        } else {
             musicBtn.classList.remove('playing');
             musicBtn.innerText = "🔇 Musik: Aus";
         }
-        addLogEntry("SYSTEM", "Hintergrundmusik pausiert.");
+    }
+
+    if (menuMusicBtn) {
+        if (musicPlaying) {
+            menuMusicBtn.classList.add('music-active');
+            menuMusicBtn.classList.remove('music-muted');
+            menuMusicBtn.innerText = "🔊 Musik: An";
+        } else {
+            menuMusicBtn.classList.add('music-muted');
+            menuMusicBtn.classList.remove('music-active');
+            menuMusicBtn.innerText = "🔇 Musik: Aus";
+        }
     }
 }
 

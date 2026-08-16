@@ -6,7 +6,8 @@
     user-select: none;
 }
 
-body, html {
+body,
+html {
     width: 100%;
     height: 100%;
     overflow: hidden;
@@ -54,20 +55,29 @@ body, html {
     position: absolute;
     width: 100%;
     height: 100%;
-    background: repeating-radial-gradient(
-        circle,
-        rgba(168, 85, 247, 0.03) 0px,
-        rgba(168, 85, 247, 0.03) 10px,
-        transparent 11px,
-        transparent 20px
-    );
+    background: repeating-radial-gradient(circle,
+            rgba(168, 85, 247, 0.03) 0px,
+            rgba(168, 85, 247, 0.03) 10px,
+            transparent 11px,
+            transparent 20px);
     animation: telepathy-pulse 8s linear infinite;
 }
 
 @keyframes telepathy-pulse {
-    0% { transform: scale(1); opacity: 0.7; }
-    50% { transform: scale(1.05); opacity: 1; }
-    100% { transform: scale(1); opacity: 0.7; }
+    0% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+
+    50% {
+        transform: scale(1.05);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
 }
 
 /* HUD Overlay Panels */
@@ -78,11 +88,12 @@ body, html {
     width: 100%;
     height: 100%;
     z-index: 10;
-    pointer-events: none; /* Let clicks pass through to canvas if not on a panel */
+    pointer-events: none;
+    /* Let clicks pass through to canvas if not on a panel */
     display: grid;
     grid-template-columns: 310px 1fr 360px;
     grid-template-rows: 85px 1fr auto;
-    grid-template-areas: 
+    grid-template-areas:
         "header header header"
         "left main right"
         "left bottom right";
@@ -97,7 +108,8 @@ body, html {
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 12px;
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-    pointer-events: auto; /* Enable interaction with panels */
+    pointer-events: auto;
+    /* Enable interaction with panels */
     transition: all 0.3s ease;
 }
 
@@ -282,8 +294,13 @@ body, html {
 }
 
 @keyframes text-pulse {
-    from { opacity: 0.6; }
-    to { opacity: 1; }
+    from {
+        opacity: 0.6;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .stress-container {
@@ -363,8 +380,13 @@ body, html {
 }
 
 @keyframes btn-active-pulse {
-    from { box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); }
-    to { box-shadow: 0 0 30px rgba(168, 85, 247, 0.7); }
+    from {
+        box-shadow: 0 0 15px rgba(168, 85, 247, 0.4);
+    }
+
+    to {
+        box-shadow: 0 0 30px rgba(168, 85, 247, 0.7);
+    }
 }
 
 .btn-glow {
@@ -436,7 +458,7 @@ body, html {
     font-size: 0.7rem;
     font-weight: 700;
     color: #f3f4f6;
-    box-shadow: 0 2px 0 rgba(0,0,0,0.4);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
     min-width: 24px;
     text-align: center;
 }
@@ -459,8 +481,15 @@ body, html {
 }
 
 @keyframes fade-in {
-    from { opacity: 0; transform: translateY(5px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .log-entry.system {
@@ -681,17 +710,32 @@ body, html {
 }
 
 @keyframes pulse-green-glow {
-    from { opacity: 0.6; r: 7.5px; }
-    to { opacity: 1; r: 9.5px; }
+    from {
+        opacity: 0.6;
+        r: 7.5px;
+    }
+
+    to {
+        opacity: 1;
+        r: 9.5px;
+    }
 }
 
-#svg-synapses-1, #svg-synapses-2 {
+#svg-synapses-1,
+#svg-synapses-2 {
     animation: pulse-pink-glow 1.5s infinite alternate;
 }
 
 @keyframes pulse-pink-glow {
-    from { opacity: 0.4; stroke-width: 1.5px; }
-    to { opacity: 1; stroke-width: 3px; }
+    from {
+        opacity: 0.4;
+        stroke-width: 1.5px;
+    }
+
+    to {
+        opacity: 1;
+        stroke-width: 3px;
+    }
 }
 
 #svg-translator {
@@ -699,8 +743,17 @@ body, html {
 }
 
 @keyframes pulse-blue-glow {
-    from { opacity: 0.6; transform: scale(0.95); transform-origin: 100px 39px; }
-    to { opacity: 1; transform: scale(1.1); transform-origin: 100px 39px; }
+    from {
+        opacity: 0.6;
+        transform: scale(0.95);
+        transform-origin: 100px 39px;
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1.1);
+        transform-origin: 100px 39px;
+    }
 }
 
 /* Responsive adjustments */
@@ -708,7 +761,7 @@ body, html {
     #hud-container {
         grid-template-columns: 1fr;
         grid-template-rows: auto auto auto auto auto;
-        grid-template-areas: 
+        grid-template-areas:
             "header"
             "left"
             "main"
@@ -716,21 +769,25 @@ body, html {
             "right";
         overflow-y: auto;
     }
-    
-    .hud-right, .hud-left {
+
+    .hud-right,
+    .hud-left {
         max-height: 400px;
     }
 }
 
 /* --- MAIN MENU & HUD FADE STYLES --- */
-.hud-header, .hud-bottom, .hud-right, .hud-left {
+.hud-header,
+.hud-bottom,
+.hud-right,
+.hud-left {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.8s ease;
 }
 
-body.game-started .hud-header, 
-body.game-started .hud-bottom, 
+body.game-started .hud-header,
+body.game-started .hud-bottom,
 body.game-started .hud-right,
 body.game-started .hud-left {
     opacity: 1;
@@ -772,8 +829,15 @@ body.game-started .hud-left {
 }
 
 @keyframes menuGlow {
-    0% { box-shadow: 0 0 30px rgba(56, 189, 248, 0.05); border-color: rgba(56, 189, 248, 0.15); }
-    100% { box-shadow: 0 0 50px rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.3); }
+    0% {
+        box-shadow: 0 0 30px rgba(56, 189, 248, 0.05);
+        border-color: rgba(56, 189, 248, 0.15);
+    }
+
+    100% {
+        box-shadow: 0 0 50px rgba(168, 85, 247, 0.15);
+        border-color: rgba(168, 85, 247, 0.3);
+    }
 }
 
 .menu-title {
@@ -791,8 +855,13 @@ body.game-started .hud-left {
 }
 
 @keyframes titlePulse {
-    0% { filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.4)); }
-    100% { filter: drop-shadow(0 0 20px rgba(168, 85, 247, 0.7)); }
+    0% {
+        filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.4));
+    }
+
+    100% {
+        filter: drop-shadow(0 0 20px rgba(168, 85, 247, 0.7));
+    }
 }
 
 .menu-subtitle {
@@ -848,6 +917,26 @@ body.game-started .hud-left {
     border-color: rgba(56, 189, 248, 0.5);
     color: #ffffff;
     transform: translateY(-2px);
+}
+
+.menu-btn.music-active {
+    border-color: rgba(16, 185, 129, 0.45);
+    color: #10b981;
+}
+
+.menu-btn.music-active:hover {
+    border-color: #10b981;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+}
+
+.menu-btn.music-muted {
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+}
+
+.menu-btn.music-muted:hover {
+    border-color: #ef4444;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.25);
 }
 
 .menu-credits {
@@ -1018,8 +1107,7 @@ body.game-started .hud-left {
     border: 1px solid rgba(168, 85, 247, 0.35);
     border-radius: 16px;
     padding: 1.5rem 1.8rem;
-    width: 95vw;
-    max-width: 1440px;
+    width: 150vw;
     height: 88vh;
     box-shadow: 0 0 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(168, 85, 247, 0.15);
     display: flex;
@@ -1237,19 +1325,27 @@ body.game-started .hud-left {
     position: absolute;
     width: 200%;
     height: 200%;
-    background-image: 
+    background-image:
         radial-gradient(circle at center, rgba(168, 85, 247, 0.15) 0%, transparent 70%),
-        linear-gradient(rgba(255,255,255,0.01) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.01) 1px, transparent 1px);
+        linear-gradient(rgba(255, 255, 255, 0.01) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
     background-size: 100% 100%, 30px 30px, 30px 30px;
     background-position: center;
     animation: warpGridSpin 10s infinite linear;
 }
 
 @keyframes warpGridSpin {
-    0% { transform: translate(-25%, -25%) rotate(0deg) scale(1.0); }
-    50% { transform: translate(-25%, -25%) rotate(180deg) scale(1.5); }
-    100% { transform: translate(-25%, -25%) rotate(360deg) scale(1.0); }
+    0% {
+        transform: translate(-25%, -25%) rotate(0deg) scale(1.0);
+    }
+
+    50% {
+        transform: translate(-25%, -25%) rotate(180deg) scale(1.5);
+    }
+
+    100% {
+        transform: translate(-25%, -25%) rotate(360deg) scale(1.0);
+    }
 }
 
 .warp-vortex {
@@ -1263,8 +1359,15 @@ body.game-started .hud-left {
 }
 
 @keyframes vortexPulse {
-    from { transform: scale(0.6) rotate(0deg); opacity: 0.5; }
-    to { transform: scale(1.3) rotate(180deg); opacity: 0.95; }
+    from {
+        transform: scale(0.6) rotate(0deg);
+        opacity: 0.5;
+    }
+
+    to {
+        transform: scale(1.3) rotate(180deg);
+        opacity: 0.95;
+    }
 }
 
 .warp-text-container {
@@ -1285,8 +1388,15 @@ body.game-started .hud-left {
 }
 
 @keyframes textFlash {
-    0% { opacity: 0.7; transform: scale(0.98); }
-    100% { opacity: 1; transform: scale(1.02); }
+    0% {
+        opacity: 0.7;
+        transform: scale(0.98);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1.02);
+    }
 }
 
 .warp-status {
@@ -1319,13 +1429,15 @@ body.game-started .hud-left {
     gap: 10px;
 }
 
-.nearest-planet-info, .nearest-planet-dist {
+.nearest-planet-info,
+.nearest-planet-dist {
     display: flex;
     justify-content: space-between;
     font-size: 0.8rem;
 }
 
-.nearest-planet-info .label, .nearest-planet-dist .label {
+.nearest-planet-info .label,
+.nearest-planet-dist .label {
     color: #94a3b8;
 }
 
@@ -1543,7 +1655,8 @@ body.game-started .hud-left {
 }
 
 /* --- COLLAPSIBLE PANELS & TRANSITIONS --- */
-.hud-left, .hud-right {
+.hud-left,
+.hud-right {
     position: relative;
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
 }
@@ -1689,8 +1802,13 @@ body.game-started .hud-left {
 }
 
 @keyframes radar-sweep {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* --- GALAXY MAP TRIGGER BUTTON (LEFT DOCK) --- */
@@ -1728,18 +1846,22 @@ body.game-started .hud-left {
         width: 95%;
         max-width: 600px;
     }
+
     .map-main {
         grid-template-columns: 1fr;
         grid-template-rows: 1.2fr 1fr;
         gap: 12px;
     }
+
     .system-details-panel {
         padding: 1rem;
     }
+
     .val-planets-list {
         max-height: 80px;
         margin-bottom: 0.8rem;
     }
+
     .warp-btn {
         padding: 8px 12px;
         font-size: 0.8rem;
@@ -1968,8 +2090,13 @@ body.game-started .hud-left {
 }
 
 @keyframes psio-pulse-glow {
-    0% { box-shadow: 0 0 8px rgba(217, 70, 239, 0.2); }
-    100% { box-shadow: 0 0 22px rgba(217, 70, 239, 0.6); }
+    0% {
+        box-shadow: 0 0 8px rgba(217, 70, 239, 0.2);
+    }
+
+    100% {
+        box-shadow: 0 0 22px rgba(217, 70, 239, 0.6);
+    }
 }
 
 .compass-beacon-icon {
@@ -1978,8 +2105,13 @@ body.game-started .hud-left {
 }
 
 @keyframes beacon-bounce {
-    0% { transform: scale(0.9); }
-    100% { transform: scale(1.15); }
+    0% {
+        transform: scale(0.9);
+    }
+
+    100% {
+        transform: scale(1.15);
+    }
 }
 
 .compass-info {
@@ -2110,6 +2242,3 @@ body.game-started .hud-left {
     font-size: 0.65rem;
     color: #38bdf8;
 }
-
-
-
