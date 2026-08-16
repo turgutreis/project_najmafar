@@ -1059,6 +1059,15 @@ function spawnPlanetsAndAsteroids() {
         // Save Kepler orbit specs & scan details
         const orbitSpeed = 0.2 / Math.sqrt(p.distance); // outer planets orbit slower!
         const pColorCss = p.color.replace("0x", "#");
+        const generated = generatePlanetAttributes(p);
+        
+        let finalSpecies = p.species || generated.species;
+        if (p.type === 'Habitable') {
+            if (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0) {
+                finalSpecies = generated.species;
+            }
+        }
+
         const planetEntry = {
             mesh: planetGroup,
             bodyMesh: mesh,
@@ -1076,12 +1085,13 @@ function spawnPlanetsAndAsteroids() {
             colorCss: pColorCss,
             isMoon: false,
             scanned: false,
-            attributes: (p.temp && p.atmos) ? {
-                atmos: p.atmos,
-                temp: p.temp,
-                bio: p.bio,
-                res: p.res
-            } : generatePlanetAttributes(p)
+            attributes: {
+                atmos: p.atmos || generated.atmos,
+                temp: p.temp || generated.temp,
+                bio: p.bio || generated.bio,
+                res: p.res || generated.res,
+                species: finalSpecies
+            }
         };
         activePlanets.push(planetEntry);
 
@@ -1644,10 +1654,17 @@ function updatePhysics(dt) {
                     document.getElementById('scan-planet-resources').innerText = STATE.scanningPlanet.attributes.res;
                 }
 
-                // Triggert story progress chatlog occasionally!
-                if (Math.random() > 0.3) {
-                    addLogEntry("CREW", encryptCrewMessage("Dr. Song", `Unsere Sensorfrequenzen wurden überlagert... Da misst jemand die Kruste von ${STATE.scanningPlanet.name}! Ist das eine tektonische Sonde?!`));
+                // Check sentient species presence and notify player
+                if (STATE.scanningPlanet.attributes && STATE.scanningPlanet.attributes.species && STATE.scanningPlanet.attributes.species.population > 0) {
+                    const spec = STATE.scanningPlanet.attributes.species;
+                    addLogEntry("SYSTEM", `PSIONISCHER BEFUND: ${spec.name} (${spec.population} Wesen) auf ${STATE.scanningPlanet.name} erfasst! [F] zum Entführen drücken.`);
                 }
+
+                // Trigger update scanner UI
+                const dx = STATE.playerPosition.x - STATE.scanningPlanet.mesh.position.x;
+                const dz = STATE.playerPosition.z - STATE.scanningPlanet.mesh.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                updateScannerUI(STATE.scanningPlanet, dist);
 
                 STATE.scanningPlanet = null;
                 STATE.scanProgress = 0;
@@ -3153,7 +3170,7 @@ function updateScannerUI(closest, dist) {
         if (closest.attributes && closest.attributes.species && closest.attributes.species.population > 0) {
             if (speciesRow) {
                 speciesRow.style.display = 'flex';
-                speciesSpan.innerText = `${closest.attributes.species.name} (${closest.attributes.species.population} Individuen)`;
+                speciesSpan.innerHTML = `<strong style="color: #d946ef;">${closest.attributes.species.name}</strong> (${closest.attributes.species.population} Wesen)`;
             }
             if (abductBtn) {
                 abductBtn.style.display = 'block';
