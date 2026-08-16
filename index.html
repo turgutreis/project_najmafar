@@ -95,6 +95,7 @@
                         <div class="detail-row"><span class="label">Sternentyp:</span> <span id="val-star-type" class="val">-</span></div>
                         <div class="detail-row"><span class="label">Masse:</span> <span id="val-star-mass" class="val">-</span></div>
                         <div class="detail-row"><span class="label">Planeten:</span> <span id="val-planet-count" class="val">0</span></div>
+                        <div class="detail-row"><span class="label">Gedanken-Echo:</span> <span id="detail-psionic-resonance" class="val">-</span></div>
                         
                         <div class="planets-list-header">Orbitaler Sensor-Scan:</div>
                         <ul id="val-planets-list" class="val-planets-list">
@@ -127,6 +128,17 @@
 
     <!-- The WebGL Canvas for 3D simulation -->
     <div id="canvas-container"></div>
+
+    <!-- Psionic Compass HUD (Direction to living minds) -->
+    <div id="psionic-compass-hud" class="psionic-compass-hud" style="display: none;">
+        <div class="compass-beacon-icon">🧠</div>
+        <div class="compass-info">
+            <span class="compass-label">Gedanken-Echo:</span>
+            <span id="compass-planet-name" class="compass-target">-</span>
+            <span id="compass-distance-text" class="compass-dist">-</span>
+        </div>
+        <div id="compass-arrow-needle" class="compass-arrow">▲</div>
+    </div>
 
     <!-- Telepathic Overlay Effect -->
     <div id="telepathic-overlay" class="inactive">
@@ -184,8 +196,9 @@
                 <canvas id="minimap-canvas" width="220" height="220"></canvas>
             </div>
 
-            <!-- Galaxy Map Button -->
+            <!-- Galaxy Map & Sonar Action Buttons -->
             <button id="galaxy-map-btn" class="galaxy-map-trigger-btn">🌌 Galaxie-Karte [M]</button>
+            <button id="psionic-sonar-btn" class="psionic-sonar-trigger-btn">📡 Psionischer Ruf [Q]</button>
             
             <!-- Scan Action Box -->
             <div class="scan-action-box">

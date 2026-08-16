@@ -115,6 +115,8 @@ let activePlanets = [];
 let scanVisualMesh = null;
 let harvestBeamMesh = null;
 let abductBeamMesh = null;
+let sonarWaveMesh = null;
+let sonarTimer = 0;
 let harvestOsc = null, harvestGain = null, harvestFilter = null;
 let abductOsc = null, abductGain = null, abductFilter = null;
 let minimapCanvas = null;
@@ -1231,6 +1233,9 @@ function setupControls() {
         if (key === 'm') {
             toggleGalaxyMap();
         }
+        if (key === 'q') {
+            triggerPsionicSonar();
+        }
         if (key === 'f') {
             if (STATE.nearestPlanet) {
                 const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
@@ -1507,6 +1512,47 @@ function updatePhysics(dt) {
 
     STATE.nearestPlanet = closestPlanet;
     updateScannerUI(closestPlanet, minDist);
+
+    // Update Psionic Compass (Points toward closest sentient planet in system)
+    const compassHud = document.getElementById('psionic-compass-hud');
+    if (compassHud) {
+        const livingPlanet = activePlanets.find(p => p.attributes && p.attributes.species && p.attributes.species.population > 0);
+        if (livingPlanet) {
+            compassHud.style.display = 'flex';
+            const cdx = livingPlanet.mesh.position.x - STATE.playerPosition.x;
+            const cdz = livingPlanet.mesh.position.z - STATE.playerPosition.z;
+            const cdist = Math.sqrt(cdx * cdx + cdz * cdz);
+
+            // Angle in screen space
+            const angle = Math.atan2(cdz, cdx) - Math.PI / 2;
+
+            const nameEl = document.getElementById('compass-planet-name');
+            const distEl = document.getElementById('compass-distance-text');
+            const needleEl = document.getElementById('compass-arrow-needle');
+
+            if (nameEl) nameEl.innerText = `${livingPlanet.name} (${livingPlanet.attributes.species.name})`;
+            if (distEl) distEl.innerText = `Distanz: ${cdist.toFixed(0)} Einheiten`;
+            if (needleEl) needleEl.style.transform = `rotate(${angle * (180 / Math.PI)}deg)`;
+        } else {
+            compassHud.style.display = 'none';
+        }
+    }
+
+    // Animate Sonar Wave expansion
+    if (sonarWaveMesh && sonarTimer > 0) {
+        sonarTimer -= dt;
+        const progress = 1.0 - (sonarTimer / 1.0);
+        const currentScale = 1.0 + progress * 150.0;
+        sonarWaveMesh.scale.set(currentScale, currentScale, currentScale);
+        sonarWaveMesh.material.opacity = Math.max(0, 0.9 * (1.0 - progress));
+
+        if (sonarTimer <= 0) {
+            scene.remove(sonarWaveMesh);
+            if (sonarWaveMesh.geometry) sonarWaveMesh.geometry.dispose();
+            if (sonarWaveMesh.material) sonarWaveMesh.material.dispose();
+            sonarWaveMesh = null;
+        }
+    }
 
     // C. Process active scan progress
     if (STATE.scanningPlanet) {
@@ -2791,6 +2837,18 @@ function drawMinimap() {
                 minimapCtx.arc(pcx, pcy, haloSize, 0, Math.PI * 2);
                 minimapCtx.stroke();
             }
+
+            // Draw Psionic Thought Beacon Waves if sentient life exists on this world!
+            if (p.attributes && p.attributes.species && p.attributes.species.population > 0) {
+                const pulseProg = (Date.now() % 1600) / 1600;
+                const pulseR = haloSize + pulseProg * 14;
+                const alpha = (1 - pulseProg) * 0.85;
+                minimapCtx.strokeStyle = `rgba(217, 70, 239, ${alpha})`;
+                minimapCtx.lineWidth = 1.5;
+                minimapCtx.beginPath();
+                minimapCtx.arc(pcx, pcy, pulseR, 0, Math.PI * 2);
+                minimapCtx.stroke();
+            }
         }
     }
 
@@ -3552,6 +3610,7 @@ function renderGalaxyMap() {
 
             const isSelected = selectedSystem && selectedSystem.id === sys.id;
             const isActive = STATE.currentSystemId === sys.id;
+            const hasSentient = sys.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
 
             let baseSize = 4;
             if (isActive) baseSize = 5.5;
@@ -3560,6 +3619,16 @@ function renderGalaxyMap() {
             if (dist < 10) {
                 hoverSystem = sys;
                 baseSize += 2.5;
+            }
+
+            // Draw Psionic Thought Beacon / Aura Pulse around systems with sentient life!
+            if (hasSentient) {
+                const pulse = (Math.sin(Date.now() * 0.005 + sys.id) + 1) * 0.5;
+                ctx.strokeStyle = `rgba(217, 70, 239, ${0.4 + pulse * 0.45})`;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(screenX, screenY, baseSize + 4 + pulse * 6, 0, Math.PI * 2);
+                ctx.stroke();
             }
 
             let starColor = '#f59e0b';
@@ -3660,6 +3729,17 @@ function updateSystemDetails(sys) {
     document.getElementById('val-star-type').innerText = sys.star.type;
     document.getElementById('val-star-mass').innerText = sys.star.mass + " SM";
     document.getElementById('val-planet-count').innerText = sys.planets.length;
+
+    // Update Psionic Resonance details
+    const hasSentient = sys.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
+    const resRow = document.getElementById('detail-psionic-resonance');
+    if (resRow) {
+        if (hasSentient) {
+            resRow.innerHTML = `<span style="color: #d946ef; font-weight: bold;">📶 Starke neuronale Resonanz</span> <span style="color: #cbd5e1; font-size: 0.65rem;">(Intelligentes Leben)</span>`;
+        } else {
+            resRow.innerHTML = `<span style="color: #64748b; font-size: 0.72rem;">✖️ Keine Gedanken-Echos (Stille)</span>`;
+        }
+    }
 
     const list = document.getElementById('val-planets-list');
     if (list) {
@@ -3852,6 +3932,79 @@ if (startHarvestBtn) {
 const startAbductBtn = document.getElementById('start-abduct-btn');
 if (startAbductBtn) {
     startAbductBtn.addEventListener('click', triggerAbductStart);
+}
+
+const sonarBtn = document.getElementById('psionic-sonar-btn');
+if (sonarBtn) {
+    sonarBtn.addEventListener('click', triggerPsionicSonar);
+}
+
+// --- PSIONIC SONAR HELPERS ---
+function triggerPsionicSonar() {
+    if (!STATE.gameStarted) return;
+    if (STATE.mentalEnergy < 15) {
+        addLogEntry("SYSTEM", "Zu wenig Mentalkraft für psionischen Sonar-Ruf (15% benötigt)!");
+        return;
+    }
+
+    STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 15);
+
+    // Create expanding 3D ring wave
+    if (sonarWaveMesh) {
+        scene.remove(sonarWaveMesh);
+        if (sonarWaveMesh.geometry) sonarWaveMesh.geometry.dispose();
+        if (sonarWaveMesh.material) sonarWaveMesh.material.dispose();
+    }
+
+    const ringGeo = new THREE.RingGeometry(1, 4, 64);
+    ringGeo.rotateX(Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xd946ef,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending
+    });
+    sonarWaveMesh = new THREE.Mesh(ringGeo, ringMat);
+    sonarWaveMesh.position.copy(STATE.playerPosition);
+    scene.add(sonarWaveMesh);
+
+    sonarTimer = 1.0;
+
+    playSonarChime();
+
+    // Check if any planet has sentient minds
+    const sentientPlanets = activePlanets.filter(p => p.attributes && p.attributes.species && p.attributes.species.population > 0);
+    if (sentientPlanets.length > 0) {
+        const names = sentientPlanets.map(p => `${p.name} (${p.attributes.species.name})`).join(", ");
+        addLogEntry("SYSTEM", `PSIONISCHER RUF: Mentales Resonanz-Echo empfangen von: ${names}! Kompass aktiv.`);
+    } else {
+        addLogEntry("SYSTEM", "PSIONISCHER RUF: Keine Gedanken-Signaturen in diesem System (Kosmische Stille).");
+    }
+}
+
+function playSonarChime() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const time = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, time); // D5
+    osc.frequency.exponentialRampToValueAtTime(880, time + 0.3); // A5
+    osc.frequency.exponentialRampToValueAtTime(1174.66, time + 0.6); // D6
+
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(0.2, time + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.9);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(time);
+    osc.stop(time + 0.95);
 }
 
 // Quantum Universe Generator triggers
