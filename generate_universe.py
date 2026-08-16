@@ -284,6 +284,58 @@ def build_galaxy(qrng):
                 
             p_name = f"{sys_name} {chr(97 + p_idx)}"
             
+            # Generate Moons (Natural Satellites)
+            moons = []
+            if p_type == "Gas Giant":
+                moon_count = 1 + (qrng.get_bits(2) % 3) # 1 to 3 moons
+            elif p_type == "Habitable":
+                moon_count = qrng.get_bits(2) % 3 # 0 to 2 moons
+            else:
+                moon_count = qrng.get_bits(1) # 0 or 1 moon
+                
+            for m_idx in range(moon_count):
+                m_dist = round(p_size + 3.2 + (m_idx * 2.6) + qrng.get_range(-0.3, 0.3), 2)
+                m_speed = round(qrng.get_range(0.7, 1.6), 2)
+                m_size = round(qrng.get_range(0.6, 1.1), 2)
+                
+                # Determine moon type
+                m_roll = qrng.get_bits(2)
+                if p_type == "Gas Giant" or m_roll == 0:
+                    m_type = "Eismond"
+                    m_color = qrng.choose(["0x38bdf8", "0xe0f2fe", "0xa5f3fc"])
+                    m_temp = f"{int(qrng.get_range(-210, -130))}°C"
+                    m_atmos = "Subglazialer Wasserdampf (Geysire)"
+                    m_bio = qrng.choose(["Kryophile Mikroben", "Steril"])
+                    m_res = "Reich an Deuterium-Eis & gefrorenem Ammoniak"
+                elif m_roll == 1:
+                    m_type = "Vulkanmond"
+                    m_color = qrng.choose(["0xf97316", "0xef4444", "0xd97706"])
+                    m_temp = f"{int(qrng.get_range(120, 350))}°C"
+                    m_atmos = "Schwefeldioxid-Ausgasungen"
+                    m_bio = qrng.choose(["Schwefel-Synthetisierer", "Steril"])
+                    m_res = "Geschmolzenes Titan, Schwefel & Silizium"
+                else:
+                    m_type = "Kratermond"
+                    m_color = qrng.choose(["0x94a3b8", "0x64748b", "0xcbcfd6"])
+                    m_temp = f"{int(qrng.get_range(-160, 110))}°C"
+                    m_atmos = "Vakuum (Keine Atmosphäre)"
+                    m_bio = "Steril"
+                    m_res = "Regolith-Gestein, Nickel & Schwermetalle"
+                    
+                m_name = f"{p_name}-{chr(73 + m_idx)}"
+                moons.append({
+                    "name": m_name,
+                    "type": m_type,
+                    "size": m_size,
+                    "distance": m_dist,
+                    "speed": m_speed,
+                    "color": m_color,
+                    "temp": m_temp,
+                    "atmos": m_atmos,
+                    "bio": m_bio,
+                    "res": m_res
+                })
+            
             planets.append({
                 "name": p_name,
                 "type": p_type,
@@ -293,7 +345,8 @@ def build_galaxy(qrng):
                 "temp": p_temp,
                 "atmos": p_atmos,
                 "bio": p_bio,
-                "res": p_res
+                "res": p_res,
+                "moons": moons
             })
             
         # 5. Resource Asteroids (arranged in two structured concentric belts)

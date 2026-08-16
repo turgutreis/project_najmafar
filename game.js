@@ -552,11 +552,9 @@ function spawnPlanetsAndAsteroids() {
         };
         STATE.gravitySources.push(sourceObj);
 
-        const ring = createGravityRing(px, pz, pRange, parseInt(p.color), 0.08);
-
         // Save Kepler orbit specs & scan details
         const orbitSpeed = 0.2 / Math.sqrt(p.distance); // outer planets orbit slower!
-        activePlanets.push({
+        const planetEntry = {
             mesh: planetGroup,
             source: sourceObj,
             ringMesh: ring,
@@ -567,6 +565,7 @@ function spawnPlanetsAndAsteroids() {
             type: p.type,
             size: p.size,
             color: p.color,
+            isMoon: false,
             scanned: false,
             attributes: (p.temp && p.atmos) ? {
                 atmos: p.atmos,
@@ -574,6 +573,66 @@ function spawnPlanetsAndAsteroids() {
                 bio: p.bio,
                 res: p.res
             } : generatePlanetAttributes(p)
+        };
+        activePlanets.push(planetEntry);
+
+        // Spawn Moons (Natural Satellites) for this planet
+        const moonsList = p.moons || generateFallbackMoons(p);
+        moonsList.forEach((m, m_idx) => {
+            const moonAngle = (m_idx * 2.2) + (idx * 0.7) + 0.5;
+            const mx = px + m.distance * Math.cos(moonAngle);
+            const mz = pz + m.distance * Math.sin(moonAngle);
+
+            const mGeo = new THREE.SphereGeometry(m.size, 20, 20);
+            const mMat = new THREE.MeshStandardMaterial({
+                color: parseInt(m.color),
+                roughness: m.type === 'Eismond' ? 0.3 : 0.9,
+                metalness: m.type === 'Vulkanmond' ? 0.4 : 0.1,
+                flatShading: false
+            });
+            const moonMesh = new THREE.Mesh(mGeo, mMat);
+            moonMesh.position.set(mx, 0, mz);
+            scene.add(moonMesh);
+
+            // Orbit line around parent planet
+            const moonOrbitRing = createGravityRing(px, pz, m.distance, 0x38bdf8, 0.05);
+
+            const mMass = m.size * m.size * 2.5;
+            const mRange = m.size * 3.5;
+
+            const moonSource = {
+                mesh: moonMesh,
+                type: 'planet',
+                subType: 'moon',
+                name: m.name,
+                mass: mMass,
+                radius: m.size,
+                gravityRange: mRange,
+                position: new THREE.Vector3(mx, 0, mz)
+            };
+            STATE.gravitySources.push(moonSource);
+
+            activePlanets.push({
+                mesh: moonMesh,
+                source: moonSource,
+                ringMesh: moonOrbitRing,
+                parentPlanet: planetEntry,
+                isMoon: true,
+                angle: moonAngle,
+                speed: m.speed || (1.0 + (m_idx * 0.3)),
+                distance: m.distance,
+                name: m.name,
+                type: m.type,
+                size: m.size,
+                color: m.color,
+                scanned: false,
+                attributes: (m.temp && m.atmos) ? {
+                    atmos: m.atmos,
+                    temp: m.temp,
+                    bio: m.bio,
+                    res: m.res
+                } : generateMoonAttributes(m)
+            });
         });
     });
 
@@ -874,16 +933,35 @@ function addLogEntry(type, text) {
 // --- PHYSICS & LOGIC TICK ---
 
 function updatePhysics(dt) {
-    // A. Update planet orbits (Keplerian dynamics)
+    // A. Update celestial orbits (Planets around star, Moons around parent planet)
+    // 1. First update parent planets
     activePlanets.forEach(p => {
-        p.angle += dt * p.speed;
-        const px = p.distance * Math.cos(p.angle);
-        const pz = p.distance * Math.sin(p.angle);
+        if (!p.isMoon) {
+            p.angle += dt * p.speed;
+            const px = p.distance * Math.cos(p.angle);
+            const pz = p.distance * Math.sin(p.angle);
 
-        p.mesh.position.set(px, 0, pz);
-        p.source.position.set(px, 0, pz);
-        if (p.ringMesh) {
-            p.ringMesh.position.set(px, 0, pz);
+            p.mesh.position.set(px, 0, pz);
+            p.source.position.set(px, 0, pz);
+            if (p.ringMesh) {
+                p.ringMesh.position.set(px, 0, pz);
+            }
+        }
+    });
+
+    // 2. Then update moons orbiting around their parent planets
+    activePlanets.forEach(m => {
+        if (m.isMoon && m.parentPlanet) {
+            m.angle += dt * m.speed;
+            const parentPos = m.parentPlanet.mesh.position;
+            const mx = parentPos.x + m.distance * Math.cos(m.angle);
+            const mz = parentPos.z + m.distance * Math.sin(m.angle);
+
+            m.mesh.position.set(mx, 0, mz);
+            m.source.position.set(mx, 0, mz);
+            if (m.ringMesh) {
+                m.ringMesh.position.copy(parentPos);
+            }
         }
     });
 
@@ -1025,8 +1103,33 @@ function updatePhysics(dt) {
                 p.harvested = true;
                 STATE.harvestedPlanets[p.name] = true;
 
-                // Award resources according to planet type
-                if (p.type === 'Habitable') {
+                // Award resources according to planet or moon type
+                if (p.isMoon) {
+                    if (p.type === 'Eismond') {
+                        STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 50);
+                        STATE.siliconRes += 35;
+                        STATE.bioRes += 10;
+                        addLogEntry("SYSTEM", `Kryo-Eis von Mond ${p.name} assimiliert. +50% Treibstoff & +35 Silizium.`);
+                        if (Math.random() > 0.3) {
+                            addLogEntry("CREW", encryptCrewMessage("Dr. Song", `Geysire brechen aus der Eiskruste von ${p.name}... Deuterium-Schichten werden abgesaugt!`));
+                        }
+                    } else if (p.type === 'Vulkanmond') {
+                        STATE.siliconRes += 60;
+                        STATE.bioRes += 25;
+                        STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 15);
+                        addLogEntry("SYSTEM", `Vulkanische Schlote von Mond ${p.name} angezapft. +60 Silizium & +25 Biomasse.`);
+                        if (Math.random() > 0.3) {
+                            addLogEntry("CREW", encryptCrewMessage("Ing. Petrov", `Schmelzflüssiges Titan strömt aus den Vulkanen von ${p.name} in unsere Außenhülle!`));
+                        }
+                    } else { // Kratermond
+                        STATE.siliconRes += 55;
+                        STATE.bioRes += 20;
+                        addLogEntry("SYSTEM", `Regolith-Kruste von Mond ${p.name} abgebaut. +55 Silizium & +20 Biomasse.`);
+                        if (Math.random() > 0.3) {
+                            addLogEntry("CREW", encryptCrewMessage("Capt. Miller", `Der Asteroidenstaub auf ${p.name} wurde von den Tentakeln komplett absorbiert.`));
+                        }
+                    }
+                } else if (p.type === 'Habitable') {
                     STATE.bioRes += 70;
                     STATE.health = Math.min(STATE.maxHealth, STATE.health + 40);
                     STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 25);
@@ -1858,6 +1961,11 @@ function clearActiveSystem() {
         if (circle.mesh) scene.remove(circle.mesh);
     });
 
+    activePlanets.forEach(p => {
+        if (p.mesh) scene.remove(p.mesh);
+        if (p.ringMesh) scene.remove(p.ringMesh);
+    });
+
     // Clear scan visuals if active during warp
     stopScanSound();
     if (scanVisualMesh) {
@@ -1957,7 +2065,7 @@ function drawMinimap() {
         minimapCtx.stroke();
     }
 
-    // 4. Draw Planets
+    // 4. Draw Celestial Bodies (Planets and Moons)
     activePlanets.forEach(p => {
         const pdx = p.mesh.position.x - STATE.playerPosition.x;
         const pdz = p.mesh.position.z - STATE.playerPosition.z;
@@ -1967,10 +2075,12 @@ function drawMinimap() {
             const pcx = cx + (pdx / range) * radius;
             const pcy = cy + (pdz / range) * radius;
             const pColorStr = p.color.replace("0x", "#");
+            const dotSize = p.isMoon ? 2.5 : 4.5;
+            const haloSize = p.isMoon ? 5.0 : 8.0;
 
             minimapCtx.fillStyle = pColorStr;
             minimapCtx.beginPath();
-            minimapCtx.arc(pcx, pcy, 4.5, 0, Math.PI * 2);
+            minimapCtx.arc(pcx, pcy, dotSize, 0, Math.PI * 2);
             minimapCtx.fill();
 
             // Draw scanned / harvested indicator halo
@@ -1978,13 +2088,13 @@ function drawMinimap() {
                 minimapCtx.strokeStyle = "rgba(148, 163, 184, 0.35)"; // Dim slate
                 minimapCtx.lineWidth = 1;
                 minimapCtx.beginPath();
-                minimapCtx.arc(pcx, pcy, 8, 0, Math.PI * 2);
+                minimapCtx.arc(pcx, pcy, haloSize, 0, Math.PI * 2);
                 minimapCtx.stroke();
             } else if (p.scanned || STATE.scannedPlanets[p.name]) {
                 minimapCtx.strokeStyle = "rgba(0, 255, 136, 0.6)"; // Bright green
                 minimapCtx.lineWidth = 1;
                 minimapCtx.beginPath();
-                minimapCtx.arc(pcx, pcy, 8, 0, Math.PI * 2);
+                minimapCtx.arc(pcx, pcy, haloSize, 0, Math.PI * 2);
                 minimapCtx.stroke();
             }
         }
@@ -2060,6 +2170,58 @@ function generatePlanetAttributes(p) {
     }
 
     return { atmos, temp, bio, res };
+}
+
+function generateFallbackMoons(p) {
+    const hash = p.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    let count = 0;
+    if (p.type === 'Gas Giant') count = 1 + (hash % 3);
+    else if (p.type === 'Habitable') count = hash % 3;
+    else count = hash % 2;
+
+    const moons = [];
+    for (let i = 0; i < count; i++) {
+        const mType = (p.type === 'Gas Giant' || (hash + i) % 3 === 0) ? "Eismond" : (((hash + i) % 3 === 1) ? "Vulkanmond" : "Kratermond");
+        const mColor = mType === 'Eismond' ? "0x38bdf8" : (mType === 'Vulkanmond' ? "0xf97316" : "0x94a3b8");
+        moons.push({
+            name: `${p.name}-${String.fromCharCode(73 + i)}`,
+            type: mType,
+            size: 0.7 + ((hash + i) % 5) * 0.1,
+            distance: p.size + 3.2 + (i * 2.5),
+            speed: 0.9 + ((hash + i) % 6) * 0.15,
+            color: mColor,
+            temp: mType === 'Eismond' ? "-170°C" : (mType === 'Vulkanmond' ? "+220°C" : "-40°C"),
+            atmos: mType === 'Eismond' ? "Subglazialer Wasserdampf" : (mType === 'Vulkanmond' ? "Schwefeldioxid-Ausgasungen" : "Vakuum"),
+            bio: mType === 'Eismond' ? "Kryophile Mikroben" : (mType === 'Vulkanmond' ? "Schwefel-Synthetisierer" : "Steril"),
+            res: mType === 'Eismond' ? "Reich an Deuterium-Eis" : (mType === 'Vulkanmond' ? "Geschmolzenes Titan & Silizium" : "Regolith & Schwermetalle")
+        });
+    }
+    return moons;
+}
+
+function generateMoonAttributes(m) {
+    if (m.type === 'Eismond') {
+        return {
+            atmos: "Subglazialer Wasserdampf (Geysire)",
+            temp: "-175°C",
+            bio: "Kryophile Mikroben",
+            res: "Reich an Deuterium-Eis & gefrorenem Ammoniak"
+        };
+    } else if (m.type === 'Vulkanmond') {
+        return {
+            atmos: "Schwefeldioxid-Ausgasungen",
+            temp: "+240°C",
+            bio: "Schwefel-Synthetisierer",
+            res: "Geschmolzenes Titan, Schwefel & Silizium"
+        };
+    } else {
+        return {
+            atmos: "Vakuum (Keine Atmosphäre)",
+            temp: "-80°C",
+            bio: "Steril",
+            res: "Regolith-Gestein, Nickel & Schwermetalle"
+        };
+    }
 }
 
 function updateScannerUI(closest, dist) {
