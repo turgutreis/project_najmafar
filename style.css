@@ -750,7 +750,13 @@ body.game-started .hud-left {
     justify-content: center;
     align-items: center;
     z-index: 1000;
-    transition: opacity 0.8s ease, visibility 0.8s ease;
+    transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+.menu-overlay.menu-hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
 }
 
 .menu-content {

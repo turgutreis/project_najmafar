@@ -118,6 +118,15 @@ let minimapCtx = null;
 let trajectoryPoints;
 const container = document.getElementById('canvas-container');
 
+// --- OPTIMIZED CACHED VECTORS & STRUCTS (ZERO GC PRESSURE) ---
+const _predPos = new THREE.Vector3();
+const _predVel = new THREE.Vector3();
+const _predAcc = new THREE.Vector3();
+const _thrustAcc = new THREE.Vector3();
+const _inputDir = new THREE.Vector3();
+const _gravityDir = new THREE.Vector3();
+const _bounceDir = new THREE.Vector3();
+
 function initThree() {
     // Scene
     scene = new THREE.Scene();
@@ -455,6 +464,8 @@ function spawnPlanetsAndAsteroids() {
         starLight.position.set(0, 0, 0);
         scene.add(starLight);
 
+        starData.colorCss = starData.color.replace("0x", "#");
+
         const starSource = {
             mesh: starMesh,
             light: starLight,
@@ -554,6 +565,7 @@ function spawnPlanetsAndAsteroids() {
 
         // Save Kepler orbit specs & scan details
         const orbitSpeed = 0.2 / Math.sqrt(p.distance); // outer planets orbit slower!
+        const pColorCss = p.color.replace("0x", "#");
         const planetEntry = {
             mesh: planetGroup,
             source: sourceObj,
@@ -565,6 +577,7 @@ function spawnPlanetsAndAsteroids() {
             type: p.type,
             size: p.size,
             color: p.color,
+            colorCss: pColorCss,
             isMoon: false,
             scanned: false,
             attributes: (p.temp && p.atmos) ? {
@@ -625,6 +638,7 @@ function spawnPlanetsAndAsteroids() {
                 type: m.type,
                 size: m.size,
                 color: m.color,
+                colorCss: m.color.replace("0x", "#"),
                 scanned: false,
                 attributes: (m.temp && m.atmos) ? {
                     atmos: m.atmos,
@@ -1171,22 +1185,22 @@ function updatePhysics(dt) {
 
     // 1. Apply Player Thrusters (WASD / Arrows)
     let isMoving = false;
-    let inputDir = new THREE.Vector3(0, 0, 0);
+    _inputDir.set(0, 0, 0);
 
-    if (STATE.keys.w) { inputDir.z = -1; isMoving = true; }
-    if (STATE.keys.s) { inputDir.z = 1; isMoving = true; }
-    if (STATE.keys.a) { inputDir.x = -1; isMoving = true; }
-    if (STATE.keys.d) { inputDir.x = 1; isMoving = true; }
+    if (STATE.keys.w) { _inputDir.z = -1; isMoving = true; }
+    if (STATE.keys.s) { _inputDir.z = 1; isMoving = true; }
+    if (STATE.keys.a) { _inputDir.x = -1; isMoving = true; }
+    if (STATE.keys.d) { _inputDir.x = 1; isMoving = true; }
 
     if (isMoving && STATE.bioEnergy > 0) {
-        inputDir.normalize();
-        STATE.playerAcceleration.addScaledVector(inputDir, STATE.thrustStrength);
+        _inputDir.normalize();
+        STATE.playerAcceleration.addScaledVector(_inputDir, STATE.thrustStrength);
 
         // Expend bio-energy when using thrust (balanced: mid-point 1.2 * dt)
         STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.2 * dt);
 
         // Rotate ship group towards movement direction smoothly
-        const targetAngle = Math.atan2(inputDir.x, inputDir.z);
+        const targetAngle = Math.atan2(_inputDir.x, _inputDir.z);
         STATE.playerGroup.rotation.y = THREE.MathUtils.lerp(STATE.playerGroup.rotation.y, targetAngle, 0.1);
 
         // Emit particles or stretch mesh slightly when accelerating
@@ -1205,33 +1219,36 @@ function updatePhysics(dt) {
         setThrusterSound(false);
     }
 
-    // 2. Apply Gravitation from planets & asteroids (N-Körper-Physik)
+    // 2. Apply Gravitation from planets & asteroids (N-Körper-Physik) (ZERO ALLOCATION)
     let closestSource = null;
     let minSourceDist = Infinity;
+    const sources = STATE.gravitySources;
+    const sourceCount = sources.length;
 
-    STATE.gravitySources.forEach((source) => {
-        if (source.isAbsorbed) return;
+    for (let s = 0; s < sourceCount; s++) {
+        const source = sources[s];
+        if (source.isAbsorbed) continue;
 
-        const direction = new THREE.Vector3().subVectors(source.position, STATE.playerPosition);
-        const distance = direction.length();
+        const dx = source.position.x - STATE.playerPosition.x;
+        const dz = source.position.z - STATE.playerPosition.z;
+        const distSq = dx * dx + dz * dz;
+        const rangeSq = source.gravityRange * source.gravityRange;
 
-        // Check if inside gravity range
-        if (distance < source.gravityRange) {
-            // Keep track of the closest one for logs/visual connections
+        if (distSq < rangeSq && distSq > 0.01) {
+            const distance = Math.sqrt(distSq);
             if (distance < minSourceDist) {
                 minSourceDist = distance;
                 closestSource = source;
             }
 
-            // Normal gravity formula (simplified F = G * m1 * m2 / r^2)
-            // Clamp distance to avoid division by zero and extreme force when overlapping
             const clampedDist = Math.max(distance, source.radius * 1.2);
             const forceStrength = (STATE.gConstant * source.mass) / (clampedDist * clampedDist);
+            const invDist = 1 / distance;
 
-            direction.normalize();
-            STATE.playerAcceleration.addScaledVector(direction, forceStrength);
+            STATE.playerAcceleration.x += dx * invDist * forceStrength;
+            STATE.playerAcceleration.z += dz * invDist * forceStrength;
         }
-    });
+    }
 
     // Log feedback for gravitational attraction
     if (closestSource && minSourceDist < closestSource.gravityRange * 0.7) {
@@ -1303,16 +1320,16 @@ function updateCollisions(dt) {
                 respawnAsteroid(source); // Trigger asteroid respawn!
             } else if (source.type === 'planet') {
                 // Bounce direction (away from planet center)
-                const bounceDir = new THREE.Vector3().subVectors(STATE.playerPosition, source.position).normalize();
+                _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
 
                 // 1. Force position correction: snap to surface immediately to prevent glitching inside
-                STATE.playerPosition.copy(source.position).addScaledVector(bounceDir, colDistance + 0.15);
+                STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, colDistance + 0.15);
                 STATE.playerGroup.position.copy(STATE.playerPosition);
 
                 // 2. Reflect velocity
-                const dot = STATE.playerVelocity.dot(bounceDir);
+                const dot = STATE.playerVelocity.dot(_bounceDir);
                 if (dot < 0) {
-                    STATE.playerVelocity.reflect(bounceDir).multiplyScalar(0.4); // 40% rebound velocity
+                    STATE.playerVelocity.reflect(_bounceDir).multiplyScalar(0.4); // 40% rebound velocity
                 }
 
                 // 3. Trigger damage and logs only on cooldown
@@ -1683,70 +1700,83 @@ function initTrajectory() {
 function updateTrajectory() {
     if (!trajectoryPoints || !STATE.playerGroup) return;
 
-    const count = 100;
+    const count = 60;
     const posAttr = trajectoryPoints.geometry.attributes.position;
     const colorAttr = trajectoryPoints.geometry.attributes.color;
     const positions = posAttr.array;
     const colors = colorAttr.array;
 
-    // Copy current state
-    const predPos = STATE.playerPosition.clone();
-    const predVel = STATE.playerVelocity.clone();
-    const predAcc = new THREE.Vector3(0, 0, 0);
+    // Copy current state into pre-allocated vectors (ZERO ALLOCATION)
+    _predPos.copy(STATE.playerPosition);
+    _predVel.copy(STATE.playerVelocity);
+    _predAcc.set(0, 0, 0);
 
     // Check input acceleration
     let isMoving = false;
-    const inputDir = new THREE.Vector3(0, 0, 0);
-    if (STATE.keys.w) { inputDir.z = -1; isMoving = true; }
-    if (STATE.keys.s) { inputDir.z = 1; isMoving = true; }
-    if (STATE.keys.a) { inputDir.x = -1; isMoving = true; }
-    if (STATE.keys.d) { inputDir.x = 1; isMoving = true; }
+    _inputDir.set(0, 0, 0);
+    if (STATE.keys.w) { _inputDir.z = -1; isMoving = true; }
+    if (STATE.keys.s) { _inputDir.z = 1; isMoving = true; }
+    if (STATE.keys.a) { _inputDir.x = -1; isMoving = true; }
+    if (STATE.keys.d) { _inputDir.x = 1; isMoving = true; }
 
-    let thrustAcc = new THREE.Vector3(0, 0, 0);
+    _thrustAcc.set(0, 0, 0);
     if (isMoving && STATE.bioEnergy > 0) {
-        inputDir.normalize();
-        thrustAcc.addScaledVector(inputDir, STATE.thrustStrength);
+        _inputDir.normalize();
+        _thrustAcc.addScaledVector(_inputDir, STATE.thrustStrength);
     }
 
-    // Base color based on state (purple if telepathy active, cyan if normal)
-    const baseColor = STATE.telepathyActive ? new THREE.Color(0xa855f7) : new THREE.Color(0x38bdf8);
+    // Base RGB values (purple if telepathy active, cyan if normal)
+    const baseR = STATE.telepathyActive ? 0.659 : 0.22;
+    const baseG = STATE.telepathyActive ? 0.333 : 0.741;
+    const baseB = STATE.telepathyActive ? 0.969 : 0.973;
 
     const stepDt = 0.04; // 40ms simulation steps
+    const sources = STATE.gravitySources;
+    const sourceCount = sources.length;
 
     for (let i = 0; i < count; i++) {
-        predAcc.copy(thrustAcc);
+        _predAcc.copy(_thrustAcc);
 
-        // Apply gravity from all sources
-        STATE.gravitySources.forEach((source) => {
-            if (source.isAbsorbed) return;
+        // Apply gravity from celestial sources (Fast scalar math)
+        for (let s = 0; s < sourceCount; s++) {
+            const source = sources[s];
+            if (source.isAbsorbed) continue;
 
-            const direction = new THREE.Vector3().subVectors(source.position, predPos);
-            const distance = direction.length();
+            const dx = source.position.x - _predPos.x;
+            const dz = source.position.z - _predPos.z;
+            const distSq = dx * dx + dz * dz;
+            const rangeSq = source.gravityRange * source.gravityRange;
 
-            if (distance < source.gravityRange) {
+            if (distSq < rangeSq && distSq > 0.01) {
+                const distance = Math.sqrt(distSq);
                 const clampedDist = Math.max(distance, source.radius * 1.1);
                 const forceStrength = (STATE.gConstant * source.mass) / (clampedDist * clampedDist);
-                direction.normalize();
-                predAcc.addScaledVector(direction, forceStrength);
+                const invDist = 1 / distance;
+                _predAcc.x += dx * invDist * forceStrength;
+                _predAcc.z += dz * invDist * forceStrength;
             }
-        });
+        }
 
         // Integrate equations of motion
-        predVel.addScaledVector(predAcc, stepDt);
-        predVel.multiplyScalar(Math.exp(-STATE.currentDrag * stepDt));
-        predPos.addScaledVector(predVel, stepDt);
+        _predVel.x += _predAcc.x * stepDt;
+        _predVel.z += _predAcc.z * stepDt;
+        const dragFactor = Math.exp(-STATE.currentDrag * stepDt);
+        _predVel.x *= dragFactor;
+        _predVel.z *= dragFactor;
+        _predPos.x += _predVel.x * stepDt;
+        _predPos.z += _predVel.z * stepDt;
 
         // Store point
-        positions[i * 3] = predPos.x;
-        positions[i * 3 + 1] = 0; // keep it flat on y = 0
-        positions[i * 3 + 2] = predPos.z;
+        positions[i * 3] = _predPos.x;
+        positions[i * 3 + 1] = 0;
+        positions[i * 3 + 2] = _predPos.z;
 
-        // Fade colors
+        // Fade colors inline without memory allocations
         const t = i / count;
-        const c = baseColor.clone().multiplyScalar(1 - t * 0.95);
-        colors[i * 3] = c.r;
-        colors[i * 3 + 1] = c.g;
-        colors[i * 3 + 2] = c.b;
+        const fade = (1 - t * 0.95);
+        colors[i * 3] = baseR * fade;
+        colors[i * 3 + 1] = baseG * fade;
+        colors[i * 3 + 2] = baseB * fade;
     }
 
     posAttr.needsUpdate = true;
@@ -1950,26 +1980,62 @@ async function checkUniverseData() {
     }
 }
 
+function disposeHierarchy(obj) {
+    if (!obj) return;
+    if (obj.children) {
+        while (obj.children.length > 0) {
+            disposeHierarchy(obj.children[0]);
+            obj.remove(obj.children[0]);
+        }
+    }
+    if (obj.geometry) {
+        obj.geometry.dispose();
+    }
+    if (obj.material) {
+        if (Array.isArray(obj.material)) {
+            obj.material.forEach(mat => mat.dispose());
+        } else {
+            obj.material.dispose();
+        }
+    }
+}
+
 function clearActiveSystem() {
     STATE.gravitySources.forEach(source => {
-        if (source.mesh) scene.remove(source.mesh);
+        if (source.mesh) {
+            scene.remove(source.mesh);
+            disposeHierarchy(source.mesh);
+        }
         if (source.light) scene.remove(source.light);
-        if (source.diskMesh) scene.remove(source.diskMesh);
+        if (source.diskMesh) {
+            scene.remove(source.diskMesh);
+            disposeHierarchy(source.diskMesh);
+        }
     });
 
     gravityCircles.forEach(circle => {
-        if (circle.mesh) scene.remove(circle.mesh);
+        if (circle.mesh) {
+            scene.remove(circle.mesh);
+            disposeHierarchy(circle.mesh);
+        }
     });
 
     activePlanets.forEach(p => {
-        if (p.mesh) scene.remove(p.mesh);
-        if (p.ringMesh) scene.remove(p.ringMesh);
+        if (p.mesh) {
+            scene.remove(p.mesh);
+            disposeHierarchy(p.mesh);
+        }
+        if (p.ringMesh) {
+            scene.remove(p.ringMesh);
+            disposeHierarchy(p.ringMesh);
+        }
     });
 
     // Clear scan visuals if active during warp
     stopScanSound();
     if (scanVisualMesh) {
         scene.remove(scanVisualMesh);
+        disposeHierarchy(scanVisualMesh);
         scanVisualMesh = null;
     }
     STATE.scanningPlanet = null;
@@ -1991,7 +2057,7 @@ function clearActiveSystem() {
     activePlanets = [];
 }
 
-// --- MINIMAP RADAR DRAW LOGIC ---
+// --- MINIMAP RADAR DRAW LOGIC (HIGH-PERFORMANCE) ---
 function drawMinimap() {
     if (!minimapCanvas || !minimapCtx || !STATE.gameStarted) return;
 
@@ -2035,22 +2101,24 @@ function drawMinimap() {
 
     // World space range mapping (edge of radar is 180 units)
     const range = 180;
+    const invRangeRadius = radius / range;
+    const rangeSq = range * range;
 
     // 3. Draw Central Star (0, 0 in world coordinates)
-    const sdx = 0 - STATE.playerPosition.x;
-    const sdz = 0 - STATE.playerPosition.z;
-    const sdist = Math.sqrt(sdx * sdx + sdz * sdz);
+    const sdx = -STATE.playerPosition.x;
+    const sdz = -STATE.playerPosition.z;
+    const sdistSq = sdx * sdx + sdz * sdz;
 
-    if (sdist < range) {
-        const scx = cx + (sdx / range) * radius;
-        const scy = cy + (sdz / range) * radius;
+    if (sdistSq < rangeSq) {
+        const scx = cx + sdx * invRangeRadius;
+        const scy = cy + sdz * invRangeRadius;
         const starPulse = 6 + Math.sin(Date.now() * 0.008) * 1.5;
 
         let starColor = "#f59e0b"; // Yellow default
-        if (STATE.universe && STATE.universe[STATE.currentSystemId]) {
-            const sys = STATE.universe[STATE.currentSystemId];
-            if (sys.star && sys.star.color) {
-                starColor = sys.star.color.replace("0x", "#");
+        if (STATE.universe && STATE.universe.systems && STATE.universe.systems[STATE.currentSystemId]) {
+            const sys = STATE.universe.systems[STATE.currentSystemId];
+            if (sys.star && sys.star.colorCss) {
+                starColor = sys.star.colorCss;
             }
         }
 
@@ -2066,19 +2134,20 @@ function drawMinimap() {
     }
 
     // 4. Draw Celestial Bodies (Planets and Moons)
-    activePlanets.forEach(p => {
+    const planCount = activePlanets.length;
+    for (let i = 0; i < planCount; i++) {
+        const p = activePlanets[i];
         const pdx = p.mesh.position.x - STATE.playerPosition.x;
         const pdz = p.mesh.position.z - STATE.playerPosition.z;
-        const pdist = Math.sqrt(pdx * pdx + pdz * pdz);
+        const pdistSq = pdx * pdx + pdz * pdz;
 
-        if (pdist < range) {
-            const pcx = cx + (pdx / range) * radius;
-            const pcy = cy + (pdz / range) * radius;
-            const pColorStr = p.color.replace("0x", "#");
+        if (pdistSq < rangeSq) {
+            const pcx = cx + pdx * invRangeRadius;
+            const pcy = cy + pdz * invRangeRadius;
             const dotSize = p.isMoon ? 2.5 : 4.5;
             const haloSize = p.isMoon ? 5.0 : 8.0;
 
-            minimapCtx.fillStyle = pColorStr;
+            minimapCtx.fillStyle = p.colorCss || "#38bdf8";
             minimapCtx.beginPath();
             minimapCtx.arc(pcx, pcy, dotSize, 0, Math.PI * 2);
             minimapCtx.fill();
@@ -2098,26 +2167,28 @@ function drawMinimap() {
                 minimapCtx.stroke();
             }
         }
-    });
+    }
 
     // 5. Draw Asteroids (Active resources)
-    STATE.asteroids.forEach(ast => {
-        if (ast.harvested) return;
+    const astCount = STATE.asteroids.length;
+    for (let i = 0; i < astCount; i++) {
+        const ast = STATE.asteroids[i];
+        if (ast.harvested) continue;
 
         const adx = ast.mesh.position.x - STATE.playerPosition.x;
         const adz = ast.mesh.position.z - STATE.playerPosition.z;
-        const adist = Math.sqrt(adx * adx + adz * adz);
+        const adistSq = adx * adx + adz * adz;
 
-        if (adist < range) {
-            const acx = cx + (adx / range) * radius;
-            const acy = cy + (adz / range) * radius;
+        if (adistSq < rangeSq) {
+            const acx = cx + adx * invRangeRadius;
+            const acy = cy + adz * invRangeRadius;
 
             minimapCtx.fillStyle = ast.type === 'bio' ? "rgba(0, 255, 136, 0.7)" : "rgba(56, 189, 248, 0.7)";
             minimapCtx.beginPath();
             minimapCtx.arc(acx, acy, 2, 0, Math.PI * 2);
             minimapCtx.fill();
         }
-    });
+    }
 
     // 6. Draw Player (Centered direction vector)
     minimapCtx.save();
@@ -2817,6 +2888,7 @@ function warpToSystem(systemId) {
     // Play heavy warp crash/rumble audio feedback
     playCrashSound();
 
+    // Fast 600ms hyperspace jump
     setTimeout(() => {
         STATE.currentSystemId = systemId;
         const activeSystem = STATE.universe.systems[systemId];
@@ -2839,7 +2911,7 @@ function warpToSystem(systemId) {
             warpOverlay.style.display = 'none';
         }
         toggleGalaxyMap();
-    }, 2000);
+    }, 600);
 }
 
 // Start
@@ -2863,11 +2935,7 @@ document.getElementById('start-game-btn').addEventListener('click', () => {
 
     const mainMenu = document.getElementById('main-menu');
     if (mainMenu) {
-        mainMenu.style.opacity = '0';
-        mainMenu.style.pointerEvents = 'none';
-        setTimeout(() => {
-            mainMenu.style.display = 'none';
-        }, 800);
+        mainMenu.classList.add('menu-hidden');
     }
 
     if (!musicPlaying) {
@@ -2897,22 +2965,7 @@ document.addEventListener('keydown', function (event) {
         
         if (STATE.gameStarted) {
             // Game is active: toggle main menu overlay (Pause / Resume)
-            const isMenuVisible = mainMenu.style.display === 'flex' && mainMenu.style.opacity !== '0';
-            if (isMenuVisible) {
-                // Resume game: hide menu
-                mainMenu.style.opacity = '0';
-                mainMenu.style.pointerEvents = 'none';
-                setTimeout(() => {
-                    mainMenu.style.display = 'none';
-                }, 800);
-            } else {
-                // Pause game: show menu
-                mainMenu.style.display = 'flex';
-                // Force layout reflow to make transition animation work
-                mainMenu.offsetHeight;
-                mainMenu.style.opacity = '1';
-                mainMenu.style.pointerEvents = 'auto';
-            }
+            mainMenu.classList.toggle('menu-hidden');
         } else {
             // We are on the initial title screen (game not started yet)
             // If running in Electron, close the app immediately
