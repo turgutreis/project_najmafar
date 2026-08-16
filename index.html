@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Najmafar - Cosmic Evolution Survival</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- Load Three.js using importmaps or directly in module script -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.152.2/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.152.2/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- The Main Menu Overlay -->
+    <div id="main-menu" class="menu-overlay">
+        <div class="menu-content">
+            <h1 class="menu-title">PROJECT NAJMAFAR</h1>
+            <p class="menu-subtitle">Ein kosmisches Survival-Abenteuer</p>
+            
+            <!-- Quantum Universe Generator Interface -->
+            <div class="quantum-generator-box">
+                <h3 class="generator-title">🌌 Quanten-Welten-Generator</h3>
+                <p class="generator-desc">Seede eine Galaxie aus 100 Systemen mittels Hadamard-Superpositionen auf IBM Quantum QPUs.</p>
+                
+                <input type="password" id="ibm-key-input" class="quantum-input" placeholder="IBM Quantum Token eingeben (optional)">
+                
+                <div class="generator-options">
+                    <label class="quantum-checkbox-label">
+                        <input type="checkbox" id="use-qpu-chk">
+                        <span class="checkbox-text">Echter IBM QPU (Guthaben benötigt)</span>
+                    </label>
+                </div>
+                
+                <button id="generate-btn" class="quantum-gen-btn">Galaxie generieren</button>
+                <div id="generation-status" class="generation-status">Bereit zum Seeden.</div>
+            </div>
+            
+            <div class="menu-buttons">
+                <button id="start-game-btn" class="menu-btn primary" disabled>Zuerst Galaxie generieren</button>
+                <button id="how-to-play-btn" class="menu-btn secondary">Genetische Akten (Anleitung)</button>
+                <button id="exit-btn" class="menu-btn secondary" style="display: none;">Verbindung trennen</button>
+            </div>
+            
+            <div class="menu-credits">
+                Entwickelt mit Qiskit, Three.js & Electron
+            </div>
+        </div>
+    </div>
+
+    <!-- Instruction Modal -->
+    <div id="how-to-play-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2>Genetische Direktive</h2>
+            <div class="modal-body">
+                <p>Du bist ein kosmisches, biomechanisches Wesen. Überlebe im leeren Raum, halte die Crew in deinem Bauch ruhig und mutiere deinen Körper.</p>
+                <ul>
+                    <li><strong>Fliegen:</strong> W A S D / Pfeiltasten zum Bewegen. Jeder Schub kostet Bio-Energie.</li>
+                    <li><strong>Flugbahn:</strong> Die gepunktete Linie zeigt deine vorhergesagte Flugbahn im Orbit. Nutze Planeten für Sling-Shot-Beschleunigungen!</li>
+                    <li><strong>Ressourcen sammeln:</strong> Fliege in Asteroiden. Grüne heilen dich, blaue laden deine Energie auf. Beide geben dir Mutations-Ressourcen. Asteroiden kondensieren nach kurzer Zeit neu!</li>
+                    <li><strong>Gefangene Crew:</strong> Die Astronauten in deinem Bauch geraten bei Kollisionen in Panik. Halte <strong>LEERTASTE</strong> gedrückt, um sie telepathisch einzulullen (kostet Mentalkraft).</li>
+                    <li><strong>Evolution:</strong> Erwirb Upgrades (Panzerung, O₂-Kern, Synapsen, Dschinn-Übersetzer) unten rechts.</li>
+                    <li><strong>Warp-Antrieb:</strong> Öffne die Galaxie-Karte [M] unten links, um zwischen den 100 Systemen zu warpen!</li>
+                </ul>
+            </div>
+            <button id="close-modal-btn" class="menu-btn secondary">Zurück zum Hauptmenü</button>
+        </div>
+    </div>
+
+    <!-- Galaxy Map Overlay -->
+    <div id="galaxy-map-overlay" class="modal-overlay" style="display: none; z-index: 1050;">
+        <div class="galaxy-map-content">
+            <header class="map-header">
+                <h2>Galaktische Kartographie</h2>
+                <p>Wähle eines der 100 quantengenerierten Sternensysteme, um dorthin zu warpen.</p>
+            </header>
+            
+            <div class="map-main">
+                <div class="galaxy-viewport-container">
+                    <canvas id="galaxy-map-canvas"></canvas>
+                </div>
+                
+                <div id="system-details-panel" class="system-details-panel">
+                    <h3 id="detail-system-name">System auswählen</h3>
+                    <div id="detail-system-stats" style="display: none;">
+                        <div class="detail-row"><span class="label">Sektor X:</span> <span id="val-coord-x" class="val">0</span></div>
+                        <div class="detail-row"><span class="label">Sektor Z:</span> <span id="val-coord-z" class="val">0</span></div>
+                        <div class="detail-row"><span class="label">Sternentyp:</span> <span id="val-star-type" class="val">-</span></div>
+                        <div class="detail-row"><span class="label">Masse:</span> <span id="val-star-mass" class="val">-</span></div>
+                        <div class="detail-row"><span class="label">Planeten:</span> <span id="val-planet-count" class="val">0</span></div>
+                        
+                        <div class="planets-list-header">Orbitaler Sensor-Scan:</div>
+                        <ul id="val-planets-list" class="val-planets-list">
+                            <!-- Dynamic -->
+                        </ul>
+                        
+                        <button id="warp-btn" class="warp-btn">Quantenfeld falten (WARP)</button>
+                    </div>
+                    <div id="detail-system-placeholder" class="detail-system-placeholder">
+                        Klicke auf ein System in der Galaxie-Spirale, um die Sensordaten auszulesen.
+                    </div>
+                </div>
+            </div>
+            
+            <footer class="map-footer">
+                <button id="close-map-btn" class="menu-btn secondary">Karte Schließen [M]</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Warp Effect Screen Overlay -->
+    <div id="warp-overlay" class="warp-overlay" style="display: none;">
+        <div class="warp-grid-effect"></div>
+        <div class="warp-vortex"></div>
+        <div class="warp-text-container">
+            <h2 class="warp-title">FALTUNG AKTIV</h2>
+            <p class="warp-status">Lade Systemdaten...</p>
+        </div>
+    </div>
+
+    <!-- The WebGL Canvas for 3D simulation -->
+    <div id="canvas-container"></div>
+
+    <!-- Telepathic Overlay Effect -->
+    <div id="telepathic-overlay" class="inactive">
+        <div class="telepathy-waves"></div>
+        <div class="telepathy-vignette"></div>
+    </div>
+
+    <!-- Game HUD -->
+    <div id="hud-container">
+        
+        <!-- Top Stats: Bio-Entity Status -->
+        <header class="hud-header glass-panel">
+            <div class="stat-group">
+                <div class="stat-label">Organischer Kern</div>
+                <div class="progress-bar-container">
+                    <div id="core-health-bar" class="progress-bar health" style="width: 100%;"></div>
+                </div>
+                <div class="stat-value" id="core-health-text">100%</div>
+            </div>
+
+            <div class="stat-group">
+                <div class="stat-label">Bio-Energie</div>
+                <div class="progress-bar-container">
+                    <div id="bio-energy-bar" class="progress-bar energy" style="width: 80%;"></div>
+                </div>
+                <div class="stat-value" id="bio-energy-text">80%</div>
+            </div>
+
+            <div class="stat-group">
+                <div class="stat-label">Mentale Feldstärke</div>
+                <div class="progress-bar-container">
+                    <div id="telepathy-energy-bar" class="progress-bar mental" style="width: 90%;"></div>
+                </div>
+                <div class="stat-value" id="telepathy-energy-text">90%</div>
+            </div>
+        </header>
+
+        <!-- Left Side: Planetary Scanner & Minimap -->
+        <aside class="hud-left glass-panel" id="left-deck-panel">
+            <!-- Collapse Button -->
+            <button id="left-collapse-btn" class="collapse-toggle-btn left-btn" title="Sensoren ein-/ausblenden">‹</button>
+
+            <h2 class="panel-title">Sensoren & Navigation</h2>
+            
+            <!-- Minimap Wrapper -->
+            <div class="minimap-wrapper">
+                <canvas id="minimap-canvas" width="220" height="220"></canvas>
+            </div>
+
+            <!-- Galaxy Map Button -->
+            <button id="galaxy-map-btn" class="galaxy-map-trigger-btn">🌌 Galaxie-Karte [M]</button>
+            
+            <!-- Scan Action Box -->
+            <div class="scan-action-box">
+                <div class="nearest-planet-info">
+                    <span class="label">Nächster Planet:</span>
+                    <span id="nearest-planet-name" class="val">Keiner</span>
+                </div>
+                <div class="nearest-planet-dist">
+                    <span class="label">Distanz:</span>
+                    <span id="nearest-planet-distance" class="val">-</span>
+                </div>
+                
+                <button id="start-scan-btn" class="scan-trigger-btn" disabled>Scan initiieren [F]</button>
+                
+                <!-- Scan Progress -->
+                <div id="scan-progress-container" class="scan-progress-container" style="display: none;">
+                    <div class="scan-progress-label">Frequenz-Sweep aktiv: <span id="scan-progress-text">0%</span></div>
+                    <div class="scan-progress-bar-bg">
+                        <div id="scan-progress-bar" class="scan-progress-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Scanned Planet Database -->
+            <div id="scan-results-box" class="scan-results-box" style="display: none;">
+                <h3 class="results-title" id="scan-planet-title">Planetenanalyse</h3>
+                
+                <div class="result-row">
+                    <span class="label">Typus:</span>
+                    <span id="scan-planet-type" class="val">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="label">Temperatur:</span>
+                    <span id="scan-planet-temp" class="val">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="label">Biosignatur:</span>
+                    <span id="scan-planet-bio" class="val">-</span>
+                </div>
+                <div class="result-row">
+                    <span class="label">Atmosphäre:</span>
+                    <span id="scan-planet-atmos" class="val">-</span>
+                </div>
+                <div class="result-row" style="flex-direction: column; align-items: flex-start; gap: 4px; border-bottom: none;">
+                    <span class="label">Ressourcendichte:</span>
+                    <span id="scan-planet-resources" class="val" style="color: #06b6d4; font-weight: normal; font-size: 0.72rem; line-height: 1.3;">-</span>
+                </div>
+            </div>
+            <div id="scan-placeholder-box" class="scan-placeholder-box">
+                Fliege in die Nähe eines Planeten (Abstand &lt; 20), um die Sensoren zu kalibrieren und einen Oberflächendetektor-Scan durchzuführen.
+            </div>
+        </aside>
+
+        <!-- Right Side: Crew & Evolution deck (tabbed) -->
+        <aside class="hud-right glass-panel" id="right-deck-panel">
+            <!-- Collapse Button -->
+            <button id="right-collapse-btn" class="collapse-toggle-btn right-btn" title="Status-Deck ein-/ausblenden">›</button>
+
+            <!-- Tabs Header -->
+            <div id="right-deck-tabs" class="deck-tabs">
+                <button class="tab-btn active" data-tab="crew">👥 Crew-Symbiose</button>
+                <button class="tab-btn" data-tab="evolution">🧬 Evolution</button>
+            </div>
+            
+            <!-- Crew Tab Container -->
+            <div id="tab-content-crew" class="tab-content active">
+                <!-- Graphic schematic of the ship inside the organic entity -->
+                <div class="vessel-schematic">
+                    <svg viewBox="0 0 200 120" class="schematic-svg">
+                        <!-- Outer organic hull -->
+                        <path d="M10,60 Q50,10 100,15 Q150,20 190,60 Q150,100 100,105 Q50,110 10,60" fill="none" stroke="rgba(0, 255, 136, 0.2)" stroke-width="3" stroke-dasharray="5 3" />
+                        <!-- MUTATION: Chitin Armor -->
+                        <path id="svg-armor" d="M8,60 Q50,6 100,11 Q150,16 192,60 Q150,104 100,109 Q50,114 8,60" fill="none" stroke="#10b981" stroke-width="4" style="display: none; opacity: 0.8;" />
+                        
+                        <!-- Captured mechanical ship cabin inside -->
+                        <rect x="55" y="40" width="90" height="40" rx="5" fill="rgba(30, 41, 59, 0.7)" stroke="#38bdf8" stroke-width="2" id="schematic-cabin" />
+                        
+                        <!-- MUTATION: Sauerstoff-Drüse (Oxygen Core) -->
+                        <circle id="svg-o2" cx="100" cy="50" r="8" fill="#10b981" style="display: none;" />
+                        
+                        <!-- MUTATION: Synapsen-Netzwerk -->
+                        <path id="svg-synapses-1" d="M55,50 Q75,30 100,40" stroke="#d946ef" stroke-width="2" fill="none" style="display: none;" />
+                        <path id="svg-synapses-2" d="M145,50 Q125,70 100,60" stroke="#d946ef" stroke-width="2" fill="none" style="display: none;" />
+                        
+                        <!-- MUTATION: Dschinn-Übersetzer Core -->
+                        <polygon id="svg-translator" points="100,34 106,44 94,44" fill="#06b6d4" style="display: none;" />
+
+                        <!-- Connection tentacles -->
+                        <path d="M30,60 Q50,60 55,60" stroke="#00ff88" stroke-width="2" fill="none" />
+                        <path d="M145,60 Q170,60 180,60" stroke="#00ff88" stroke-width="2" fill="none" />
+                        <path d="M100,15 Q100,35 100,40" stroke="rgba(236, 72, 153, 0.5)" stroke-width="1.5" stroke-dasharray="2 2" fill="none" class="telepathic-pulse-line" />
+                        <!-- Status text overlay -->
+                        <text x="100" y="65" font-family="'Orbitron', sans-serif" font-size="10" fill="#38bdf8" text-anchor="middle" id="schematic-status">Druck stabil</text>
+                    </svg>
+                </div>
+
+                <!-- Crew list and stress monitoring -->
+                <div class="crew-list">
+                    <div class="crew-member" id="crew-1">
+                        <div class="crew-header">
+                            <span class="crew-name">Capt. Miller (Pilot)</span>
+                            <span class="crew-status action-working">Arbeitet</span>
+                        </div>
+                        <div class="stress-container">
+                            <span class="stress-label">Stress</span>
+                            <div class="stress-bar-bg">
+                                <div class="stress-bar" style="width: 25%;"></div>
+                            </div>
+                            <span class="stress-percentage">25%</span>
+                        </div>
+                    </div>
+
+                    <div class="crew-member" id="crew-2">
+                        <div class="crew-header">
+                            <span class="crew-name">Dr. Song (Biologin)</span>
+                            <span class="crew-status action-working">Analysiert Proben</span>
+                        </div>
+                        <div class="stress-container">
+                            <span class="stress-label">Stress</span>
+                            <div class="stress-bar-bg">
+                                <div class="stress-bar" style="width: 40%;"></div>
+                            </div>
+                            <span class="stress-percentage">40%</span>
+                        </div>
+                    </div>
+
+                    <div class="crew-member" id="crew-3">
+                        <div class="crew-header">
+                            <span class="crew-name">Ing. Petrov (Mechaniker)</span>
+                            <span class="crew-status action-panic">Panik</span>
+                        </div>
+                        <div class="stress-container">
+                            <span class="stress-label">Stress</span>
+                            <div class="stress-bar-bg">
+                                <div class="stress-bar" style="width: 75%;"></div>
+                            </div>
+                            <span class="stress-percentage">75%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Telepathy Controls -->
+                <div class="telepathy-control-panel">
+                    <button id="telepathy-toggle-btn" class="telepathy-btn">
+                        <span class="btn-glow"></span>
+                        <span class="btn-text">Telepathische Illusion aktivieren</span>
+                    </button>
+                    <div class="btn-hint">Oder [LEERTASTE] drücken</div>
+                </div>
+            </div>
+
+            <!-- Evolution Tab Container -->
+            <div id="tab-content-evolution" class="tab-content">
+                <!-- Evolution & Mutations Panel -->
+                <div class="evolution-panel" style="margin-top: 0; border: none; padding-top: 0; padding-bottom: 0;">
+                    <div class="mutation-list">
+                        <div class="mutation-item" id="mut-armor">
+                            <div class="mut-details">
+                                <span class="mut-name">Chitin-Panzerung</span>
+                                <span class="mut-desc">Halbiert Planetenschaden</span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">50 Bio</span> | <span class="cost-val silicon">30 Silizium</span></span>
+                            </div>
+                            <button class="mut-btn" data-mutation="armor">Mutieren</button>
+                        </div>
+                        <div class="mutation-item" id="mut-o2">
+                            <div class="mut-details">
+                                <span class="mut-name">Sauerstoff-Drüse</span>
+                                <span class="mut-desc">-50% Crew-Stressaufbau</span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">60 Bio</span> | <span class="cost-val silicon">40 Silizium</span></span>
+                            </div>
+                            <button class="mut-btn" data-mutation="o2">Mutieren</button>
+                        </div>
+                        <div class="mutation-item" id="mut-synapses">
+                            <div class="mut-details">
+                                <span class="mut-name">Synapsen-Netzwerk</span>
+                                <span class="mut-desc">150 Max Mentalkraft & 2x Regen</span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">40 Bio</span> | <span class="cost-val silicon">80 Silizium</span></span>
+                            </div>
+                            <button class="mut-btn" data-mutation="synapses">Mutieren</button>
+                        </div>
+                        <div class="mutation-item" id="mut-translator">
+                            <div class="mut-details">
+                                <span class="mut-name">Dschinn-Übersetzer</span>
+                                <span class="mut-desc">Übersetzt Crew-Funklogs (Story!)</span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">80 Bio</span> | <span class="cost-val silicon">80 Silizium</span></span>
+                            </div>
+                            <button class="mut-btn" data-mutation="translator">Mutieren</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Bottom bar: Instructions & Log -->
+        <footer class="hud-bottom glass-panel">
+            <div class="controls-guide">
+                <div class="control-item"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> / <span class="key">↑</span><span class="key">←</span><span class="key">↓</span><span class="key">→</span> Schubdüsen (Verbraucht Bio-Energie)</div>
+                <div class="control-item"><span class="key">LEERTASTE</span> Telepathisches Beruhigungsfeld (Entzieht Mentalkraft)</div>
+                <div class="control-item" style="margin-top: 8px;">
+                    <button id="music-toggle-btn" class="music-btn">🔇 Musik: Aus</button>
+                </div>
+            </div>
+            <div class="game-log" id="log-box">
+                <div class="log-entry system">[SYSTEM] Organismus in Milchstraße eingetreten. Suche nach stabilen Orbits.</div>
+                <div class="log-entry crew-chat" id="init-crew-log">[CREW] Capt. Miller: "⏁⊑⟒ ⌇⊑⟟⌿ ⟟⌇ ⏃⌰⟟⎎⟒! ⏃⏃⏃⊑!"</div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Script loading -->
+    <script type="module" src="game.js"></script>
+</body>
+</html>
