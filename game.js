@@ -20,11 +20,26 @@ const STATE = {
     psionicRange: 75, // Base telepathic detection range in Lightyears
     warpRange: 90,    // Base warp folding range in Lightyears
 
+    // Crew Management & Synergies
+    maxCrewCapacity: 2,
+    crewSatietyTimer: 0,
+    crewDialogueTimer: 18,
+    crewBuffs: {
+        thrust: 1.0,
+        bioGain: 1.0,
+        scanSpeed: 1.0,
+        repairRate: 0,
+        stressDampening: 1.0,
+        psionicBonus: 0
+    },
+
     // Mutations
     mutations: {
         armor: { purchased: false, bioCost: 50, siliconCost: 30 },
         o2: { purchased: false, bioCost: 60, siliconCost: 40 },
         synapses: { purchased: false, bioCost: 40, siliconCost: 80 },
+        cocoon: { purchased: false, bioCost: 50, siliconCost: 40 },
+        hivemind: { purchased: false, bioCost: 80, siliconCost: 70 },
         folddrive: { purchased: false, bioCost: 90, siliconCost: 70 },
         translator: { purchased: false, bioCost: 80, siliconCost: 80 }
     },
@@ -1370,12 +1385,21 @@ function buyMutation(type) {
         } else if (type === 'synapses') {
             STATE.maxMentalEnergy = 150;
             STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 50);
-            STATE.psionicRange = 140; // Expand telepathic detection reach
+            calculateCrewBuffs();
             addLogEntry("SYSTEM", "MUTATION ERFOLGREICH: Synapsen-Netzwerk integriert. Max Mentalkraft nun 150 & Gedanken-Reichweite auf 140 LJ erweitert!");
             const el1 = document.getElementById('svg-synapses-1');
             const el2 = document.getElementById('svg-synapses-2');
             if (el1) el1.style.display = 'block';
             if (el2) el2.style.display = 'block';
+        } else if (type === 'cocoon') {
+            STATE.maxCrewCapacity = 4;
+            addLogEntry("SYSTEM", "MUTATION ERFOLGREICH: Neuronales Kokon-Gewebe gewachsen. Crew-Kapazität auf 4 erweitert & Stressschocks gedämpft!");
+            renderCrewUI();
+        } else if (type === 'hivemind') {
+            STATE.maxCrewCapacity = 6;
+            calculateCrewBuffs();
+            addLogEntry("SYSTEM", "MUTATION ERFOLGREICH: Symbiotische Synapsen-Kammer vollendet. Max 6 Besatzung & +20% auf alle Spezialisten-Buffs!");
+            renderCrewUI();
         } else if (type === 'folddrive') {
             STATE.warpRange = 160; // Expand warp jump reach
             addLogEntry("SYSTEM", "MUTATION ERFOLGREICH: Raumzeit-Faltungsmembran gewachsen. Warp-Reichweite auf 160 LJ vergrößert (-30% Energiekosten)!");
@@ -2277,15 +2301,62 @@ function updateCrewSimulation(dt) {
     document.getElementById('telepathy-energy-bar').style.width = `${(STATE.mentalEnergy / STATE.maxMentalEnergy) * 100}%`;
     document.getElementById('telepathy-energy-text').innerText = `${Math.round(STATE.mentalEnergy)}/${STATE.maxMentalEnergy}`;
 
+    // Passive Engineer Repair (Consumes tiny silicon to restore organic hull)
+    if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.05 && STATE.health < STATE.maxHealth) {
+        STATE.health = Math.min(STATE.maxHealth, STATE.health + STATE.crewBuffs.repairRate * dt);
+        STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.04 * dt);
+    }
+
+    // Dynamic Loneliness & Satiety Decay System
+    const uniqueRoles = new Set(STATE.crew.map(c => c.role)).size;
+    const totalCrew = STATE.crew.length;
+
+    let targetLoneliness = 100;
+    let isHarmony = false;
+
+    if (totalCrew === 0) {
+        targetLoneliness = 100;
+    } else if (totalCrew === 1) {
+        STATE.crewSatietyTimer += dt;
+        // Over 90 seconds, loneliness slowly drifts from 40% up to 65% (needs companion/diversity)
+        const decay = Math.min(25, (STATE.crewSatietyTimer / 90) * 25);
+        targetLoneliness = 40 + decay;
+    } else if (uniqueRoles === 2) {
+        targetLoneliness = 25;
+    } else if (uniqueRoles >= 3) {
+        targetLoneliness = 5;
+        isHarmony = true;
+    }
+
+    if (STATE.loneliness < targetLoneliness) {
+        STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
+    } else if (STATE.loneliness > targetLoneliness) {
+        STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
+    }
+
+    // Kosmische Harmonie bonus: +15% energy & mental regen
+    if (isHarmony) {
+        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
+        STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
+    }
+
+    // Multi-Crew Periodic Interactive Dialogue
+    STATE.crewDialogueTimer -= dt;
+    if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
+        STATE.crewDialogueTimer = 20 + Math.random() * 8;
+        triggerMultiCrewDialogue();
+    }
+
     // Loneliness Bar update
     const loneBar = document.getElementById('loneliness-bar');
     const loneTxt = document.getElementById('loneliness-text');
     if (loneBar) loneBar.style.width = `${STATE.loneliness}%`;
     if (loneTxt) {
         let loneState = "Verzweiflung";
-        if (STATE.loneliness < 20) loneState = "Geborgen";
+        if (isHarmony) loneState = "💫 Kosmische Harmonie";
+        else if (STATE.loneliness < 25) loneState = "Geborgen";
         else if (STATE.loneliness < 50) loneState = "Stabil";
-        else if (STATE.loneliness < 75) loneState = "Einsam";
+        else if (STATE.loneliness < 75) loneState = "Eintönig";
         loneTxt.innerText = `${Math.round(STATE.loneliness)}% (${loneState})`;
     }
 
@@ -2307,7 +2378,42 @@ function updateCrewSimulation(dt) {
 function renderCrewUI() {
     const container = document.getElementById('crew-list-container');
     const badge = document.getElementById('crew-count-badge');
+    const capText = document.getElementById('crew-capacity-text');
+    const synTitle = document.getElementById('crew-synergy-title');
+    const synDesc = document.getElementById('crew-synergy-desc');
+    const synBanner = document.getElementById('crew-synergy-banner');
+
     if (badge) badge.innerText = STATE.crew.length;
+    if (capText) capText.innerText = `${STATE.crew.length} / ${STATE.maxCrewCapacity}`;
+
+    const uniqueRoles = new Set(STATE.crew.map(c => c.role)).size;
+    const totalCrew = STATE.crew.length;
+
+    if (synBanner && synTitle && synDesc) {
+        if (totalCrew === 0) {
+            synBanner.className = 'crew-synergy-banner';
+            synTitle.innerText = "🌌 Kosmische Einsamkeit";
+            synDesc.innerText = "Keine Geister an Bord. Das Wesen sehnt sich nach Gedanken-Resonanz.";
+        } else if (totalCrew === 1) {
+            if (STATE.crewSatietyTimer > 45) {
+                synBanner.className = 'crew-synergy-banner satiety-decay';
+                synTitle.innerText = "⏳ Geistige Sättigung (Eintönigkeit)";
+                synDesc.innerText = "Alle Gedanken des Individuums erforscht. Das Wesen verlangt nach neuen Perspektiven!";
+            } else {
+                synBanner.className = 'crew-synergy-banner';
+                synTitle.innerText = "🌱 Erste Gedanken-Resonanz";
+                synDesc.innerText = "1 Geist an Bord. Erweitere das Kollektiv für stärkere Synergien.";
+            }
+        } else if (uniqueRoles === 2) {
+            synBanner.className = 'crew-synergy-banner';
+            synTitle.innerText = "✨ Duale Resonanz";
+            synDesc.innerText = "2 Rollen im Einklang. Einsamkeit stabil, passive Buffs verstärkt.";
+        } else if (uniqueRoles >= 3) {
+            synBanner.className = 'crew-synergy-banner harmony';
+            synTitle.innerText = "💫 Kosmische Harmonie";
+            synDesc.innerText = "Diverses Kollektiv aktiv! Einsamkeit auf 0% & +15% Bio/Mental-Regeneration!";
+        }
+    }
 
     if (!container) return;
 
@@ -2332,9 +2438,9 @@ function renderCrewUI() {
             <div class="${cardClass}">
                 <div class="crew-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
-                    <span class="species-badge">${c.species}</span>
+                    <span class="crew-role-badge">${c.roleIcon || '👤'} ${c.roleName || c.role}</span>
                 </div>
-                <div class="symbiotic-perk">✨ ${c.perk || c.role}</div>
+                <div class="crew-buff-tag">⚡ ${c.buffDesc || c.perk}</div>
                 
                 <div class="stability-container">
                     <span class="stability-label">Traum-Stabilität:</span>
@@ -2359,6 +2465,90 @@ function renderCrewUI() {
         `;
     });
     container.innerHTML = html;
+}
+
+// --- CREW BUFFS & MULTI-CREW DIALOGUE SYSTEM ---
+
+function calculateCrewBuffs() {
+    let thrustMult = 1.0;
+    let bioMult = 1.0;
+    let scanMult = 1.0;
+    let repair = 0;
+    let stressDamp = 1.0;
+    let psioBonus = 0;
+
+    const hiveBonus = STATE.mutations.hivemind && STATE.mutations.hivemind.purchased ? 1.2 : 1.0;
+
+    STATE.crew.forEach(c => {
+        if (c.role === 'pilot') thrustMult += 0.15 * hiveBonus;
+        if (c.role === 'biologist') {
+            bioMult += 0.30 * hiveBonus;
+            scanMult += 0.25 * hiveBonus;
+        }
+        if (c.role === 'engineer') repair += 0.6 * hiveBonus;
+        if (c.role === 'psychologist') stressDamp *= (1.0 - 0.40 * hiveBonus);
+        if (c.role === 'cryptologist') psioBonus += 30 * hiveBonus;
+    });
+
+    STATE.crewBuffs = {
+        thrust: thrustMult,
+        bioGain: bioMult,
+        scanSpeed: scanMult,
+        repairRate: repair,
+        stressDampening: stressDamp,
+        psionicBonus: Math.round(psioBonus)
+    };
+
+    const basePsio = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 140 : 75;
+    STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
+}
+
+const crewDialogueBank = {
+    pilot_engineer: [
+        { lineA: 'Miller: "Petrov, diese biomolekularen Trägheitsdämpfer... das Schiff richtet die Schubvektoren aus, bevor ich überhaupt lenke."', lineB: 'Petrov: "Die Naniten im Chitin leiten unsere Gedanken direkt weiter. Das ist kein Raumschiff, das ist ein lebendes Cockpit."' },
+        { lineA: 'Miller: "Wie sieht die Hüllenintegrität aus, wenn wir durch Asteroidengürtel tauchen?"', lineB: 'Petrov: "Silizium-Naniten schließen Risse im Flug. Solange wir Mineralien aufnehmen, hält die organische Panzerung stand."' }
+    ],
+    biologist_psychologist: [
+        { lineA: 'Dr. Song: "Die Traum-Matrix synchronisiert unsere neuronalen REM-Phasen. Es absorbiert nicht unsere Körper, sondern unsere Gefühle."', lineB: 'Dr. Vance: "Ein psionischer Stoffwechsel. Solange wir Gelassenheit und Zuversicht ausstrahlen, ernährt sich die Entität von Harmonie statt Verzweiflung."' },
+        { lineA: 'Dr. Song: "Die Biolumineszenz an den Synapsen-Wänden pulsiert im Takt unseres Herzschlags."', lineB: 'Dr. Vance: "Ein biologischer Resonanzraum. Wir halten das Wesen am Leben – und es beschützt uns vor der tödlichen Kälte des Alls."' }
+    ],
+    cryptologist_pilot: [
+        { lineA: 'Novak: "Ich fange schwache Tachyonen-Echos aus dem nächsten Sternensystem auf. Psio-Sensorhorizont erweitert."', lineB: 'Miller: "Kurs ist korrigiert, Novak. Bringen wir uns in den nächsten planetaren Orbit."' }
+    ],
+    engineer_biologist: [
+        { lineA: 'Petrov: "Dr. Song, die organischen Leitungen um die Faltungsmembran regenerieren erstaunlich schnell."', lineB: 'Dr. Song: "Es ist ein symbiotisches Ökosystem. Jede Ressource, die wir assimilieren, stärkt die Zellwände des Schiffes."' }
+    ],
+    general: [
+        { lineA: 'Crew-Funk: "Die Traum-Matrix flüstert Erinnerungen an Sternensysteme, die Lichtjahre entfernt liegen..."', lineB: 'Crew-Funk: "Wir reisen durch das Herz einer Galaxie, die kein Mensch zuvor erblickt hat."' }
+    ]
+};
+
+function triggerMultiCrewDialogue() {
+    if (STATE.crew.length < 2) return;
+
+    const hasTranslator = STATE.mutations.translator && STATE.mutations.translator.purchased;
+
+    const c1 = STATE.crew[Math.floor(Math.random() * STATE.crew.length)];
+    const others = STATE.crew.filter(c => c !== c1);
+    const c2 = others[Math.floor(Math.random() * others.length)];
+
+    let pairKey = `${c1.role}_${c2.role}`;
+    let revPairKey = `${c2.role}_${c1.role}`;
+    let dialogues = crewDialogueBank[pairKey] || crewDialogueBank[revPairKey] || crewDialogueBank.general;
+
+    const dialog = dialogues[Math.floor(Math.random() * dialogues.length)];
+
+    const name1 = c1.name.split(' ')[1] || c1.name;
+    const name2 = c2.name.split(' ')[1] || c2.name;
+
+    if (hasTranslator) {
+        addLogEntry("CREW", dialog.lineA.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name1));
+        setTimeout(() => {
+            addLogEntry("CREW", dialog.lineB.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name2));
+        }, 3200);
+    } else {
+        addLogEntry("CREW", `[Verschlüsselter Datenstrom zwischen ${c1.name} & ${c2.name}... Dschinn-Übersetzer benötigt!]`);
+    }
 }
 
 // --- RENDER & ANIMATION LOOP ---
@@ -2948,14 +3138,31 @@ function pollGamepadControls(dt) {
     if (gp.buttons[14] && gp.buttons[14].pressed) stickX = -1.0;
     if (gp.buttons[15] && gp.buttons[15].pressed) stickX = 1.0;
 
-    if (Math.abs(stickX) > 0 || Math.abs(stickY) > 0) {
-        const thrust = STATE.thrustStrength * dt;
-        STATE.playerVelocity.x += stickX * thrust;
-        STATE.playerVelocity.z += stickY * thrust;
-        STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.06 * dt);
+    // Process user movement keys
+    _inputDir.set(0, 0, 0);
+    if (STATE.keys.w) _inputDir.z -= 1;
+    if (STATE.keys.s) _inputDir.z += 1;
+    if (STATE.keys.a) _inputDir.x -= 1;
+    if (STATE.keys.d) _inputDir.x += 1;
+
+    const isThrusting = _inputDir.lengthSq() > 0 || Math.abs(stickX) > 0 || Math.abs(stickY) > 0;
+    if (isThrusting) {
+        if (_inputDir.lengthSq() === 0) {
+            _inputDir.set(stickX, 0, stickY);
+        }
+        _inputDir.normalize();
+
+        const thrustMult = (STATE.crewBuffs ? STATE.crewBuffs.thrust : 1.0);
+        const thrust = STATE.thrustStrength * thrustMult * dt;
+        STATE.playerVelocity.x += _inputDir.x * thrust;
+        STATE.playerVelocity.z += _inputDir.z * thrust;
+
+        // Drain Bio-Energy when moving (Pilot role provides -15% fuel efficiency)
+        const fuelCostMult = STATE.crew.some(c => c.role === 'pilot') ? 0.85 : 1.0;
+        STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.08 * fuelCostMult * dt);
 
         if (STATE.playerGroup) {
-            const angle = Math.atan2(stickX, stickY);
+            const angle = Math.atan2(_inputDir.x, _inputDir.z);
             STATE.playerGroup.rotation.y = angle;
         }
 
@@ -3323,14 +3530,16 @@ function generatePlanetAttributes(p) {
         bio = hash % 3 === 0 ? "Biolumineszierende Flora" : (hash % 3 === 1 ? "Mikrobielle Kolonien" : "Komplexes Ökosystem");
         res = "Reich an Biomasse, Kohlenstoff & O2";
 
-        // Sentient species candidates pool for abduction
+        // Sentient species candidates pool for abduction with distinct specialist roles
         const candidatePool = [
-            { name: "Capt. Alan Miller", species: "Mensch / Terraner", role: "Pilot & Navigator", perk: "+25% Schub-Effizienz", baseStressRate: 0.35 },
-            { name: "Dr. Elena Song", species: "Mensch / Terranerin", role: "Exobiologin", perk: "+0.3 Bio-Regen/s", baseStressRate: 0.30 },
-            { name: "Ing. Viktor Petrov", species: "Mensch / Terraner", role: "Quanten-Mechaniker", perk: "+0.25 Hüllen-Reparatur/s", baseStressRate: 0.45 },
-            { name: "Kael'Thas", species: "Silizium-Nomade", role: "Kristall-Philosoph", perk: "+50 Max Mentalkraft", baseStressRate: 0.20 },
-            { name: "Nereus-09", species: "Aquatischer Psioniker", role: "Tiefsee-Empath", perk: "-50% Schiffs-Einsamkeitsaufbau", baseStressRate: 0.15 },
-            { name: "Zul'Rik", species: "Avianischer Sternenkundler", role: "Kosmologe", perk: "+30% Scan-Reichweite", baseStressRate: 0.25 }
+            { name: "Capt. Alan Miller", species: "Mensch / Terraner", role: "pilot", roleName: "🧑‍✈️ Chef-Navigator", buffDesc: "+15% Schub & -15% Manöverkosten", baseStressRate: 0.30 },
+            { name: "Dr. Elena Song", species: "Mensch / Terranerin", role: "biologist", roleName: "🔬 Xenobiologin", buffDesc: "+30% Bio-Ertrag & +25% Scan-Speed", baseStressRate: 0.25 },
+            { name: "Ing. Viktor Petrov", species: "Mensch / Terraner", role: "engineer", roleName: "🔧 Chef-Ingenieur", buffDesc: "+0.6 HP/s Naniten-Reparatur", baseStressRate: 0.40 },
+            { name: "Dr. Julian Vance", species: "Mensch / Terraner", role: "psychologist", roleName: "🧘 Neuro-Therapeut", buffDesc: "-40% Crew-Stressaufbau", baseStressRate: 0.15 },
+            { name: "Lt. Kira Novak", species: "Mensch / Terranerin", role: "cryptologist", roleName: "📡 Quanten-Kryptologin", buffDesc: "+30 LJ Psio-Sensorhorizont", baseStressRate: 0.20 },
+            { name: "Prof. T'Kora", species: "Vulkanoid", role: "biologist", roleName: "🔬 Bio-Analytikerin", buffDesc: "+30% Bio-Ertrag & +25% Scan-Speed", baseStressRate: 0.10 },
+            { name: "Cyber-Adept Rex", species: "Cyborg-Pionier", role: "engineer", roleName: "🔧 Naniten-Meister", buffDesc: "+0.6 HP/s Naniten-Reparatur", baseStressRate: 0.20 },
+            { name: "Gesandte Maya", species: "Empathin", role: "psychologist", roleName: "🧘 Gedanken-Diplomatin", buffDesc: "-40% Crew-Stressaufbau", baseStressRate: 0.12 }
         ];
 
         const c1 = candidatePool[hash % candidatePool.length];
@@ -3679,6 +3888,12 @@ function triggerHarvestStart() {
 function triggerAbductStart() {
     if (!STATE.gameStarted || STATE.abductActive || STATE.scanningPlanet || STATE.extractingPlanet || !STATE.nearestPlanet) return;
 
+    // Check capacity limit
+    if (STATE.crew.length >= STATE.maxCrewCapacity) {
+        addLogEntry("SYSTEM", `Psionischer Transfer blockiert: Kokon-Kapazität voll (${STATE.crew.length} / ${STATE.maxCrewCapacity})! Erweitere Kapazität im Evolutions-Deck.`);
+        return;
+    }
+
     // Check range
     const dx = STATE.playerPosition.x - STATE.nearestPlanet.mesh.position.x;
     const dz = STATE.playerPosition.z - STATE.nearestPlanet.mesh.position.z;
@@ -3812,10 +4027,11 @@ function completeAbduction() {
         planet.attributes.species.population = planet.attributes.species.candidates.length;
 
         STATE.crew.push(candidate);
-        STATE.loneliness = Math.max(0, STATE.loneliness - 45);
+        STATE.crewSatietyTimer = 0; // Fresh mind resets satiety timer!
+        calculateCrewBuffs();
 
-        addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.species}) in Biokammer transferiert.`);
-        addLogEntry("CREW", `Traum-Matrix initialisiert. ${candidate.name} glaubt, an Bord der Forschungsstation Dienst zu tun. Einsamkeit sinkt.`);
+        addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.roleName || candidate.role}) in Kokon-Kammer transferiert.`);
+        addLogEntry("CREW", `Traum-Matrix initialisiert. ${candidate.name} aktiviert Rolle: ${candidate.buffDesc}!`);
 
         renderCrewUI();
         if (STATE.nearestPlanet === planet) {

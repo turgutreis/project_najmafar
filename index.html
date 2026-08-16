@@ -341,6 +341,18 @@
                     </svg>
                 </div>
 
+                <!-- Crew Meta & Synergy Header -->
+                <div class="crew-meta-panel">
+                    <div class="crew-capacity-row">
+                        <span class="meta-label">Kokon-Kapazität:</span>
+                        <span id="crew-capacity-text" class="meta-val highlight">0 / 2</span>
+                    </div>
+                    <div id="crew-synergy-banner" class="crew-synergy-banner">
+                        <span id="crew-synergy-title" class="synergy-title">🌌 Kosmische Einsamkeit</span>
+                        <span id="crew-synergy-desc" class="synergy-desc">Keine Geister an Bord. Das Wesen sehnt sich nach Gedanken-Resonanz.</span>
+                    </div>
+                </div>
+
                 <!-- Dynamic Crew / Matrix list -->
                 <div class="crew-list" id="crew-list-container">
                     <!-- Populated dynamically via renderCrewUI() in game.js -->
@@ -384,6 +396,22 @@
                                 <span class="mut-cost">Kosten: <span class="cost-val bio">40 Bio</span> | <span class="cost-val silicon">80 Silizium</span></span>
                             </div>
                             <button class="mut-btn" data-mutation="synapses">Mutieren</button>
+                        </div>
+                        <div class="mutation-item" id="mut-cocoon">
+                            <div class="mut-details">
+                                <span class="mut-name">Neuronales Kokon-Gewebe</span>
+                                <span class="mut-desc">Erweitert Crew-Kapazität auf 4 & dämpft Stress</span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">50 Bio</span> | <span class="cost-val silicon">40 Silizium</span></span>
+                            </div>
+                            <button class="mut-btn" data-mutation="cocoon">Mutieren</button>
+                        </div>
+                        <div class="mutation-item" id="mut-hivemind">
+                            <div class="mut-details">
+                                <span class="mut-name">Symbiotische Synapsen-Kammer</span>
+                                <span class="mut-desc">Max 6 Crew & +20% auf alle Spezialisten-Buffs</span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">80 Bio</span> | <span class="cost-val silicon">70 Silizium</span></span>
+                            </div>
+                            <button class="mut-btn" data-mutation="hivemind">Mutieren</button>
                         </div>
                         <div class="mutation-item" id="mut-folddrive">
                             <div class="mut-details">

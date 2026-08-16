@@ -1975,51 +1975,86 @@ body.game-started .hud-left {
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
 }
 
-.species-badge {
+.crew-meta-panel {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.crew-capacity-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.72rem;
+    font-family: 'Orbitron', sans-serif;
+    color: #94a3b8;
+}
+
+.crew-capacity-row .highlight {
+    color: #38bdf8;
+    font-weight: 700;
+}
+
+.crew-synergy-banner {
+    background: rgba(0, 0, 0, 0.4);
+    border-left: 3px solid #ec4899;
+    border-radius: 4px;
+    padding: 4px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    transition: all 0.3s ease;
+}
+
+.crew-synergy-banner.harmony {
+    border-left-color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+.crew-synergy-banner.satiety-decay {
+    border-left-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.synergy-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.synergy-desc {
+    font-size: 0.64rem;
+    color: #cbd5e1;
+    line-height: 1.25;
+}
+
+.crew-role-badge {
     font-size: 0.65rem;
     padding: 2px 6px;
     border-radius: 4px;
-    background: rgba(217, 70, 239, 0.2);
-    color: #d946ef;
-    border: 1px solid rgba(217, 70, 239, 0.4);
-    font-weight: 600;
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    font-weight: 700;
 }
 
-.symbiotic-perk {
-    font-size: 0.68rem;
+.crew-buff-tag {
+    font-size: 0.66rem;
     color: #10b981;
     display: flex;
     align-items: center;
     gap: 4px;
-}
-
-.stability-container {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.7rem;
-}
-
-.stability-label {
-    color: #a855f7;
-    width: 90px;
-    font-size: 0.68rem;
-    font-weight: 600;
-}
-
-.stability-bar-bg {
-    flex: 1;
-    height: 5px;
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 3px;
-    overflow: hidden;
-}
-
-.stability-bar {
-    height: 100%;
-    background: linear-gradient(90deg, #a855f7, #38bdf8);
-    box-shadow: 0 0 6px #a855f7;
-    transition: width 0.2s ease;
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: 4px;
+    padding: 2px 6px;
+    margin-top: 2px;
 }
 
 .thought-whisper {
