@@ -29459,6 +29459,9 @@ function setupMenuListeners() {
       STATE.gameStarted = true;
       if (resumeBtn)
         resumeBtn.style.display = "block";
+      if (!isMusicPlaying() && !isMusicUserMuted()) {
+        toggleMusic(true);
+      }
       addLogEntry("SYSTEM", "Biologisches Raumschiff erwacht. Psionische Sensoren online.");
       addLogEntry("CREW", "Capt. Miller: 'Systeme nominal. Wir fliegen mit vollem Schub!'");
     });
@@ -29564,4 +29567,8 @@ function setupMenuListeners() {
     });
   }
 }
-window.addEventListener("DOMContentLoaded", init);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
+}

@@ -14,6 +14,8 @@ import { renderCrewUI } from './systems/crew';
 import { toggleGalaxyMap, warpToSystem } from './systems/galaxy-map';
 import { triggerScanStart } from './systems/scanner';
 
+import { toggleMusic, isMusicPlaying, isMusicUserMuted } from './engine/audio';
+
 let lastTime = 0;
 
 function animate(time: number) {
@@ -126,6 +128,10 @@ function setupMenuListeners() {
             STATE.gameStarted = true;
             if (resumeBtn) resumeBtn.style.display = 'block';
 
+            if (!isMusicPlaying() && !isMusicUserMuted()) {
+                toggleMusic(true);
+            }
+
             addLogEntry("SYSTEM", "Biologisches Raumschiff erwacht. Psionische Sensoren online.");
             addLogEntry("CREW", "Capt. Miller: 'Systeme nominal. Wir fliegen mit vollem Schub!'");
         });
@@ -237,4 +243,8 @@ function setupMenuListeners() {
     }
 }
 
-window.addEventListener('DOMContentLoaded', init);
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
