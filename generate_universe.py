@@ -186,36 +186,65 @@ def run_local_simulator(qc, shots):
 
 
 def build_galaxy(qrng):
-    """Procedurally generates a spiral galaxy of 100 stellar systems using quantum bits."""
+    """Procedurally generates a beautiful, natural spiral galaxy of 100 stellar systems using quantum bits."""
     print("Generiere Galaxie mit 100 Sternensystemen...", flush=True)
     systems = []
     
-    # We arrange the 100 systems in a 2-armed spiral galaxy!
+    # 2-armed Logarithmic Spiral Galaxy
     arms = 2
+    existing_coords = []
+    
     for i in range(100):
-        # 1. System Coordinates in spiral arms
-        # Spiral parameters: angle theta, radius r
-        theta = qrng.get_range(0, 4 * math.pi) # rotation angle
-        # Arm choice (quantum choice)
-        arm = qrng.get_bits(1) % arms
-        arm_offset = arm * (2 * math.pi / arms)
-        
-        # Radius expands out with some randomness
-        r = qrng.get_range(30, 250) + (i * 1.5)
-        
-        # Spiral math
-        x = r * math.cos(theta + arm_offset) + qrng.get_range(-15, 15)
-        z = r * math.sin(theta + arm_offset) + qrng.get_range(-15, 15)
-        
-        # 2. System naming
-        prefix = qrng.choose(STAR_PREFIXES)
-        suffix = qrng.choose(STAR_SUFFIXES)
-        sys_name = f"{prefix} {suffix}"
-        
-        # Make the starting system (ID 0) Epsilon Prime at center coordinates for easy start
+        # Starting system (ID 0) at galactic core
         if i == 0:
             sys_name = "Sol-Verbindung (Start)"
             x, z = 0.0, 0.0
+            existing_coords.append((x, z))
+        else:
+            # Distribute along spiral arms with natural galactic dispersion
+            arm = i % arms
+            arm_offset = arm * math.pi
+            
+            # Progress from core (0.05) to outer rim (1.0)
+            progress = ((i + qrng.get_range(-0.3, 0.3)) / 100.0) ** 0.72
+            progress = max(0.08, min(1.0, progress))
+            
+            # Spiral arm angle
+            arm_angle = progress * (3.2 * math.pi) + arm_offset
+            
+            # Arm center distance
+            arm_r = 24.0 + progress * 215.0
+            
+            # Natural stellar dispersion around the spiral arm
+            dispersion = 10.0 + progress * 22.0
+            scatter_dist = qrng.get_range(-dispersion, dispersion)
+            scatter_angle = qrng.get_range(0, 2 * math.pi)
+            
+            x = round(arm_r * math.cos(arm_angle) + scatter_dist * math.cos(scatter_angle), 2)
+            z = round(arm_r * math.sin(arm_angle) + scatter_dist * math.sin(scatter_angle), 2)
+            
+            # Spacing protection: Ensure stars never overlap or stack on top of each other (min 16 units)
+            attempts = 0
+            while attempts < 20:
+                too_close = False
+                for ex, ez in existing_coords:
+                    dx = x - ex
+                    dz = z - ez
+                    if dx * dx + dz * dz < 16.0 * 16.0:
+                        too_close = True
+                        break
+                if not too_close:
+                    break
+                x = round(x + qrng.get_range(-14, 14), 2)
+                z = round(z + qrng.get_range(-14, 14), 2)
+                attempts += 1
+                
+            existing_coords.append((x, z))
+            
+            # System naming
+            prefix = qrng.choose(STAR_PREFIXES)
+            suffix = qrng.choose(STAR_SUFFIXES)
+            sys_name = f"{prefix} {suffix}"
             
         # 3. Star selection
         # Weighted roll using quantum bits
