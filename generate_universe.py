@@ -312,6 +312,24 @@ def build_galaxy(qrng):
                 p_res = qrng.choose(["Reich an Biomasse, Kohlenstoff & O2", "Uran-Akkretionen & Urzeitfarne"])
                 
             p_name = f"{sys_name} {chr(97 + p_idx)}"
+
+            # Sentient Species / Civilization presence on Habitable Worlds
+            species = None
+            if p_type == "Habitable":
+                spec_roll = qrng.get_bits(3)
+                if spec_roll < 6: # 75% of habitable worlds have intelligent life
+                    spec_type = qrng.choose([
+                        "Terranische Exploratoren",
+                        "Silizium-Nomaden",
+                        "Aquatische Psioniker",
+                        "Proto-Humanoide Sternensucher",
+                        "Avianische Philosophen"
+                    ])
+                    species = {
+                        "hasSentient": True,
+                        "name": spec_type,
+                        "population": 1 + (qrng.get_bits(2) % 3)
+                    }
             
             # Generate Moons (Natural Satellites)
             moons = []
@@ -375,6 +393,7 @@ def build_galaxy(qrng):
                 "atmos": p_atmos,
                 "bio": p_bio,
                 "res": p_res,
+                "species": species,
                 "moons": moons
             })
             

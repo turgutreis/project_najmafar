@@ -162,6 +162,14 @@
                 </div>
                 <div class="stat-value" id="telepathy-energy-text">90%</div>
             </div>
+
+            <div class="stat-group">
+                <div class="stat-label">Kosmische Einsamkeit</div>
+                <div class="progress-bar-container">
+                    <div id="loneliness-bar" class="progress-bar loneliness" style="width: 80%;"></div>
+                </div>
+                <div class="stat-value" id="loneliness-text" style="color: #ec4899;">80% (Verzweiflung)</div>
+            </div>
         </header>
 
         <!-- Left Side: Planetary Scanner & Minimap -->
@@ -221,6 +229,10 @@
                     <span class="label">Atmosphäre:</span>
                     <span id="scan-planet-atmos" class="val">-</span>
                 </div>
+                <div class="result-row" id="scan-planet-species-row" style="display: none;">
+                    <span class="label">Intelligentes Leben:</span>
+                    <span id="scan-planet-species" class="val" style="color: #d946ef; font-weight: bold;">-</span>
+                </div>
                 <div class="result-row" style="flex-direction: column; align-items: flex-start; gap: 4px; border-bottom: none;">
                     <span class="label">Ressourcendichte:</span>
                     <span id="scan-planet-resources" class="val" style="color: #06b6d4; font-weight: normal; font-size: 0.72rem; line-height: 1.3;">-</span>
@@ -241,6 +253,15 @@
                         <div id="harvest-progress-bar" class="harvest-progress-bar" style="width: 0%;"></div>
                     </div>
                 </div>
+
+                <!-- Abduction Trigger Button & Progress -->
+                <button id="start-abduct-btn" class="abduct-btn" style="display: none;">🛸 Psionische Entführung [F]</button>
+                <div id="abduct-progress-container" class="abduct-progress-container" style="display: none;">
+                    <div class="abduct-progress-label">Traum-Matrix-Transfer: <span id="abduct-progress-text">0%</span></div>
+                    <div class="abduct-progress-bar-bg">
+                        <div id="abduct-progress-bar" class="abduct-progress-bar" style="width: 0%;"></div>
+                    </div>
+                </div>
             </div>
             <div id="scan-placeholder-box" class="scan-placeholder-box">
                 Fliege in die Nähe eines Planeten (Abstand &lt; 20), um die Sensoren zu kalibrieren und einen Oberflächendetektor-Scan durchzuführen.
@@ -254,7 +275,7 @@
 
             <!-- Tabs Header -->
             <div id="right-deck-tabs" class="deck-tabs">
-                <button class="tab-btn active" data-tab="crew">👥 Crew-Symbiose</button>
+                <button class="tab-btn active" data-tab="crew">🔮 Traum-Matrix (<span id="crew-count-badge">0</span>)</button>
                 <button class="tab-btn" data-tab="evolution">🧬 Evolution</button>
             </div>
             
@@ -269,7 +290,7 @@
                         <path id="svg-armor" d="M8,60 Q50,6 100,11 Q150,16 192,60 Q150,104 100,109 Q50,114 8,60" fill="none" stroke="#10b981" stroke-width="4" style="display: none; opacity: 0.8;" />
                         
                         <!-- Captured mechanical ship cabin inside -->
-                        <rect x="55" y="40" width="90" height="40" rx="5" fill="rgba(30, 41, 59, 0.7)" stroke="#38bdf8" stroke-width="2" id="schematic-cabin" />
+                        <rect x="55" y="40" width="90" height="40" rx="5" fill="rgba(30, 41, 59, 0.7)" stroke="#d946ef" stroke-width="2" id="schematic-cabin" />
                         
                         <!-- MUTATION: Sauerstoff-Drüse (Oxygen Core) -->
                         <circle id="svg-o2" cx="100" cy="50" r="8" fill="#10b981" style="display: none;" />
@@ -282,66 +303,26 @@
                         <polygon id="svg-translator" points="100,34 106,44 94,44" fill="#06b6d4" style="display: none;" />
 
                         <!-- Connection tentacles -->
-                        <path d="M30,60 Q50,60 55,60" stroke="#00ff88" stroke-width="2" fill="none" />
-                        <path d="M145,60 Q170,60 180,60" stroke="#00ff88" stroke-width="2" fill="none" />
+                        <path d="M30,60 Q50,60 55,60" stroke="#d946ef" stroke-width="2" fill="none" />
+                        <path d="M145,60 Q170,60 180,60" stroke="#d946ef" stroke-width="2" fill="none" />
                         <path d="M100,15 Q100,35 100,40" stroke="rgba(236, 72, 153, 0.5)" stroke-width="1.5" stroke-dasharray="2 2" fill="none" class="telepathic-pulse-line" />
                         <!-- Status text overlay -->
-                        <text x="100" y="65" font-family="'Orbitron', sans-serif" font-size="10" fill="#38bdf8" text-anchor="middle" id="schematic-status">Druck stabil</text>
+                        <text x="100" y="65" font-family="'Orbitron', sans-serif" font-size="10" fill="#d946ef" text-anchor="middle" id="schematic-status">Traum-Matrix aktiv</text>
                     </svg>
                 </div>
 
-                <!-- Crew list and stress monitoring -->
-                <div class="crew-list">
-                    <div class="crew-member" id="crew-1">
-                        <div class="crew-header">
-                            <span class="crew-name">Capt. Miller (Pilot)</span>
-                            <span class="crew-status action-working">Arbeitet</span>
-                        </div>
-                        <div class="stress-container">
-                            <span class="stress-label">Stress</span>
-                            <div class="stress-bar-bg">
-                                <div class="stress-bar" style="width: 25%;"></div>
-                            </div>
-                            <span class="stress-percentage">25%</span>
-                        </div>
-                    </div>
-
-                    <div class="crew-member" id="crew-2">
-                        <div class="crew-header">
-                            <span class="crew-name">Dr. Song (Biologin)</span>
-                            <span class="crew-status action-working">Analysiert Proben</span>
-                        </div>
-                        <div class="stress-container">
-                            <span class="stress-label">Stress</span>
-                            <div class="stress-bar-bg">
-                                <div class="stress-bar" style="width: 40%;"></div>
-                            </div>
-                            <span class="stress-percentage">40%</span>
-                        </div>
-                    </div>
-
-                    <div class="crew-member" id="crew-3">
-                        <div class="crew-header">
-                            <span class="crew-name">Ing. Petrov (Mechaniker)</span>
-                            <span class="crew-status action-panic">Panik</span>
-                        </div>
-                        <div class="stress-container">
-                            <span class="stress-label">Stress</span>
-                            <div class="stress-bar-bg">
-                                <div class="stress-bar" style="width: 75%;"></div>
-                            </div>
-                            <span class="stress-percentage">75%</span>
-                        </div>
-                    </div>
+                <!-- Dynamic Crew / Matrix list -->
+                <div class="crew-list" id="crew-list-container">
+                    <!-- Populated dynamically via renderCrewUI() in game.js -->
                 </div>
 
                 <!-- Telepathy Controls -->
                 <div class="telepathy-control-panel">
                     <button id="telepathy-toggle-btn" class="telepathy-btn">
                         <span class="btn-glow"></span>
-                        <span class="btn-text">Telepathische Illusion aktivieren</span>
+                        <span class="btn-text">Traum-Matrix stabilisieren [LEERTASTE]</span>
                     </button>
-                    <div class="btn-hint">Oder [LEERTASTE] drücken</div>
+                    <div class="btn-hint">Webt die Illusion neu & beruhigt das Bewusstsein</div>
                 </div>
             </div>
 

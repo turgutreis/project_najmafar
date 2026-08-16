@@ -33,7 +33,7 @@ const STATE = {
     currentSystemId: 0,
     playerAcceleration: new THREE.Vector3(0, 0, 0),
 
-    // Scanner & Harvesting System
+    // Scanner, Harvesting & Abduction System
     nearestPlanet: null,
     scanningPlanet: null,
     scanProgress: 0,
@@ -41,18 +41,20 @@ const STATE = {
     extractingPlanet: null,
     extractProgress: 0,
     harvestedPlanets: {},
+    abductActive: false,
+    abductProgress: 0,
+    abductTarget: null,
     playerMass: 1,
     drag: 0.4, // Base drag when thrusting
     brakeDrag: 2.2, // Retro-dampeners drag when coasting
     currentDrag: 0.4,
     thrustStrength: 25.0, // Responsive thrusters
 
-    // Crew Simulation
-    crew: [
-        { id: 1, name: "Capt. Miller (Pilot)", role: "Pilot", stress: 25, status: "Arbeitet", baseStressRate: 0.4 },
-        { id: 2, name: "Dr. Song (Biologin)", role: "Biologin", stress: 40, status: "Analysiert Gewebe", baseStressRate: 0.3 },
-        { id: 3, name: "Ing. Petrov (Mechaniker)", role: "Mechaniker", stress: 75, status: "Wartung", baseStressRate: 0.6 }
-    ],
+    // Psionic Loneliness & Mental Coherence
+    loneliness: 85, // Starts lonely (0-100%)
+
+    // Psionic Dream Matrix (Starts with 0 Crew!)
+    crew: [],
 
     // Environment
     gravitySources: [],
@@ -112,7 +114,9 @@ let gravityCircles = [];
 let activePlanets = [];
 let scanVisualMesh = null;
 let harvestBeamMesh = null;
+let abductBeamMesh = null;
 let harvestOsc = null, harvestGain = null, harvestFilter = null;
+let abductOsc = null, abductGain = null, abductFilter = null;
 let minimapCanvas = null;
 let minimapCtx = null;
 let trajectoryPoints;
@@ -1228,7 +1232,14 @@ function setupControls() {
             toggleGalaxyMap();
         }
         if (key === 'f') {
-            triggerScanStart();
+            if (STATE.nearestPlanet) {
+                const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
+                if (isScanned && STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
+                    triggerAbductStart();
+                } else {
+                    triggerScanStart();
+                }
+            }
         }
         if (key === 'e') {
             triggerHarvestStart();
@@ -1683,6 +1694,29 @@ function updatePhysics(dt) {
         }
     }
 
+    // --- ACTIVE ABDUCTION UPDATE LOOP ---
+    if (STATE.abductActive && STATE.abductTarget) {
+        const adx = STATE.playerPosition.x - STATE.abductTarget.mesh.position.x;
+        const adz = STATE.playerPosition.z - STATE.abductTarget.mesh.position.z;
+        const adist = Math.sqrt(adx * adx + adz * adz);
+
+        if (adist > 22) {
+            cancelAbduction("Psionische Verbindung abgerissen: Schiff driftete aus dem Orbit!");
+        } else {
+            STATE.abductProgress += (dt / 2.8) * 100; // 2.8s abduction
+            updateAbductBeam(STATE.playerPosition, STATE.abductTarget.mesh.position);
+
+            const aProgBar = document.getElementById('abduct-progress-bar');
+            const aProgTxt = document.getElementById('abduct-progress-text');
+            if (aProgBar) aProgBar.style.width = `${Math.min(100, STATE.abductProgress)}%`;
+            if (aProgTxt) aProgTxt.innerText = `${Math.round(Math.min(100, STATE.abductProgress))}%`;
+
+            if (STATE.abductProgress >= 100) {
+                completeAbduction();
+            }
+        }
+    }
+
     STATE.playerAcceleration.set(0, 0, 0);
 
     // 1. Apply Player Thrusters (WASD / Arrows)
@@ -1971,69 +2005,94 @@ function respawnAsteroid(sourceObj) {
 }
 
 function updateCrewSimulation(dt) {
-    // 1. Stress rates calculations
-    let totalStress = 0;
+    // 1. Loneliness & Existential Solitude
+    if (STATE.crew.length === 0) {
+        // Loneliness builds up when no minds are in the matrix
+        STATE.loneliness = Math.min(100, STATE.loneliness + 1.2 * dt);
+        if (STATE.loneliness > 75) {
+            // Neural depression: slight bio-energy decay & hull distress
+            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.35 * dt);
+            STATE.health = Math.max(15, STATE.health - 0.15 * dt);
+        }
+    } else {
+        // Imprisoned minds soothe the ship's loneliness
+        STATE.loneliness = Math.max(0, STATE.loneliness - 2.8 * dt * STATE.crew.length);
+    }
 
-    // General modifiers (balanced: mid-point)
+    // 2. Individual Dream Matrix & Illusion Stability Loop
+    let totalStress = 0;
     let speed = STATE.playerVelocity.length();
-    let speedStressModifier = speed > 10.0 ? 0.8 : 0;
-    let criticalEnergyModifier = STATE.bioEnergy < 25 ? 1.2 : 0;
+    let speedStressModifier = speed > 10.0 ? 0.6 : 0;
+    let criticalEnergyModifier = STATE.bioEnergy < 25 ? 1.0 : 0;
 
     STATE.crew.forEach((c) => {
-        if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
-            // Telepathy decreases stress
-            c.stress = Math.max(0, c.stress - 6.0 * dt);
-            c.status = "Gasgelullt";
-        } else {
-            // Normal stress behavior (balanced: 1.35x factor for engaging survival)
-            let growth = (c.baseStressRate + speedStressModifier + criticalEnergyModifier) * 1.35 * dt;
-            if (STATE.mutations.o2.purchased) {
-                growth *= 0.5; // O2 chamber halves stress buildup
-            }
-            c.stress = Math.min(100, c.stress + growth);
+        // Illusion stability decays slowly as minds probe their surroundings
+        const decayRate = (0.35 + c.stress * 0.006) * dt;
+        c.illusionStability = Math.max(0, c.illusionStability - decayRate);
 
-            if (c.stress > 70) {
+        if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
+            // Telepathy actively mends the dream matrix and calms the subject
+            c.stress = Math.max(0, c.stress - 7.5 * dt);
+            c.illusionStability = Math.min(100, c.illusionStability + 8.0 * dt);
+            c.status = "Traum-Trance";
+            c.thought = "Fühlt eine warme, beruhigende Welle... 'Alles ist friedlich.'";
+        } else {
+            // Natural stress growth based on illusion stability
+            if (c.illusionStability < 35) {
+                // Cracks in reality: High stress spike!
+                c.stress = Math.min(100, c.stress + (4.5 + speedStressModifier) * dt);
                 c.status = "Panik";
+                c.thought = "Verzweifelt: 'Die Wände pulsieren... das ist keine Station!'";
+            } else if (c.illusionStability < 65) {
+                // Suspicion rising
+                c.stress = Math.min(100, c.stress + (1.2 + speedStressModifier) * dt);
+                c.status = "Misstrauisch";
+                c.thought = "Stutzt: 'Höre ich ein Atmen in den Lüftungsschächten?'";
             } else {
-                c.status = c.role === "Pilot" ? "Versucht zu steuern" : (c.role === "Biologin" ? "Nimmt Proben" : "Repariert Triebwerk");
+                // Peaceful dream illusion
+                c.stress = Math.max(0, c.stress - 2.0 * dt);
+                c.status = "Arbeitet";
+                c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
             }
         }
         totalStress += c.stress;
+
+        // Symbiotic Perks from calm minds
+        if (c.illusionStability >= 50) {
+            if (c.role.includes("Mechaniker") || c.role.includes("Ingenieur")) {
+                STATE.health = Math.min(STATE.maxHealth, STATE.health + 0.25 * dt);
+            } else if (c.role.includes("Biologin")) {
+                STATE.bioRes += 0.1 * dt;
+            } else if (c.role.includes("Empath") || c.species.includes("Psioniker")) {
+                STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 1.5 * dt);
+            }
+        }
+
+        // Panic Sabotage at extreme stress
+        if (c.stress >= 85) {
+            STATE.health = Math.max(0, STATE.health - 1.8 * dt);
+            if (Math.random() < 0.004) {
+                addLogEntry("CREW", `MATRIX-ALARM: ${c.name} greift in Panik die organische Zellwand an! (Zellschaden)`);
+            }
+        }
     });
 
-    const avgStress = totalStress / STATE.crew.length;
-
-    // 2. Mental energy drain/regen
+    // 3. Mental energy drain/regen
     if (STATE.telepathyActive) {
-        // Balanced: telepathy drain speed mid-point 6
         STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 6 * dt);
         if (STATE.mentalEnergy === 0) {
-            toggleTelepathy(); // Force deactivate
-            addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Illusion bricht zusammen.");
-            addLogEntry("CREW", encryptCrewMessage("Ing. Petrov", "Warte... die Wände haben gerade geatmet! Das ist kein Holz, das ist Fleisch!"));
+            toggleTelepathy();
+            addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
         }
     } else {
-        // Slow regeneration (balanced: synapses is 8 * dt, normal is 4 * dt)
         const regenSpeed = STATE.mutations.synapses.purchased ? 8 * dt : 4 * dt;
         STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
     }
 
-    // 3. Crew Sabotage at high stress
-    STATE.crew.forEach((c) => {
-        if (c.stress >= 85) {
-            // Highly stressed crew damages the ship core out of desperation/sabotage!
-            STATE.health = Math.max(0, STATE.health - 1.8 * dt);
-            if (Math.random() < 0.004) {
-                addLogEntry("CREW", encryptCrewMessage(c.name, "Ich muss dieses Ding aufschneiden! Wir müssen hier raus! (Zellkern erleidet Schaden)"));
-            }
-        }
-    });
-
-    // 4. Update UI Bars and Texts
+    // 4. Update UI Bars
     document.getElementById('core-health-bar').style.width = `${STATE.health}%`;
     document.getElementById('core-health-text').innerText = `${Math.round(STATE.health)}%`;
 
-    // Danger color shift for core health
     if (STATE.health < 30) {
         document.getElementById('core-health-bar').className = "progress-bar health danger";
     } else {
@@ -2046,40 +2105,19 @@ function updateCrewSimulation(dt) {
     document.getElementById('telepathy-energy-bar').style.width = `${(STATE.mentalEnergy / STATE.maxMentalEnergy) * 100}%`;
     document.getElementById('telepathy-energy-text').innerText = `${Math.round(STATE.mentalEnergy)}/${STATE.maxMentalEnergy}`;
 
-    // Update individual crew status in HTML
-    STATE.crew.forEach((c, idx) => {
-        const crewDiv = document.getElementById(`crew-${c.id}`);
-        if (crewDiv) {
-            // Status label
-            const statusLabel = crewDiv.querySelector('.crew-status');
-            statusLabel.innerText = c.status;
-            statusLabel.className = 'crew-status';
-            if (c.status === 'Panik') {
-                statusLabel.classList.add('action-panic');
-            } else if (c.status === 'Gasgelullt') {
-                statusLabel.classList.add('action-calm');
-            } else {
-                statusLabel.classList.add('action-working');
-            }
+    // Loneliness Bar update
+    const loneBar = document.getElementById('loneliness-bar');
+    const loneTxt = document.getElementById('loneliness-text');
+    if (loneBar) loneBar.style.width = `${STATE.loneliness}%`;
+    if (loneTxt) {
+        let loneState = "Verzweiflung";
+        if (STATE.loneliness < 20) loneState = "Geborgen";
+        else if (STATE.loneliness < 50) loneState = "Stabil";
+        else if (STATE.loneliness < 75) loneState = "Einsam";
+        loneTxt.innerText = `${Math.round(STATE.loneliness)}% (${loneState})`;
+    }
 
-            // Stress Bar width & text
-            const bar = crewDiv.querySelector('.stress-bar');
-            bar.style.width = `${c.stress}%`;
-
-            // Stress color depending on urgency
-            if (c.stress > 70) {
-                bar.style.backgroundColor = '#ef4444'; // Red
-            } else if (c.stress > 40) {
-                bar.style.backgroundColor = '#f59e0b'; // Amber
-            } else {
-                bar.style.backgroundColor = '#10b981'; // Green
-            }
-
-            crewDiv.querySelector('.stress-percentage').innerText = `${Math.round(c.stress)}%`;
-        }
-    });
-
-    // Passive decay of bioEnergy over time (balanced: 0.40 * dt for active survival loop)
+    // Passive decay of bioEnergy over time
     STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.40 * dt);
 
     // Core damages if no energy left
@@ -2089,6 +2127,66 @@ function updateCrewSimulation(dt) {
             addLogEntry("SYSTEM", "Kritischer Nahrungsmangel. Organismus verhungert (-2 Kernintegrität).");
         }
     }
+
+    // Render Matrix / Crew Deck
+    renderCrewUI();
+}
+
+function renderCrewUI() {
+    const container = document.getElementById('crew-list-container');
+    const badge = document.getElementById('crew-count-badge');
+    if (badge) badge.innerText = STATE.crew.length;
+
+    if (!container) return;
+
+    if (STATE.crew.length === 0) {
+        container.innerHTML = `
+            <div class="matrix-empty-card">
+                <span class="highlight">Keine Vernunftbegabten Wesen</span>
+                Die psionische Traum-Matrix ist leer. Das Schiff leidet unter existenzieller kosmischer Einsamkeit.<br><br>
+                <em>Scanne habitable Planeten nach intelligentem Leben und starte eine psionische Entführung [F]!</em>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    STATE.crew.forEach(c => {
+        let cardClass = 'crew-member';
+        if (c.illusionStability < 35 || c.stress > 70) cardClass += ' panic';
+        else if (c.illusionStability < 65 || c.stress > 45) cardClass += ' suspicious';
+
+        html += `
+            <div class="${cardClass}">
+                <div class="crew-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
+                    <span class="species-badge">${c.species}</span>
+                </div>
+                <div class="symbiotic-perk">✨ ${c.perk || c.role}</div>
+                
+                <div class="stability-container">
+                    <span class="stability-label">Traum-Stabilität:</span>
+                    <div class="stability-bar-bg">
+                        <div class="stability-bar" style="width: ${c.illusionStability}%;"></div>
+                    </div>
+                    <span style="color: #a855f7; font-size: 0.68rem; font-weight: 700;">${Math.round(c.illusionStability)}%</span>
+                </div>
+
+                <div class="stress-container" style="display: flex; align-items: center; gap: 6px;">
+                    <span class="stress-label" style="width: 90px; font-size: 0.68rem; color: #94a3b8;">Stress:</span>
+                    <div class="stress-bar-bg" style="flex: 1; height: 5px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden;">
+                        <div class="stress-bar" style="width: ${c.stress}%; height: 100%; background: ${c.stress > 70 ? '#ef4444' : '#f59e0b'};"></div>
+                    </div>
+                    <span class="stress-percentage" style="font-size: 0.68rem;">${Math.round(c.stress)}%</span>
+                </div>
+
+                <div class="thought-whisper ${c.illusionStability < 35 ? 'terrified' : ''}">
+                    💭 "${c.thought}"
+                </div>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
 }
 
 // --- RENDER & ANIMATION LOOP ---
@@ -2749,25 +2847,53 @@ function drawMinimap() {
 function generatePlanetAttributes(p) {
     const hash = p.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
 
-    let atmos, temp, bio, res;
+    let atmos, temp, bio, res, species;
     if (p.type === 'Habitable') {
         atmos = hash % 2 === 0 ? "Stickstoff & Sauerstoff (Klasse M)" : "Dichte Aerosole & Wasserdampf";
         temp = (15 + (hash % 15)) + "°C";
         bio = hash % 3 === 0 ? "Biolumineszierende Flora" : (hash % 3 === 1 ? "Mikrobielle Kolonien" : "Komplexes Ökosystem");
         res = "Reich an Biomasse, Kohlenstoff & O2";
+
+        // Sentient species candidates pool for abduction
+        const candidatePool = [
+            { name: "Capt. Alan Miller", species: "Mensch / Terraner", role: "Pilot & Navigator", perk: "+25% Schub-Effizienz", baseStressRate: 0.35 },
+            { name: "Dr. Elena Song", species: "Mensch / Terranerin", role: "Exobiologin", perk: "+0.3 Bio-Regen/s", baseStressRate: 0.30 },
+            { name: "Ing. Viktor Petrov", species: "Mensch / Terraner", role: "Quanten-Mechaniker", perk: "+0.25 Hüllen-Reparatur/s", baseStressRate: 0.45 },
+            { name: "Kael'Thas", species: "Silizium-Nomade", role: "Kristall-Philosoph", perk: "+50 Max Mentalkraft", baseStressRate: 0.20 },
+            { name: "Nereus-09", species: "Aquatischer Psioniker", role: "Tiefsee-Empath", perk: "-50% Schiffs-Einsamkeitsaufbau", baseStressRate: 0.15 },
+            { name: "Zul'Rik", species: "Avianischer Sternenkundler", role: "Kosmologe", perk: "+30% Scan-Reichweite", baseStressRate: 0.25 }
+        ];
+
+        const c1 = candidatePool[hash % candidatePool.length];
+        const c2 = candidatePool[(hash + 3) % candidatePool.length];
+        const pool = [
+            { ...c1, id: Date.now() + Math.random(), stress: 15, illusionStability: 100, status: "Friedlich", thought: "Arbeitet auf der Forschungsstation..." }
+        ];
+        if (hash % 2 === 0) {
+            pool.push({ ...c2, id: Date.now() + Math.random() + 1, stress: 25, illusionStability: 100, status: "Friedlich", thought: "Führt Atmosphärenmessungen durch..." });
+        }
+
+        species = {
+            hasSentient: true,
+            name: pool[0].species.includes("Mensch") ? "Terranische Exploratoren" : `${pool[0].species}-Präsenz`,
+            population: pool.length,
+            candidates: pool
+        };
     } else if (p.type === 'Gas Giant') {
         atmos = hash % 2 === 0 ? "Flüssiges Helium & Wasserstoff" : "Superdichtes Ammoniak & Methan";
         temp = (-120 - (hash % 60)) + "°C";
         bio = hash % 5 === 0 ? "Schwebende Plankton-Analoge" : "Keine Signaturen erfasst";
         res = "Extrem hoher Druck, Deuterium-Vorkommen";
+        species = null;
     } else { // Rocky
         atmos = hash % 3 === 0 ? "Dünnes CO2-Vakuum" : (hash % 3 === 1 ? "Schwefeldioxid & Argon" : "Keine Atmosphäre (Vakuum)");
         temp = (hash % 2 === 0 ? "+" : "-") + (hash % 250) + "°C";
         bio = hash % 8 === 0 ? "Extremophile Flechten" : "Steril";
         res = "Reich an Silizium-Kristallen, Eisen & Schwermetallen";
+        species = null;
     }
 
-    return { atmos, temp, bio, res };
+    return { atmos, temp, bio, res, species };
 }
 
 function generateFallbackMoons(p) {
@@ -2829,7 +2955,10 @@ function updateScannerUI(closest, dist) {
     const placeholder = document.getElementById('scan-placeholder-box');
     const results = document.getElementById('scan-results-box');
     const harvestBtn = document.getElementById('start-harvest-btn');
+    const abductBtn = document.getElementById('start-abduct-btn');
     const statusBadge = document.getElementById('scan-planet-status');
+    const speciesRow = document.getElementById('scan-planet-species-row');
+    const speciesSpan = document.getElementById('scan-planet-species');
 
     if (!closest) {
         if (nameSpan) nameSpan.innerText = "Keiner";
@@ -2839,8 +2968,10 @@ function updateScannerUI(closest, dist) {
             scanBtn.innerText = "Scan initiieren [F]";
         }
         if (harvestBtn) harvestBtn.disabled = true;
-        if (placeholder && !STATE.scanningPlanet && !STATE.extractingPlanet) placeholder.style.display = 'block';
-        if (results && !STATE.scanningPlanet && !STATE.extractingPlanet) results.style.display = 'none';
+        if (abductBtn) abductBtn.style.display = 'none';
+        if (speciesRow) speciesRow.style.display = 'none';
+        if (placeholder && !STATE.scanningPlanet && !STATE.extractingPlanet && !STATE.abductActive) placeholder.style.display = 'block';
+        if (results && !STATE.scanningPlanet && !STATE.extractingPlanet && !STATE.abductActive) results.style.display = 'none';
         return;
     }
 
@@ -2907,7 +3038,7 @@ function updateScannerUI(closest, dist) {
         }
     }
 
-    // Update harvest button & status badge if results are visible
+    // Update harvest & abduction buttons if results are visible
     if (results && isScanned) {
         if (statusBadge) {
             if (isHarvested) {
@@ -2936,6 +3067,30 @@ function updateScannerUI(closest, dist) {
                 harvestBtn.disabled = true;
                 harvestBtn.innerText = "Außer Reichweite";
             }
+        }
+
+        // Abduction button & species display
+        if (closest.attributes && closest.attributes.species && closest.attributes.species.population > 0) {
+            if (speciesRow) {
+                speciesRow.style.display = 'flex';
+                speciesSpan.innerText = `${closest.attributes.species.name} (${closest.attributes.species.population} Individuen)`;
+            }
+            if (abductBtn) {
+                abductBtn.style.display = 'block';
+                if (STATE.abductActive) {
+                    abductBtn.disabled = true;
+                    abductBtn.innerText = "Entführung aktiv...";
+                } else if (dist < 20) {
+                    abductBtn.disabled = false;
+                    abductBtn.innerText = `🛸 Psionisch Entführen [F] (${closest.attributes.species.population} verfügbar)`;
+                } else {
+                    abductBtn.disabled = true;
+                    abductBtn.innerText = "Außer Reichweite";
+                }
+            }
+        } else {
+            if (speciesRow) speciesRow.style.display = 'none';
+            if (abductBtn) abductBtn.style.display = 'none';
         }
     }
 }
@@ -3049,6 +3204,159 @@ function triggerHarvestStart() {
     startHarvestSound();
 
     addLogEntry("SYSTEM", `Bio-Siphon aktiviert. Extrahiere planetare Ressourcen von ${STATE.extractingPlanet.name}...`);
+}
+
+// --- ABDUCTION SYSTEM HELPERS ---
+function triggerAbductStart() {
+    if (!STATE.gameStarted || STATE.abductActive || STATE.scanningPlanet || STATE.extractingPlanet || !STATE.nearestPlanet) return;
+
+    // Check range
+    const dx = STATE.playerPosition.x - STATE.nearestPlanet.mesh.position.x;
+    const dz = STATE.playerPosition.z - STATE.nearestPlanet.mesh.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist >= 20) return;
+
+    const p = STATE.nearestPlanet;
+    if (!p.attributes.species || p.attributes.species.population <= 0) {
+        addLogEntry("SYSTEM", `Keine vernunftbegabten Individuen auf ${p.name} für psionische Entführung verfügbar.`);
+        return;
+    }
+
+    STATE.abductActive = true;
+    STATE.abductTarget = p;
+    STATE.abductProgress = 0;
+
+    const progContainer = document.getElementById('abduct-progress-container');
+    if (progContainer) progContainer.style.display = 'block';
+
+    createAbductBeam(STATE.playerPosition, p.mesh.position);
+    startAbductSound();
+
+    addLogEntry("SYSTEM", `PSIONISCHER TRAKTORSTRAHL AKTIVIERT. Fasse Bewusstsein auf ${p.name} ins Visier...`);
+}
+
+function createAbductBeam(startPos, targetPos) {
+    if (abductBeamMesh) {
+        scene.remove(abductBeamMesh);
+        abductBeamMesh.geometry.dispose();
+        abductBeamMesh.material.dispose();
+    }
+
+    const points = [startPos.clone(), targetPos.clone()];
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({
+        color: 0xd946ef,
+        linewidth: 3,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending
+    });
+    abductBeamMesh = new THREE.Line(geometry, material);
+    scene.add(abductBeamMesh);
+}
+
+function updateAbductBeam(startPos, targetPos) {
+    if (!abductBeamMesh) return;
+    const positions = abductBeamMesh.geometry.attributes.position.array;
+    positions[0] = startPos.x;
+    positions[1] = startPos.y;
+    positions[2] = startPos.z;
+    positions[3] = targetPos.x;
+    positions[4] = targetPos.y;
+    positions[5] = targetPos.z;
+    abductBeamMesh.geometry.attributes.position.needsUpdate = true;
+    abductBeamMesh.material.opacity = 0.6 + Math.sin(Date.now() * 0.03) * 0.35;
+}
+
+function removeAbductBeam() {
+    if (abductBeamMesh) {
+        scene.remove(abductBeamMesh);
+        abductBeamMesh.geometry.dispose();
+        abductBeamMesh.material.dispose();
+        abductBeamMesh = null;
+    }
+}
+
+function startAbductSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    abductOsc = ctx.createOscillator();
+    abductGain = ctx.createGain();
+    abductFilter = ctx.createBiquadFilter();
+
+    abductOsc.type = 'triangle';
+    abductOsc.frequency.setValueAtTime(330, ctx.currentTime);
+
+    abductFilter.type = 'bandpass';
+    abductFilter.frequency.setValueAtTime(440, ctx.currentTime);
+    abductFilter.Q.setValueAtTime(3, ctx.currentTime);
+
+    abductGain.gain.setValueAtTime(0, ctx.currentTime);
+    abductGain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.2);
+
+    abductOsc.connect(abductFilter);
+    abductFilter.connect(abductGain);
+    abductGain.connect(ctx.destination);
+    abductOsc.start();
+}
+
+function stopAbductSound() {
+    if (abductOsc) {
+        const ctx = getAudioContext();
+        const time = ctx ? ctx.currentTime : 0;
+        if (abductGain && time) {
+            abductGain.gain.cancelScheduledValues(time);
+            abductGain.gain.setValueAtTime(abductGain.gain.value, time);
+            abductGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+            abductOsc.stop(time + 0.2);
+        } else {
+            abductOsc.stop();
+        }
+        abductOsc = null;
+        abductGain = null;
+        abductFilter = null;
+    }
+}
+
+function cancelAbduction(reason) {
+    stopAbductSound();
+    removeAbductBeam();
+    addLogEntry("SYSTEM", `Entführung abgebrochen: ${reason}`);
+    STATE.abductActive = false;
+    STATE.abductTarget = null;
+    STATE.abductProgress = 0;
+    const progContainer = document.getElementById('abduct-progress-container');
+    if (progContainer) progContainer.style.display = 'none';
+}
+
+function completeAbduction() {
+    stopAbductSound();
+    removeAbductBeam();
+
+    const progContainer = document.getElementById('abduct-progress-container');
+    if (progContainer) progContainer.style.display = 'none';
+
+    const planet = STATE.abductTarget;
+    if (planet && planet.attributes.species && planet.attributes.species.candidates.length > 0) {
+        const candidate = planet.attributes.species.candidates.shift();
+        planet.attributes.species.population = planet.attributes.species.candidates.length;
+
+        STATE.crew.push(candidate);
+        STATE.loneliness = Math.max(0, STATE.loneliness - 45);
+
+        addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.species}) in Biokammer transferiert.`);
+        addLogEntry("CREW", `Traum-Matrix initialisiert. ${candidate.name} glaubt, an Bord der Forschungsstation Dienst zu tun. Einsamkeit sinkt.`);
+
+        renderCrewUI();
+        if (STATE.nearestPlanet === planet) {
+            updateScannerUI(planet, 10);
+        }
+    }
+
+    STATE.abductActive = false;
+    STATE.abductTarget = null;
+    STATE.abductProgress = 0;
 }
 
 function startHarvestSound() {
@@ -3539,6 +3847,11 @@ if (startScanBtn) {
 const startHarvestBtn = document.getElementById('start-harvest-btn');
 if (startHarvestBtn) {
     startHarvestBtn.addEventListener('click', triggerHarvestStart);
+}
+
+const startAbductBtn = document.getElementById('start-abduct-btn');
+if (startAbductBtn) {
+    startAbductBtn.addEventListener('click', triggerAbductStart);
 }
 
 // Quantum Universe Generator triggers

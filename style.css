@@ -1745,3 +1745,174 @@ body.game-started .hud-left {
         font-size: 0.8rem;
     }
 }
+
+/* =========================================================================
+   --- PHASE 12: LONELINESS, PSIONIC ABDUCTION & DREAM MATRIX STYLES ---
+   ========================================================================= */
+
+.progress-bar.loneliness {
+    background: linear-gradient(90deg, #ec4899 0%, #f43f5e 100%);
+    box-shadow: 0 0 10px rgba(236, 72, 153, 0.6);
+}
+
+.abduct-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #ffffff;
+    background: linear-gradient(135deg, #d946ef 0%, #a855f7 100%);
+    border: 1px solid rgba(217, 70, 239, 0.4);
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(217, 70, 239, 0.35);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.abduct-btn:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #c026d3 0%, #9333ea 100%);
+    box-shadow: 0 6px 20px rgba(217, 70, 239, 0.6);
+    border-color: rgba(217, 70, 239, 0.8);
+}
+
+.abduct-progress-container {
+    margin-top: 8px;
+    padding: 8px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(217, 70, 239, 0.3);
+    border-radius: 6px;
+}
+
+.abduct-progress-label {
+    font-size: 0.7rem;
+    color: #d946ef;
+    font-family: 'Orbitron', sans-serif;
+    margin-bottom: 4px;
+}
+
+.abduct-progress-bar-bg {
+    width: 100%;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.abduct-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #d946ef, #a855f7);
+    box-shadow: 0 0 8px #d946ef;
+    transition: width 0.1s linear;
+}
+
+/* Dream Matrix Cards */
+.matrix-empty-card {
+    padding: 14px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px dashed rgba(236, 72, 153, 0.4);
+    border-radius: 8px;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    line-height: 1.5;
+}
+
+.matrix-empty-card .highlight {
+    color: #ec4899;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 4px;
+    font-family: 'Orbitron', sans-serif;
+}
+
+.crew-member {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.3s ease;
+}
+
+.crew-member.suspicious {
+    border-color: rgba(245, 158, 11, 0.6);
+    background: rgba(40, 25, 15, 0.7);
+}
+
+.crew-member.panic {
+    border-color: rgba(239, 68, 68, 0.8);
+    background: rgba(50, 15, 15, 0.8);
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+}
+
+.species-badge {
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(217, 70, 239, 0.2);
+    color: #d946ef;
+    border: 1px solid rgba(217, 70, 239, 0.4);
+    font-weight: 600;
+}
+
+.symbiotic-perk {
+    font-size: 0.68rem;
+    color: #10b981;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.stability-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+}
+
+.stability-label {
+    color: #a855f7;
+    width: 90px;
+    font-size: 0.68rem;
+    font-weight: 600;
+}
+
+.stability-bar-bg {
+    flex: 1;
+    height: 5px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.stability-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #a855f7, #38bdf8);
+    box-shadow: 0 0 6px #a855f7;
+    transition: width 0.2s ease;
+}
+
+.thought-whisper {
+    font-size: 0.7rem;
+    font-style: italic;
+    color: #cbd5e1;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border-left: 2px solid #a855f7;
+    margin-top: 2px;
+}
+
+.thought-whisper.terrified {
+    border-left-color: #ef4444;
+    color: #fca5a5;
+}
+
