@@ -33,11 +33,14 @@ const STATE = {
     currentSystemId: 0,
     playerAcceleration: new THREE.Vector3(0, 0, 0),
 
-    // Scanner System
+    // Scanner & Harvesting System
     nearestPlanet: null,
     scanningPlanet: null,
     scanProgress: 0,
     scannedPlanets: {},
+    extractingPlanet: null,
+    extractProgress: 0,
+    harvestedPlanets: {},
     playerMass: 1,
     drag: 0.4, // Base drag when thrusting
     brakeDrag: 2.2, // Retro-dampeners drag when coasting
@@ -108,6 +111,8 @@ let starfield;
 let gravityCircles = [];
 let activePlanets = [];
 let scanVisualMesh = null;
+let harvestBeamMesh = null;
+let harvestOsc = null, harvestGain = null, harvestFilter = null;
 let minimapCanvas = null;
 let minimapCtx = null;
 let trajectoryPoints;
@@ -663,6 +668,9 @@ function setupControls() {
         if (key === 'f') {
             triggerScanStart();
         }
+        if (key === 'e') {
+            triggerHarvestStart();
+        }
         if (key === 'w' || e.key === 'ArrowUp') STATE.keys.w = true;
         if (key === 's' || e.key === 'ArrowDown') STATE.keys.s = true;
         if (key === 'a' || e.key === 'ArrowLeft') STATE.keys.a = true;
@@ -976,6 +984,86 @@ function updatePhysics(dt) {
         }
     }
 
+    // --- ACTIVE HARVESTING UPDATE LOOP ---
+    if (STATE.extractingPlanet) {
+        const hdx = STATE.playerPosition.x - STATE.extractingPlanet.mesh.position.x;
+        const hdz = STATE.playerPosition.z - STATE.extractingPlanet.mesh.position.z;
+        const hdist = Math.sqrt(hdx * hdx + hdz * hdz);
+
+        if (hdist > 22) {
+            // Cancel harvest (lost connection)
+            stopHarvestSound();
+            removeHarvestBeam();
+            addLogEntry("SYSTEM", `Assimilation abgebrochen: Verbindung verloren. Abstand zu ${STATE.extractingPlanet.name} überschritt Sicherheitsradius.`);
+            STATE.extractingPlanet = null;
+            STATE.extractProgress = 0;
+            const hprogContainer = document.getElementById('harvest-progress-container');
+            if (hprogContainer) hprogContainer.style.display = 'none';
+        } else {
+            // Advance harvest progress
+            STATE.extractProgress += (dt / 3.0) * 100; // 3 seconds extraction
+
+            // Update beam position between ship and planet
+            updateHarvestBeam(STATE.playerPosition, STATE.extractingPlanet.mesh.position);
+
+            // Modulate harvest sound filter
+            if (harvestFilter && audioCtx) {
+                harvestFilter.frequency.setValueAtTime(180 + (STATE.extractProgress / 100) * 450 + Math.sin(Date.now() * 0.02) * 60, audioCtx.currentTime);
+            }
+
+            const hprogBar = document.getElementById('harvest-progress-bar');
+            const hprogTxt = document.getElementById('harvest-progress-text');
+            if (hprogBar) hprogBar.style.width = `${Math.min(100, STATE.extractProgress)}%`;
+            if (hprogTxt) hprogTxt.innerText = `${Math.round(Math.min(100, STATE.extractProgress))}%`;
+
+            if (STATE.extractProgress >= 100) {
+                // Complete harvest!
+                stopHarvestSound();
+                removeHarvestBeam();
+
+                const p = STATE.extractingPlanet;
+                p.harvested = true;
+                STATE.harvestedPlanets[p.name] = true;
+
+                // Award resources according to planet type
+                if (p.type === 'Habitable') {
+                    STATE.bioRes += 70;
+                    STATE.health = Math.min(STATE.maxHealth, STATE.health + 40);
+                    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 25);
+                    addLogEntry("SYSTEM", `Biosphäre von ${p.name} assimiliert. +70 Biomasse gewonnen, Zellkern repariert (+40 HP).`);
+                    if (Math.random() > 0.3) {
+                        addLogEntry("CREW", encryptCrewMessage("Capt. Miller", `Sensoren melden gewaltige organische Schockwellen auf ${p.name}... Die Biosphäre wurde assimiliert!`));
+                    }
+                } else if (p.type === 'Gas Giant') {
+                    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 60);
+                    STATE.siliconRes += 35;
+                    STATE.bioRes += 10;
+                    addLogEntry("SYSTEM", `Gasatmosphäre von ${p.name} abgesaugt. +60% Bio-Energie Treibstoff & +35 Silizium.`);
+                    if (Math.random() > 0.3) {
+                        addLogEntry("CREW", encryptCrewMessage("Dr. Song", `Atmosphärischer Druck fällt rapide... Wir haben flüssiges Deuterium aus ${p.name} absorbiert!`));
+                    }
+                } else { // Rocky
+                    STATE.siliconRes += 75;
+                    STATE.bioRes += 15;
+                    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 20);
+                    addLogEntry("SYSTEM", `Lithosphäre von ${p.name} abgebaut. +75 Silizium-Kristalle & +15 Biomasse gewonnen.`);
+                    if (Math.random() > 0.3) {
+                        addLogEntry("CREW", encryptCrewMessage("Ing. Petrov", `Die Kruste von ${p.name} wurde aufgebrochen... Siliziumadern fließen in unsere Membranen!`));
+                    }
+                }
+
+                playBioCollectSound();
+                updateMutationUI();
+                updateScannerUI(p, hdist);
+
+                STATE.extractingPlanet = null;
+                STATE.extractProgress = 0;
+                const hprogContainer = document.getElementById('harvest-progress-container');
+                if (hprogContainer) hprogContainer.style.display = 'none';
+            }
+        }
+    }
+
     STATE.playerAcceleration.set(0, 0, 0);
 
     // 1. Apply Player Thrusters (WASD / Arrows)
@@ -1253,8 +1341,8 @@ function updateCrewSimulation(dt) {
             c.stress = Math.max(0, c.stress - 6.0 * dt);
             c.status = "Gasgelullt";
         } else {
-            // Normal stress behavior (balanced: mid-point 0.7x factor)
-            let growth = (c.baseStressRate + speedStressModifier + criticalEnergyModifier) * 0.7 * dt;
+            // Normal stress behavior (balanced: 1.1x factor for engaging survival)
+            let growth = (c.baseStressRate + speedStressModifier + criticalEnergyModifier) * 1.1 * dt;
             if (STATE.mutations.o2.purchased) {
                 growth *= 0.5; // O2 chamber halves stress buildup
             }
@@ -1347,8 +1435,8 @@ function updateCrewSimulation(dt) {
         }
     });
 
-    // Passive decay of bioEnergy over time (balanced: mid-point 0.18 * dt)
-    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.18 * dt);
+    // Passive decay of bioEnergy over time (balanced: 0.30 * dt for moderate survival challenge)
+    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.30 * dt);
 
     // Core damages if no energy left
     if (STATE.bioEnergy <= 0) {
@@ -1781,6 +1869,14 @@ function clearActiveSystem() {
     const progContainer = document.getElementById('scan-progress-container');
     if (progContainer) progContainer.style.display = 'none';
 
+    // Clear harvest visuals if active during warp
+    stopHarvestSound();
+    removeHarvestBeam();
+    STATE.extractingPlanet = null;
+    STATE.extractProgress = 0;
+    const harvestProgContainer = document.getElementById('harvest-progress-container');
+    if (harvestProgContainer) harvestProgContainer.style.display = 'none';
+
     STATE.gravitySources = [];
     STATE.asteroids = [];
     gravityCircles = [];
@@ -1877,9 +1973,15 @@ function drawMinimap() {
             minimapCtx.arc(pcx, pcy, 4.5, 0, Math.PI * 2);
             minimapCtx.fill();
 
-            // Draw scanned indicator halo
-            if (p.scanned || STATE.scannedPlanets[p.name]) {
-                minimapCtx.strokeStyle = "rgba(0, 255, 136, 0.4)";
+            // Draw scanned / harvested indicator halo
+            if (p.harvested || STATE.harvestedPlanets[p.name]) {
+                minimapCtx.strokeStyle = "rgba(148, 163, 184, 0.35)"; // Dim slate
+                minimapCtx.lineWidth = 1;
+                minimapCtx.beginPath();
+                minimapCtx.arc(pcx, pcy, 8, 0, Math.PI * 2);
+                minimapCtx.stroke();
+            } else if (p.scanned || STATE.scannedPlanets[p.name]) {
+                minimapCtx.strokeStyle = "rgba(0, 255, 136, 0.6)"; // Bright green
                 minimapCtx.lineWidth = 1;
                 minimapCtx.beginPath();
                 minimapCtx.arc(pcx, pcy, 8, 0, Math.PI * 2);
@@ -1966,6 +2068,8 @@ function updateScannerUI(closest, dist) {
     const scanBtn = document.getElementById('start-scan-btn');
     const placeholder = document.getElementById('scan-placeholder-box');
     const results = document.getElementById('scan-results-box');
+    const harvestBtn = document.getElementById('start-harvest-btn');
+    const statusBadge = document.getElementById('scan-planet-status');
 
     if (!closest) {
         if (nameSpan) nameSpan.innerText = "Keiner";
@@ -1974,13 +2078,17 @@ function updateScannerUI(closest, dist) {
             scanBtn.disabled = true;
             scanBtn.innerText = "Scan initiieren [F]";
         }
-        if (placeholder && !STATE.scanningPlanet) placeholder.style.display = 'block';
-        if (results && !STATE.scanningPlanet) results.style.display = 'none';
+        if (harvestBtn) harvestBtn.disabled = true;
+        if (placeholder && !STATE.scanningPlanet && !STATE.extractingPlanet) placeholder.style.display = 'block';
+        if (results && !STATE.scanningPlanet && !STATE.extractingPlanet) results.style.display = 'none';
         return;
     }
 
     if (nameSpan) nameSpan.innerText = closest.name;
     if (distSpan) distSpan.innerText = dist.toFixed(1);
+
+    const isScanned = closest.scanned || STATE.scannedPlanets[closest.name];
+    const isHarvested = closest.harvested || STATE.harvestedPlanets[closest.name];
 
     if (dist < 20) {
         if (STATE.scanningPlanet) {
@@ -1988,7 +2096,7 @@ function updateScannerUI(closest, dist) {
                 scanBtn.disabled = true;
                 scanBtn.innerText = "Scanne...";
             }
-        } else if (closest.scanned || STATE.scannedPlanets[closest.name]) {
+        } else if (isScanned) {
             if (scanBtn) {
                 scanBtn.disabled = true;
                 scanBtn.innerText = "Bereits gescannt";
@@ -2013,7 +2121,22 @@ function updateScannerUI(closest, dist) {
         }
     } else {
         if (STATE.scanningPlanet) {
-            // we are scanning, don't change UI here (let the distance cancel trigger handle it)
+            // let distance trigger handle cancel
+        } else if (isScanned) {
+            if (scanBtn) {
+                scanBtn.disabled = true;
+                scanBtn.innerText = "Bereits gescannt";
+            }
+            if (placeholder) placeholder.style.display = 'none';
+            if (results) {
+                results.style.display = 'flex';
+                document.getElementById('scan-planet-title').innerText = closest.name;
+                document.getElementById('scan-planet-type').innerText = closest.type;
+                document.getElementById('scan-planet-temp').innerText = closest.attributes.temp;
+                document.getElementById('scan-planet-bio').innerText = closest.attributes.bio;
+                document.getElementById('scan-planet-atmos').innerText = closest.attributes.atmos;
+                document.getElementById('scan-planet-resources').innerText = closest.attributes.res;
+            }
         } else {
             if (scanBtn) {
                 scanBtn.disabled = true;
@@ -2021,6 +2144,38 @@ function updateScannerUI(closest, dist) {
             }
             if (placeholder) placeholder.style.display = 'block';
             if (results) results.style.display = 'none';
+        }
+    }
+
+    // Update harvest button & status badge if results are visible
+    if (results && isScanned) {
+        if (statusBadge) {
+            if (isHarvested) {
+                statusBadge.innerText = "Erschöpft / Depletiert";
+                statusBadge.className = "planet-badge badge-depleted";
+            } else if (STATE.extractingPlanet) {
+                statusBadge.innerText = "Assimilierung aktiv...";
+                statusBadge.className = "planet-badge badge-ready";
+            } else {
+                statusBadge.innerText = "Bereit zur Assimilation";
+                statusBadge.className = "planet-badge badge-ready";
+            }
+        }
+
+        if (harvestBtn) {
+            if (isHarvested) {
+                harvestBtn.disabled = true;
+                harvestBtn.innerText = "Ressourcen erschöpft";
+            } else if (STATE.extractingPlanet) {
+                harvestBtn.disabled = true;
+                harvestBtn.innerText = "Assimiere...";
+            } else if (dist < 20) {
+                harvestBtn.disabled = false;
+                harvestBtn.innerText = "🌿 Ressourcen assimilieren [E]";
+            } else {
+                harvestBtn.disabled = true;
+                harvestBtn.innerText = "Außer Reichweite";
+            }
         }
     }
 }
@@ -2098,6 +2253,122 @@ function stopScanSound() {
         }
         scanOsc = null;
         scanGain = null;
+    }
+}
+
+// --- HARVESTING SYSTEM HELPERS ---
+function triggerHarvestStart() {
+    if (!STATE.gameStarted || STATE.extractingPlanet || STATE.scanningPlanet || !STATE.nearestPlanet) return;
+
+    // Check range
+    const dx = STATE.playerPosition.x - STATE.nearestPlanet.mesh.position.x;
+    const dz = STATE.playerPosition.z - STATE.nearestPlanet.mesh.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist >= 20) return;
+
+    // Must be scanned first!
+    if (!STATE.nearestPlanet.scanned && !STATE.scannedPlanets[STATE.nearestPlanet.name]) {
+        addLogEntry("SYSTEM", `Planet muss vor der Assimilation erst vollständig gescannt werden [F].`);
+        return;
+    }
+
+    // Must not be already harvested!
+    if (STATE.nearestPlanet.harvested || STATE.harvestedPlanets[STATE.nearestPlanet.name]) {
+        addLogEntry("SYSTEM", `Ressourcen von ${STATE.nearestPlanet.name} sind bereits vollständig erschöpft.`);
+        return;
+    }
+
+    // Start extraction!
+    STATE.extractingPlanet = STATE.nearestPlanet;
+    STATE.extractProgress = 0;
+
+    const progContainer = document.getElementById('harvest-progress-container');
+    if (progContainer) progContainer.style.display = 'block';
+
+    createHarvestBeam(STATE.playerPosition, STATE.nearestPlanet.mesh.position);
+    startHarvestSound();
+
+    addLogEntry("SYSTEM", `Bio-Siphon aktiviert. Extrahiere planetare Ressourcen von ${STATE.extractingPlanet.name}...`);
+}
+
+function startHarvestSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    harvestOsc = ctx.createOscillator();
+    harvestGain = ctx.createGain();
+    harvestFilter = ctx.createBiquadFilter();
+
+    harvestOsc.type = 'sawtooth';
+    harvestOsc.frequency.setValueAtTime(110, ctx.currentTime);
+
+    harvestFilter.type = 'lowpass';
+    harvestFilter.frequency.setValueAtTime(250, ctx.currentTime);
+
+    harvestGain.gain.setValueAtTime(0, ctx.currentTime);
+    harvestGain.gain.linearRampToValueAtTime(0.14, ctx.currentTime + 0.15);
+
+    harvestOsc.connect(harvestFilter);
+    harvestFilter.connect(harvestGain);
+    harvestGain.connect(ctx.destination);
+    harvestOsc.start();
+}
+
+function stopHarvestSound() {
+    if (harvestOsc) {
+        const ctx = getAudioContext();
+        const time = ctx ? ctx.currentTime : 0;
+        if (harvestGain && time) {
+            harvestGain.gain.cancelScheduledValues(time);
+            harvestGain.gain.setValueAtTime(harvestGain.gain.value, time);
+            harvestGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+            harvestOsc.stop(time + 0.2);
+        } else {
+            harvestOsc.stop();
+        }
+        harvestOsc = null;
+        harvestGain = null;
+        harvestFilter = null;
+    }
+}
+
+function createHarvestBeam(startPos, endPos) {
+    if (harvestBeamMesh) {
+        scene.remove(harvestBeamMesh);
+        harvestBeamMesh = null;
+    }
+
+    const material = new THREE.LineBasicMaterial({
+        color: 0x10b981,
+        linewidth: 3,
+        transparent: true,
+        opacity: 0.85
+    });
+
+    const points = [startPos.clone(), endPos.clone()];
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    harvestBeamMesh = new THREE.Line(geometry, material);
+    scene.add(harvestBeamMesh);
+}
+
+function updateHarvestBeam(startPos, endPos) {
+    if (!harvestBeamMesh) return;
+    const positions = harvestBeamMesh.geometry.attributes.position.array;
+    positions[0] = startPos.x;
+    positions[1] = startPos.y;
+    positions[2] = startPos.z;
+    positions[3] = endPos.x;
+    positions[4] = endPos.y;
+    positions[5] = endPos.z;
+    harvestBeamMesh.geometry.attributes.position.needsUpdate = true;
+}
+
+function removeHarvestBeam() {
+    if (harvestBeamMesh) {
+        scene.remove(harvestBeamMesh);
+        if (harvestBeamMesh.geometry) harvestBeamMesh.geometry.dispose();
+        if (harvestBeamMesh.material) harvestBeamMesh.material.dispose();
+        harvestBeamMesh = null;
     }
 }
 
@@ -2350,9 +2621,14 @@ function updateSystemDetails(sys) {
             warpBtn.innerText = "Etablierter Standort";
             warpBtn.style.opacity = "0.5";
             warpBtn.style.pointerEvents = "none";
+        } else if (STATE.bioEnergy < 20) {
+            warpBtn.disabled = true;
+            warpBtn.innerText = "Zu wenig Bio-Energie (20% nötig)";
+            warpBtn.style.opacity = "0.5";
+            warpBtn.style.pointerEvents = "none";
         } else {
             warpBtn.disabled = false;
-            warpBtn.innerText = "Quantenfeld falten (WARP)";
+            warpBtn.innerText = "Quantenfeld falten (WARP: -20% Energie)";
             warpBtn.style.opacity = "1";
             warpBtn.style.pointerEvents = "auto";
         }
@@ -2360,6 +2636,14 @@ function updateSystemDetails(sys) {
 }
 
 function warpToSystem(systemId) {
+    if (STATE.bioEnergy < 20) {
+        addLogEntry("SYSTEM", "Hypersprung abgebrochen: Nicht genügend Bio-Energie (20% benötigt)!");
+        return;
+    }
+
+    // Deduct Warp Bio-Energy cost
+    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 20);
+
     const warpOverlay = document.getElementById('warp-overlay');
     if (warpOverlay) {
         warpOverlay.style.display = 'flex';
@@ -2507,6 +2791,12 @@ if (warpBtn) {
 const startScanBtn = document.getElementById('start-scan-btn');
 if (startScanBtn) {
     startScanBtn.addEventListener('click', triggerScanStart);
+}
+
+// Harvest button click wiring
+const startHarvestBtn = document.getElementById('start-harvest-btn');
+if (startHarvestBtn) {
+    startHarvestBtn.addEventListener('click', triggerHarvestStart);
 }
 
 // Quantum Universe Generator triggers
