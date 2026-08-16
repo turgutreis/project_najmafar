@@ -16,11 +16,16 @@ const STATE = {
     bioRes: 0,
     siliconRes: 0,
 
+    // Sensor & Travel Limits (Fog of War & Jump Ranges)
+    psionicRange: 75, // Base telepathic detection range in Lightyears
+    warpRange: 90,    // Base warp folding range in Lightyears
+
     // Mutations
     mutations: {
         armor: { purchased: false, bioCost: 50, siliconCost: 30 },
         o2: { purchased: false, bioCost: 60, siliconCost: 40 },
         synapses: { purchased: false, bioCost: 40, siliconCost: 80 },
+        folddrive: { purchased: false, bioCost: 90, siliconCost: 70 },
         translator: { purchased: false, bioCost: 80, siliconCost: 80 }
     },
 
@@ -1355,11 +1360,15 @@ function buyMutation(type) {
         } else if (type === 'synapses') {
             STATE.maxMentalEnergy = 150;
             STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 50);
-            addLogEntry("SYSTEM", "MUTATION ERFOLGREICH: Mentale Feldstärke erhöht. Max Feldstärke nun 150 & 2x Regeneration.");
+            STATE.psionicRange = 140; // Expand telepathic detection reach
+            addLogEntry("SYSTEM", "MUTATION ERFOLGREICH: Synapsen-Netzwerk integriert. Max Mentalkraft nun 150 & Gedanken-Reichweite auf 140 LJ erweitert!");
             const el1 = document.getElementById('svg-synapses-1');
             const el2 = document.getElementById('svg-synapses-2');
             if (el1) el1.style.display = 'block';
             if (el2) el2.style.display = 'block';
+        } else if (type === 'folddrive') {
+            STATE.warpRange = 160; // Expand warp jump reach
+            addLogEntry("SYSTEM", "MUTATION ERFOLGREICH: Raumzeit-Faltungsmembran gewachsen. Warp-Reichweite auf 160 LJ vergrößert (-30% Energiekosten)!");
         } else if (type === 'translator') {
             addLogEntry("SYSTEM", "MUTATION ERFOLGREICH: Dschinn-Übersetzungsknoten verankert. Funkverkehr übersetzt!");
             addLogEntry("CREW", "Dschinn-Agent: '...Konnektivität hergestellt. Übersetze menschlichen Datenstrom...'");
@@ -3687,14 +3696,34 @@ function renderGalaxyMap() {
         ctx.arc(centerX, centerY, 50 * currentScale, 0, Math.PI * 2);
         ctx.fill();
 
-        // Current system indicator halo
-        const currentSys = systems.find(s => s.id === STATE.currentSystemId);
+        // Current system indicator halo & Range Circles
+        const currentSys = systems.find(s => s.id === STATE.currentSystemId) || systems[0];
         if (currentSys) {
             const curScreenX = centerX + currentSys.x * currentScale;
             const curScreenY = centerY + currentSys.z * currentScale;
 
-            ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
-            ctx.lineWidth = 1.5;
+            // Draw Warp Range Circle (Cyan dashed)
+            const warpRadiusScreen = STATE.warpRange * currentScale;
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+            ctx.lineWidth = 1.4;
+            ctx.setLineDash([6, 6]);
+            ctx.beginPath();
+            ctx.arc(curScreenX, curScreenY, warpRadiusScreen, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Draw Psionic Detection Circle (Magenta dotted)
+            const psioRadiusScreen = STATE.psionicRange * currentScale;
+            ctx.strokeStyle = 'rgba(217, 70, 239, 0.35)';
+            ctx.lineWidth = 1.4;
+            ctx.setLineDash([3, 5]);
+            ctx.beginPath();
+            ctx.arc(curScreenX, curScreenY, psioRadiusScreen, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Pulsing current ship beacon
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+            ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.arc(curScreenX, curScreenY, 14 * Math.min(1.5, Math.max(0.7, mapZoom)) + Math.sin(Date.now() * 0.006) * 3, 0, Math.PI * 2);
             ctx.stroke();
@@ -3702,7 +3731,7 @@ function renderGalaxyMap() {
 
         hoverSystem = null;
 
-        // Render all stars with Smart Level-of-Detail (LOD)
+        // Render all stars with Smart Level-of-Detail (LOD) & Limited Sensor Detection
         systems.forEach(sys => {
             const screenX = centerX + sys.x * currentScale;
             const screenY = centerY + sys.z * currentScale;
@@ -3712,6 +3741,13 @@ function renderGalaxyMap() {
                 return;
             }
 
+            const dxFromCur = sys.x - currentSys.x;
+            const dzFromCur = sys.z - currentSys.z;
+            const distFromCur = Math.sqrt(dxFromCur * dxFromCur + dzFromCur * dzFromCur);
+
+            const inWarpRange = distFromCur <= STATE.warpRange;
+            const inPsionicRange = distFromCur <= STATE.psionicRange;
+
             const dx = mouseX - screenX;
             const dy = mouseY - screenY;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -3720,8 +3756,13 @@ function renderGalaxyMap() {
             const isActive = STATE.currentSystemId === sys.id;
             const hasSentient = sys.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
 
-            if (filterLifeOnly && !hasSentient && !isActive && !isSelected) {
-                ctx.globalAlpha = 0.12;
+            // Only show thought beacon if sentient life exists AND is within the Psionic Sensor Range!
+            const showLifeBeacon = hasSentient && inPsionicRange;
+
+            if (filterLifeOnly && !showLifeBeacon && !isActive && !isSelected) {
+                ctx.globalAlpha = 0.08;
+            } else if (!inWarpRange && !isActive && !isSelected) {
+                ctx.globalAlpha = 0.45; // Dim out-of-range stars
             } else {
                 ctx.globalAlpha = 1.0;
             }
@@ -3735,8 +3776,8 @@ function renderGalaxyMap() {
                 baseSize += 2.5;
             }
 
-            // --- PSIONIC THOUGHT BEACON (Dramatic Multi-Wave Aura for Life!) ---
-            if (hasSentient) {
+            // --- PSIONIC THOUGHT BEACON (Only if within Psionic Range!) ---
+            if (showLifeBeacon) {
                 const glowR = (baseSize + 14) * Math.min(1.4, Math.max(0.8, mapZoom));
                 const glowGrad = ctx.createRadialGradient(screenX, screenY, baseSize, screenX, screenY, glowR);
                 glowGrad.addColorStop(0, 'rgba(217, 70, 239, 0.45)');
@@ -3772,12 +3813,12 @@ function renderGalaxyMap() {
             if (sys.star.type === 'Black Hole') starColor = '#8b5cf6';
 
             if (isSelected) {
-                ctx.fillStyle = 'rgba(168, 85, 247, 0.4)';
+                ctx.fillStyle = inWarpRange ? 'rgba(168, 85, 247, 0.4)' : 'rgba(239, 68, 68, 0.3)';
                 ctx.beginPath();
                 ctx.arc(screenX, screenY, baseSize + 6, 0, Math.PI * 2);
                 ctx.fill();
 
-                ctx.strokeStyle = '#e879f9';
+                ctx.strokeStyle = inWarpRange ? '#e879f9' : '#f87171';
                 ctx.lineWidth = 1.5;
                 ctx.beginPath();
                 ctx.arc(screenX, screenY, baseSize + 3, 0, Math.PI * 2);
@@ -3795,9 +3836,9 @@ function renderGalaxyMap() {
             ctx.fill();
 
             // Smart LOD Labeling: Only show labels if selected, active, hovered, or when zoomed in!
-            const shouldShowLabel = isSelected || isActive || dist < 10 || (mapZoom > 2.0) || (hasSentient && mapZoom > 1.2);
+            const shouldShowLabel = isSelected || isActive || dist < 10 || (mapZoom > 2.0) || (showLifeBeacon && mapZoom > 1.2);
             if (shouldShowLabel) {
-                ctx.fillStyle = isSelected ? '#e879f9' : (isActive ? '#38bdf8' : (hasSentient ? '#f8fafc' : '#94a3b8'));
+                ctx.fillStyle = isSelected ? (inWarpRange ? '#e879f9' : '#f87171') : (isActive ? '#38bdf8' : (showLifeBeacon ? '#f8fafc' : '#94a3b8'));
                 ctx.font = isSelected ? 'bold 9px Orbitron, sans-serif' : '8px Orbitron, sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillText(sys.name, screenX, screenY - baseSize - 4);
@@ -3885,25 +3926,43 @@ function populateQuickBeaconsList() {
     const listEl = document.getElementById('psionic-beacons-quick-list');
     if (!listEl || !STATE.universe) return;
 
-    const livingSystems = STATE.universe.systems.filter(s => s.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient)));
+    const currentSys = STATE.universe.systems.find(s => s.id === STATE.currentSystemId) || STATE.universe.systems[0];
+
+    const livingSystems = STATE.universe.systems
+        .map(s => {
+            const dx = s.x - currentSys.x;
+            const dz = s.z - currentSys.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            return { system: s, dist: dist };
+        })
+        .filter(entry => {
+            const hasSentient = entry.system.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
+            return hasSentient && entry.dist <= STATE.psionicRange;
+        })
+        .sort((a, b) => a.dist - b.dist);
     
     if (livingSystems.length === 0) {
-        listEl.innerHTML = `<li style="font-size: 0.68rem; color: #64748b; padding: 4px;">Keine Gedanken-Echos geortet</li>`;
+        listEl.innerHTML = `<li style="font-size: 0.72rem; color: #64748b; padding: 6px; text-align: center;">Keine Gedanken-Echos im Sensorradius (${STATE.psionicRange} LJ) geortet.<br><span style="color: #a855f7; font-size: 0.65rem;">Reise näher heran oder erweitere Synapsen!</span></li>`;
         return;
     }
 
     let html = '';
-    livingSystems.forEach(sys => {
+    livingSystems.forEach(entry => {
+        const sys = entry.system;
         const habPlanet = sys.planets.find(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
         let specName = "Habitables Ökosystem";
         if (habPlanet && habPlanet.species && habPlanet.species.name) {
             specName = habPlanet.species.name;
         }
         const isSel = selectedSystem && selectedSystem.id === sys.id;
+        const inWarp = entry.dist <= STATE.warpRange;
         
         html += `
             <li class="beacon-quick-item ${isSel ? 'active-item' : ''}" data-sys-id="${sys.id}">
-                <span class="beacon-sys-name">✨ ${sys.name}</span>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="beacon-sys-name">✨ ${sys.name}</span>
+                    <span style="font-size: 0.65rem; color: ${inWarp ? '#38bdf8' : '#f87171'};">${entry.dist.toFixed(0)} LJ</span>
+                </div>
                 <span class="beacon-species-tag">${specName}</span>
             </li>
         `;
@@ -3937,6 +3996,13 @@ function updateSystemDetails(sys) {
     if (placeholder) placeholder.style.display = 'none';
     if (statsPanel) statsPanel.style.display = 'flex';
 
+    const currentSys = STATE.universe.systems.find(s => s.id === STATE.currentSystemId) || STATE.universe.systems[0];
+    const dx = sys.x - currentSys.x;
+    const dz = sys.z - currentSys.z;
+    const distFromCur = Math.sqrt(dx * dx + dz * dz);
+    const inWarpRange = distFromCur <= STATE.warpRange;
+    const inPsionicRange = distFromCur <= STATE.psionicRange;
+
     document.getElementById('detail-system-name').innerText = sys.name;
     document.getElementById('val-coord-x').innerText = sys.x;
     document.getElementById('val-coord-z').innerText = sys.z;
@@ -3948,8 +4014,10 @@ function updateSystemDetails(sys) {
     const hasSentient = sys.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
     const resRow = document.getElementById('detail-psionic-resonance');
     if (resRow) {
-        if (hasSentient) {
-            resRow.innerHTML = `<span style="color: #d946ef; font-weight: bold;">📶 Starke neuronale Resonanz</span> <span style="color: #cbd5e1; font-size: 0.65rem;">(Intelligentes Leben)</span>`;
+        if (hasSentient && inPsionicRange) {
+            resRow.innerHTML = `<span style="color: #d946ef; font-weight: bold;">📶 Starke neuronale Resonanz</span> <span style="color: #cbd5e1; font-size: 0.65rem;">(Intelligentes Leben, ${distFromCur.toFixed(0)} LJ)</span>`;
+        } else if (hasSentient && !inPsionicRange) {
+            resRow.innerHTML = `<span style="color: #64748b; font-size: 0.72rem;">❓ Außerhalb Psio-Horizont (${distFromCur.toFixed(0)} / ${STATE.psionicRange} LJ)</span>`;
         } else {
             resRow.innerHTML = `<span style="color: #64748b; font-size: 0.72rem;">✖️ Keine Gedanken-Echos (Stille)</span>`;
         }
@@ -3976,6 +4044,9 @@ function updateSystemDetails(sys) {
         });
     }
 
+    const costMult = STATE.mutations.folddrive && STATE.mutations.folddrive.purchased ? 0.7 : 1.0;
+    const warpCost = Math.round((15 + distFromCur * 0.15) * costMult);
+
     const warpBtn = document.getElementById('warp-btn');
     if (warpBtn) {
         if (sys.id === STATE.currentSystemId) {
@@ -3983,14 +4054,19 @@ function updateSystemDetails(sys) {
             warpBtn.innerText = "Etablierter Standort";
             warpBtn.style.opacity = "0.5";
             warpBtn.style.pointerEvents = "none";
-        } else if (STATE.bioEnergy < 20) {
+        } else if (!inWarpRange) {
             warpBtn.disabled = true;
-            warpBtn.innerText = "Zu wenig Bio-Energie (20% nötig)";
+            warpBtn.innerText = `❌ Zu weit entfernt (${distFromCur.toFixed(0)} / Max ${STATE.warpRange} LJ)`;
+            warpBtn.style.opacity = "0.5";
+            warpBtn.style.pointerEvents = "none";
+        } else if (STATE.bioEnergy < warpCost) {
+            warpBtn.disabled = true;
+            warpBtn.innerText = `⚡ Zu wenig Bio-Energie (${warpCost}% nötig)`;
             warpBtn.style.opacity = "0.5";
             warpBtn.style.pointerEvents = "none";
         } else {
             warpBtn.disabled = false;
-            warpBtn.innerText = "Quantenfeld falten (WARP: -20% Energie)";
+            warpBtn.innerText = `🌀 Quantenfeld falten (${distFromCur.toFixed(0)} LJ | -${warpCost}% Energie)`;
             warpBtn.style.opacity = "1";
             warpBtn.style.pointerEvents = "auto";
         }
@@ -3998,13 +4074,30 @@ function updateSystemDetails(sys) {
 }
 
 function warpToSystem(systemId) {
-    if (STATE.bioEnergy < 20) {
-        addLogEntry("SYSTEM", "Hypersprung abgebrochen: Nicht genügend Bio-Energie (20% benötigt)!");
+    if (!STATE.universe) return;
+    const currentSys = STATE.universe.systems.find(s => s.id === STATE.currentSystemId) || STATE.universe.systems[0];
+    const targetSys = STATE.universe.systems.find(s => s.id === systemId);
+    if (!targetSys) return;
+
+    const dx = targetSys.x - currentSys.x;
+    const dz = targetSys.z - currentSys.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    if (dist > STATE.warpRange) {
+        addLogEntry("SYSTEM", `Hypersprung abgebrochen: Distanz zu ${targetSys.name} (${dist.toFixed(0)} LJ) überschreitet maximale Faltungsreichweite (${STATE.warpRange} LJ)!`);
         return;
     }
 
-    // Deduct Warp Bio-Energy cost
-    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 20);
+    const costMult = STATE.mutations.folddrive && STATE.mutations.folddrive.purchased ? 0.7 : 1.0;
+    const warpCost = Math.round((15 + dist * 0.15) * costMult);
+
+    if (STATE.bioEnergy < warpCost) {
+        addLogEntry("SYSTEM", `Hypersprung abgebrochen: Nicht genügend Bio-Energie (${warpCost}% benötigt, aktuell ${Math.round(STATE.bioEnergy)}%)!`);
+        return;
+    }
+
+    // Deduct calculated Warp Bio-Energy cost
+    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - warpCost);
 
     const warpOverlay = document.getElementById('warp-overlay');
     if (warpOverlay) {
@@ -4033,7 +4126,7 @@ function warpToSystem(systemId) {
             STATE.playerGroup.position.set(0, 0, 50);
         }
 
-        addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} stabilisiert.`);
+        addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} (${dist.toFixed(0)} LJ, -${warpCost}% Energie) stabilisiert.`);
 
         // Close panels
         if (warpOverlay) {
