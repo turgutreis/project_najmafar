@@ -1056,8 +1056,8 @@ function spawnPlanetsAndAsteroids() {
 
         const ring = createGravityRing(px, pz, pRange, parseInt(p.color), 0.08);
 
-        // Save Kepler orbit specs & scan details
-        const orbitSpeed = 0.2 / Math.sqrt(p.distance); // outer planets orbit slower!
+        // Save Kepler orbit specs & scan details (Calm, majestic planetary orbit speed)
+        const orbitSpeed = 0.045 / Math.sqrt(p.distance);
         const pColorCss = p.color.replace("0x", "#");
         const generated = generatePlanetAttributes(p);
         
@@ -1095,7 +1095,7 @@ function spawnPlanetsAndAsteroids() {
         };
         activePlanets.push(planetEntry);
 
-        // Spawn Moons (Natural Satellites) for this planet
+        // Spawn Moons (Natural Satellites) for this planet (Calm, graceful moon orbit speed)
         const moonsList = p.moons || generateFallbackMoons(p);
         moonsList.forEach((m, m_idx) => {
             const moonAngle = (m_idx * 2.2) + (idx * 0.7) + 0.5;
@@ -1146,6 +1146,8 @@ function spawnPlanetsAndAsteroids() {
             };
             STATE.gravitySources.push(moonSource);
 
+            const moonOrbitSpeed = m.speed ? m.speed * 0.14 : (0.12 + m_idx * 0.03);
+
             activePlanets.push({
                 mesh: moonMesh,
                 bodyMesh: moonMesh,
@@ -1154,7 +1156,7 @@ function spawnPlanetsAndAsteroids() {
                 parentPlanet: planetEntry,
                 isMoon: true,
                 angle: moonAngle,
-                speed: m.speed || (1.0 + (m_idx * 0.3)),
+                speed: moonOrbitSpeed,
                 distance: m.distance,
                 name: m.name,
                 type: m.type,
@@ -1493,12 +1495,12 @@ function updatePhysics(dt) {
                 p.ringMesh.position.set(px, 0, pz);
             }
 
-            // Planet and clouds axial rotation
+            // Planet and clouds axial rotation (Relaxed, smooth speed)
             if (p.bodyMesh) {
-                p.bodyMesh.rotation.y += (p.isGasGiant ? 0.3 : 0.15) * dt;
+                p.bodyMesh.rotation.y += (p.isGasGiant ? 0.06 : 0.035) * dt;
             }
             if (p.cloudMesh) {
-                p.cloudMesh.rotation.y += 0.22 * dt;
+                p.cloudMesh.rotation.y += 0.05 * dt;
             }
             // Pulse 3D Psionic Aura ring
             if (p.psioAuraMesh) {
@@ -1522,9 +1524,9 @@ function updatePhysics(dt) {
                 m.ringMesh.position.copy(parentPos);
             }
 
-            // Moon axial rotation
+            // Moon axial rotation (Calm rotation)
             if (m.bodyMesh) {
-                m.bodyMesh.rotation.y += 0.45 * dt;
+                m.bodyMesh.rotation.y += 0.05 * dt;
             }
         }
     });
@@ -3542,6 +3544,10 @@ let selectedSystem = null;
 let mapAnimFrameId = null;
 let filterLifeOnly = false;
 let mapMouseX = -1, mapMouseY = -1;
+let mapZoom = 1.0;
+let mapPanX = 0, mapPanY = 0;
+let isDraggingMap = false;
+let dragStartX = 0, dragStartY = 0;
 
 function toggleGalaxyMap() {
     if (!STATE.gameStarted) return;
@@ -3590,8 +3596,6 @@ function renderGalaxyMap() {
 
     const width = canvas.width;
     const height = canvas.height;
-    const centerX = width / 2;
-    const centerY = height / 2;
 
     const systems = STATE.universe.systems;
     let maxDist = 0;
@@ -3599,7 +3603,7 @@ function renderGalaxyMap() {
         const dist = Math.sqrt(sys.x * sys.x + sys.z * sys.z);
         if (dist > maxDist) maxDist = dist;
     });
-    const scale = Math.min(width, height) / (maxDist * 2.2 || 1);
+    const baseScale = Math.min(width, height) / (maxDist * 2.3 || 1);
 
     if (!selectedSystem) {
         selectedSystem = systems.find(s => s.id === STATE.currentSystemId) || systems[0];
@@ -3613,65 +3617,67 @@ function renderGalaxyMap() {
         ctx.fillStyle = '#030712';
         ctx.fillRect(0, 0, width, height);
 
-        // Grid lines
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        const currentScale = baseScale * mapZoom;
+        const centerX = width / 2 + mapPanX;
+        const centerY = height / 2 + mapPanY;
+
+        // Grid lines with pan/zoom
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
         ctx.lineWidth = 1;
-        const gridSize = 40;
-        for (let x = 0; x < width; x += gridSize) {
+        const gridSize = 40 * mapZoom;
+        const startX = (centerX % gridSize);
+        const startY = (centerY % gridSize);
+        for (let x = startX; x < width; x += gridSize) {
             ctx.beginPath();
             ctx.moveTo(x, 0); ctx.lineTo(x, height);
             ctx.stroke();
         }
-        for (let y = 0; y < height; y += gridSize) {
+        for (let y = startY; y < height; y += gridSize) {
             ctx.beginPath();
             ctx.moveTo(0, y); ctx.lineTo(width, y);
             ctx.stroke();
         }
 
         // Center Axis
-        ctx.strokeStyle = 'rgba(168, 85, 247, 0.1)';
+        ctx.strokeStyle = 'rgba(168, 85, 247, 0.08)';
         ctx.beginPath();
         ctx.moveTo(centerX, 0); ctx.lineTo(centerX, height);
         ctx.moveTo(0, centerY); ctx.lineTo(width, centerY);
         ctx.stroke();
 
-        // Spiral background dust
-        ctx.fillStyle = 'rgba(168, 85, 247, 0.015)';
-        for (let i = 0; i < 400; i++) {
-            const theta = (i / 400) * 4 * Math.PI;
-            const r = 20 + (i / 400) * maxDist * scale;
-            const x1 = centerX + r * Math.cos(theta);
-            const y1 = centerY + r * Math.sin(theta);
-            ctx.beginPath();
-            ctx.arc(x1, y1, 12, 0, Math.PI * 2);
-            ctx.fill();
-
-            const x2 = centerX + r * Math.cos(theta + Math.PI);
-            const y2 = centerY + r * Math.sin(theta + Math.PI);
-            ctx.beginPath();
-            ctx.arc(x2, y2, 12, 0, Math.PI * 2);
-            ctx.fill();
-        }
+        // Galactic Center Core Glow
+        const coreGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 50 * currentScale);
+        coreGrad.addColorStop(0, 'rgba(168, 85, 247, 0.15)');
+        coreGrad.addColorStop(1, 'rgba(168, 85, 247, 0)');
+        ctx.fillStyle = coreGrad;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 50 * currentScale, 0, Math.PI * 2);
+        ctx.fill();
 
         // Current system indicator halo
         const currentSys = systems.find(s => s.id === STATE.currentSystemId);
         if (currentSys) {
-            const curScreenX = centerX + currentSys.x * scale;
-            const curScreenY = centerY + currentSys.z * scale;
+            const curScreenX = centerX + currentSys.x * currentScale;
+            const curScreenY = centerY + currentSys.z * currentScale;
 
-            ctx.strokeStyle = 'rgba(56, 189, 248, 0.7)';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+            ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.arc(curScreenX, curScreenY, 16 + Math.sin(Date.now() * 0.006) * 4, 0, Math.PI * 2);
+            ctx.arc(curScreenX, curScreenY, 14 * Math.min(1.5, Math.max(0.7, mapZoom)) + Math.sin(Date.now() * 0.006) * 3, 0, Math.PI * 2);
             ctx.stroke();
         }
 
         hoverSystem = null;
 
-        // Render all stars
+        // Render all stars with Smart Level-of-Detail (LOD)
         systems.forEach(sys => {
-            const screenX = centerX + sys.x * scale;
-            const screenY = centerY + sys.z * scale;
+            const screenX = centerX + sys.x * currentScale;
+            const screenY = centerY + sys.z * currentScale;
+
+            // Cull stars outside canvas viewport
+            if (screenX < -30 || screenX > width + 30 || screenY < -30 || screenY > height + 30) {
+                return;
+            }
 
             const dx = mouseX - screenX;
             const dy = mouseY - screenY;
@@ -3682,50 +3688,48 @@ function renderGalaxyMap() {
             const hasSentient = sys.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
 
             if (filterLifeOnly && !hasSentient && !isActive && !isSelected) {
-                ctx.globalAlpha = 0.15;
+                ctx.globalAlpha = 0.12;
             } else {
                 ctx.globalAlpha = 1.0;
             }
 
-            let baseSize = 4.5;
-            if (isActive) baseSize = 6;
-            if (isSelected) baseSize = 7.5;
+            let baseSize = 2.8 * Math.min(1.6, Math.max(0.7, mapZoom));
+            if (isActive) baseSize = 4.8;
+            if (isSelected) baseSize = 6.0;
 
-            if (dist < 12) {
+            if (dist < 10) {
                 hoverSystem = sys;
-                baseSize += 3;
+                baseSize += 2.5;
             }
 
             // --- PSIONIC THOUGHT BEACON (Dramatic Multi-Wave Aura for Life!) ---
             if (hasSentient) {
-                // 1. Radial glow disc
-                const glowGrad = ctx.createRadialGradient(screenX, screenY, baseSize, screenX, screenY, baseSize + 24);
-                glowGrad.addColorStop(0, 'rgba(217, 70, 239, 0.5)');
-                glowGrad.addColorStop(0.6, 'rgba(168, 85, 247, 0.2)');
+                const glowR = (baseSize + 14) * Math.min(1.4, Math.max(0.8, mapZoom));
+                const glowGrad = ctx.createRadialGradient(screenX, screenY, baseSize, screenX, screenY, glowR);
+                glowGrad.addColorStop(0, 'rgba(217, 70, 239, 0.45)');
+                glowGrad.addColorStop(0.6, 'rgba(168, 85, 247, 0.15)');
                 glowGrad.addColorStop(1, 'rgba(217, 70, 239, 0)');
                 ctx.fillStyle = glowGrad;
                 ctx.beginPath();
-                ctx.arc(screenX, screenY, baseSize + 24, 0, Math.PI * 2);
+                ctx.arc(screenX, screenY, glowR, 0, Math.PI * 2);
                 ctx.fill();
 
-                // 2. 3-Layer continuous expanding ripple waves
-                const timeSec = (Date.now() % 2400) / 2400; // 0 to 1
-                for (let w = 0; w < 3; w++) {
-                    const waveProg = (timeSec + w * 0.333) % 1.0;
-                    const waveR = baseSize + 4 + waveProg * 24;
-                    const waveAlpha = (1.0 - waveProg) * 0.9;
+                const timeSec = (Date.now() % 2400) / 2400;
+                for (let w = 0; w < 2; w++) {
+                    const waveProg = (timeSec + w * 0.5) % 1.0;
+                    const waveR = baseSize + 2 + waveProg * 14 * Math.min(1.4, Math.max(0.8, mapZoom));
+                    const waveAlpha = (1.0 - waveProg) * 0.85;
                     ctx.strokeStyle = `rgba(217, 70, 239, ${waveAlpha})`;
-                    ctx.lineWidth = 1.8;
+                    ctx.lineWidth = 1.4;
                     ctx.beginPath();
                     ctx.arc(screenX, screenY, waveR, 0, Math.PI * 2);
                     ctx.stroke();
                 }
 
-                // 3. Glowing neon life tag
                 ctx.fillStyle = '#f472b6';
-                ctx.font = 'bold 8.5px Orbitron, sans-serif';
+                ctx.font = 'bold 8px Orbitron, sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText('🧠 LEBEN', screenX, screenY + baseSize + 12);
+                ctx.fillText('🧠', screenX, screenY + baseSize + 9);
             }
 
             let starColor = '#f59e0b';
@@ -3735,20 +3739,20 @@ function renderGalaxyMap() {
             if (sys.star.type === 'Black Hole') starColor = '#8b5cf6';
 
             if (isSelected) {
-                ctx.fillStyle = 'rgba(168, 85, 247, 0.45)';
+                ctx.fillStyle = 'rgba(168, 85, 247, 0.4)';
                 ctx.beginPath();
-                ctx.arc(screenX, screenY, baseSize + 8, 0, Math.PI * 2);
+                ctx.arc(screenX, screenY, baseSize + 6, 0, Math.PI * 2);
                 ctx.fill();
 
                 ctx.strokeStyle = '#e879f9';
-                ctx.lineWidth = 2;
+                ctx.lineWidth = 1.5;
                 ctx.beginPath();
-                ctx.arc(screenX, screenY, baseSize + 4, 0, Math.PI * 2);
+                ctx.arc(screenX, screenY, baseSize + 3, 0, Math.PI * 2);
                 ctx.stroke();
             } else if (isActive) {
-                ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+                ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
                 ctx.beginPath();
-                ctx.arc(screenX, screenY, baseSize + 5, 0, Math.PI * 2);
+                ctx.arc(screenX, screenY, baseSize + 4, 0, Math.PI * 2);
                 ctx.fill();
             }
 
@@ -3757,16 +3761,19 @@ function renderGalaxyMap() {
             ctx.arc(screenX, screenY, baseSize, 0, Math.PI * 2);
             ctx.fill();
 
-            if (isSelected || isActive || hasSentient || dist < 12) {
+            // Smart LOD Labeling: Only show labels if selected, active, hovered, or when zoomed in!
+            const shouldShowLabel = isSelected || isActive || dist < 10 || (mapZoom > 2.0) || (hasSentient && mapZoom > 1.2);
+            if (shouldShowLabel) {
                 ctx.fillStyle = isSelected ? '#e879f9' : (isActive ? '#38bdf8' : (hasSentient ? '#f8fafc' : '#94a3b8'));
-                ctx.font = 'bold 9px Orbitron, sans-serif';
+                ctx.font = isSelected ? 'bold 9px Orbitron, sans-serif' : '8px Orbitron, sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText(sys.name, screenX, screenY - baseSize - 6);
+                ctx.fillText(sys.name, screenX, screenY - baseSize - 4);
             }
         });
 
         ctx.globalAlpha = 1.0;
 
+        // Hover tooltip
         if (hoverSystem) {
             ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
             ctx.strokeStyle = 'rgba(217, 70, 239, 0.6)';
@@ -3775,26 +3782,55 @@ function renderGalaxyMap() {
             const tooltipX = mouseX + 15;
             const tooltipY = mouseY - 15;
             const hasSentient = hoverSystem.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
-            const text = `${hoverSystem.name} (${hoverSystem.star.type}) ${hasSentient ? '🧠' : ''}`;
+            const text = `${hoverSystem.name} (${hoverSystem.star.type}) ${hasSentient ? '🧠 Leben' : ''}`;
 
-            ctx.font = '10px Orbitron, sans-serif';
+            ctx.font = '9.5px Orbitron, sans-serif';
             const textWidth = ctx.measureText(text).width;
 
             ctx.beginPath();
-            ctx.roundRect(tooltipX, tooltipY - 20, textWidth + 24, 28, 6);
+            ctx.roundRect(tooltipX, tooltipY - 18, textWidth + 20, 24, 5);
             ctx.fill();
             ctx.stroke();
 
             ctx.fillStyle = '#ffffff';
             ctx.textAlign = 'left';
-            ctx.fillText(text, tooltipX + 12, tooltipY - 2);
+            ctx.fillText(text, tooltipX + 10, tooltipY - 2);
         }
     };
+
+    // --- INTERACTIVE ZOOM & PAN CONTROLS ---
+    canvas.onwheel = (e) => {
+        e.preventDefault();
+        const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+        const newZoom = Math.min(5.0, Math.max(0.6, mapZoom * zoomFactor));
+        mapZoom = newZoom;
+    };
+
+    canvas.onmousedown = (e) => {
+        isDraggingMap = true;
+        dragStartX = e.clientX - mapPanX;
+        dragStartY = e.clientY - mapPanY;
+    };
+
+    window.addEventListener('mouseup', () => {
+        isDraggingMap = false;
+    });
 
     canvas.onmousemove = (e) => {
         const mRect = canvas.getBoundingClientRect();
         mapMouseX = e.clientX - mRect.left;
         mapMouseY = e.clientY - mRect.top;
+
+        if (isDraggingMap) {
+            mapPanX = e.clientX - dragStartX;
+            mapPanY = e.clientY - dragStartY;
+        }
+    };
+
+    canvas.ondblclick = () => {
+        mapZoom = 1.0;
+        mapPanX = 0;
+        mapPanY = 0;
     };
 
     canvas.onmouseleave = () => {
@@ -3802,7 +3838,7 @@ function renderGalaxyMap() {
         mapMouseY = -1;
     };
 
-    canvas.onclick = () => {
+    canvas.onclick = (e) => {
         if (hoverSystem) {
             selectedSystem = hoverSystem;
             updateSystemDetails(selectedSystem);
