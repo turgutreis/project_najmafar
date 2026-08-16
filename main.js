@@ -3,6 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const { exec } = require('child_process');
 
+app.commandLine.appendSwitch('disable-features', 'AutofillServerCommunication');
+
 function createWindow() {
     const win = new BrowserWindow({
         width: 1200,
