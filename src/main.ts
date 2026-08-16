@@ -1,0 +1,240 @@
+import * as THREE from 'three';
+import { STATE } from './core/state';
+import { initScene, starfield, renderer, scene, camera } from './engine/scene';
+import { initTrajectory, updateTrajectory } from './engine/trajectory';
+import { createPlayerMesh, playerMesh, playerGlowMesh, gravityCircles } from './procedural/meshes';
+import { setupControls, pollGamepadControls } from './input/controls';
+import { checkUniverseData } from './systems/universe';
+import { updatePhysics } from './engine/physics';
+import { updateHarvesting, triggerHarvestStart } from './systems/harvesting';
+import { updateAbduction, triggerAbductStart } from './systems/abduction';
+import { updateMinimap, updateSonarWave, initHUD, addLogEntry } from './ui/hud';
+import { initDeckUI, updateMutationUI } from './ui/deck';
+import { renderCrewUI } from './systems/crew';
+import { toggleGalaxyMap, warpToSystem } from './systems/galaxy-map';
+import { triggerScanStart } from './systems/scanner';
+
+let lastTime = 0;
+
+function animate(time: number) {
+    if (time === undefined) {
+        requestAnimationFrame(animate);
+        return;
+    }
+    if (!lastTime) lastTime = time;
+    const dt = Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
+
+    // Background starfield slow rotation
+    if (starfield) {
+        starfield.rotation.y += dt * 0.005;
+    }
+
+    // Pulse gravity rings
+    gravityCircles.forEach(c => {
+        const timePulse = Math.sin(Date.now() * 0.003 * c.pulseSpeed);
+        (c.mesh.material as THREE.Material).opacity = c.baseOpacity + timePulse * (c.baseOpacity * 0.5);
+    });
+
+    if (STATE.gameStarted) {
+        // Poll Gamepad controls
+        pollGamepadControls(dt);
+
+        // Core Physics simulation
+        updatePhysics(dt);
+
+        // Subsystems updates
+        updateHarvesting(dt);
+        updateAbduction(dt);
+        updateSonarWave(dt);
+
+        // Trajectory prediction
+        updateTrajectory();
+
+        // Minimap 2D radar
+        updateMinimap();
+
+        // Biomechanical tentacle animation
+        if (STATE.playerGroup) {
+            const timeVal = Date.now() * 0.005;
+            STATE.playerGroup.children.forEach((child, index) => {
+                if (index >= 3) { // Tentacle groups
+                    let parent: any = child;
+                    let depth = 0;
+                    while (parent && parent.children && parent.children.length > 0) {
+                        const joint = parent.children[0];
+                        if (joint) {
+                            joint.rotation.z = Math.sin(timeVal + index + depth * 0.5) * 0.15;
+                            joint.rotation.y = Math.cos(timeVal + depth * 0.3) * 0.1;
+                            parent = joint;
+                            depth++;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+
+        // Bioluminescent shell pulse
+        if (playerGlowMesh) {
+            const glowPulse = 1.0 + Math.sin(Date.now() * 0.004) * 0.08;
+            playerGlowMesh.scale.set(1.6 * glowPulse, 0.9 * glowPulse, 0.9 * glowPulse);
+        }
+    }
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+}
+
+function init() {
+    const container = document.getElementById('webgl-container');
+    if (!container) return;
+
+    // 1. Three.js Scene Setup
+    initScene(container);
+
+    // 2. Meshes & Trajectory
+    createPlayerMesh();
+    initTrajectory();
+
+    // 3. UI & Controls
+    setupControls();
+    initHUD();
+    initDeckUI();
+    renderCrewUI();
+    updateMutationUI();
+
+    // 4. Universe Initialization
+    checkUniverseData();
+
+    // 5. Setup Menu Listeners
+    setupMenuListeners();
+
+    // 6. Start Render Loop
+    requestAnimationFrame(animate);
+}
+
+function setupMenuListeners() {
+    const startBtn = document.getElementById('start-game-btn');
+    const mainMenu = document.getElementById('main-menu');
+    const resumeBtn = document.getElementById('resume-game-btn');
+
+    if (startBtn && mainMenu) {
+        startBtn.addEventListener('click', () => {
+            mainMenu.classList.add('menu-hidden');
+            STATE.gameStarted = true;
+            if (resumeBtn) resumeBtn.style.display = 'block';
+
+            addLogEntry("SYSTEM", "Biologisches Raumschiff erwacht. Psionische Sensoren online.");
+            addLogEntry("CREW", "Capt. Miller: 'Systeme nominal. Wir fliegen mit vollem Schub!'");
+        });
+    }
+
+    if (resumeBtn && mainMenu) {
+        resumeBtn.addEventListener('click', () => {
+            mainMenu.classList.add('menu-hidden');
+        });
+    }
+
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (!mainMenu) return;
+            const runningInElectron = typeof (window as any).api !== 'undefined';
+            if (STATE.gameStarted) {
+                mainMenu.classList.toggle('menu-hidden');
+            } else if (runningInElectron) {
+                (window as any).api.closeApp();
+            }
+        }
+    });
+
+    const howToBtn = document.getElementById('how-to-play-btn');
+    const howToModal = document.getElementById('how-to-play-modal');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+
+    if (howToBtn && howToModal) {
+        howToBtn.addEventListener('click', () => { howToModal.style.display = 'flex'; });
+    }
+    if (closeModalBtn && howToModal) {
+        closeModalBtn.addEventListener('click', () => { howToModal.style.display = 'none'; });
+    }
+
+    const mapBtn = document.getElementById('galaxy-map-btn');
+    const closeMapBtn = document.getElementById('close-map-btn');
+    if (mapBtn) mapBtn.addEventListener('click', toggleGalaxyMap);
+    if (closeMapBtn) closeMapBtn.addEventListener('click', toggleGalaxyMap);
+
+    const startScanBtn = document.getElementById('start-scan-btn');
+    if (startScanBtn) startScanBtn.addEventListener('click', triggerScanStart);
+
+    const startHarvestBtn = document.getElementById('start-harvest-btn');
+    if (startHarvestBtn) startHarvestBtn.addEventListener('click', triggerHarvestStart);
+
+    const startAbductBtn = document.getElementById('start-abduct-btn');
+    if (startAbductBtn) startAbductBtn.addEventListener('click', triggerAbductStart);
+
+    // Electron Quit Button
+    const runningInElectron = typeof (window as any).api !== 'undefined';
+    if (runningInElectron) {
+        const exitBtn = document.getElementById('exit-btn');
+        if (exitBtn) {
+            exitBtn.style.display = 'block';
+            exitBtn.addEventListener('click', () => {
+                (window as any).api.closeApp();
+            });
+        }
+    }
+
+    // IBM Quantum Universe Generator Button in Menu
+    const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement;
+    if (generateBtn) {
+        generateBtn.addEventListener('click', async () => {
+            const keyInput = document.getElementById('ibm-key-input') as HTMLInputElement;
+            const qpuChk = document.getElementById('use-qpu-chk') as HTMLInputElement;
+            const statusDiv = document.getElementById('generation-status');
+
+            const apiKey = keyInput ? keyInput.value.trim() : '';
+            const useQpu = qpuChk ? qpuChk.checked : false;
+
+            if (statusDiv) {
+                statusDiv.innerText = "Lade Quantenschaltkreis... Bitte warten...";
+                statusDiv.style.color = "#a855f7";
+            }
+            generateBtn.disabled = true;
+
+            if (runningInElectron) {
+                try {
+                    const res = await (window as any).api.generateUniverse(apiKey, useQpu);
+                    if (res.success) {
+                        if (statusDiv) {
+                            statusDiv.innerText = "Galaxie generiert! Najmafar erwacht.";
+                            statusDiv.style.color = "#10b981";
+                        }
+                        await checkUniverseData();
+                    } else {
+                        if (statusDiv) {
+                            statusDiv.innerText = "Fehler: " + res.error;
+                            statusDiv.style.color = "#ef4444";
+                        }
+                        generateBtn.disabled = false;
+                    }
+                } catch (e: any) {
+                    if (statusDiv) {
+                        statusDiv.innerText = "Fehler: " + e.message;
+                        statusDiv.style.color = "#ef4444";
+                    }
+                    generateBtn.disabled = false;
+                }
+            } else {
+                if (statusDiv) {
+                    statusDiv.innerText = "Quantum-Generierung benötigt Electron Desktop Client!";
+                    statusDiv.style.color = "#f59e0b";
+                }
+                generateBtn.disabled = false;
+            }
+        });
+    }
+}
+
+window.addEventListener('DOMContentLoaded', init);
