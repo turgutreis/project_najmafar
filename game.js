@@ -563,6 +563,8 @@ function spawnPlanetsAndAsteroids() {
         };
         STATE.gravitySources.push(sourceObj);
 
+        const ring = createGravityRing(px, pz, pRange, parseInt(p.color), 0.08);
+
         // Save Kepler orbit specs & scan details
         const orbitSpeed = 0.2 / Math.sqrt(p.distance); // outer planets orbit slower!
         const pColorCss = p.color.replace("0x", "#");
