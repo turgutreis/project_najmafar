@@ -261,21 +261,21 @@ def build_galaxy(qrng):
                 p_type = "Gas Giant" # Too far / cold
                 
             if p_type == "Rocky":
-                p_size = qrng.get_range(1.2, 2.0)
+                p_size = qrng.get_range(1.6, 2.3)
                 p_color = qrng.choose(["0x94a3b8", "0xfdba74", "0xca8a04", "0x64748b"])
                 p_temp = f"{int(qrng.get_range(-200, 380))}°C"
                 p_atmos = qrng.choose(["Keine Atmosphäre (Vakuum)", "Dünnes CO2-Vakuum", "Schwefeldioxid & Argon"])
                 p_bio = qrng.choose(["Steril", "Extremophile Flechten"])
                 p_res = qrng.choose(["Reich an Silizium-Kristallen, Eisen & Titan", "Wertlose Staubkruste, Spuren von Nickel", "Schwermetall-Flöz (Eisen & Nickel)"])
             elif p_type == "Gas Giant":
-                p_size = qrng.get_range(3.5, 5.0)
+                p_size = qrng.get_range(4.5, 6.0)
                 p_color = qrng.choose(["0xa855f7", "0x0ea5e9", "0xf43f5e", "0x6366f1"])
                 p_temp = f"{int(qrng.get_range(-180, -90))}°C"
                 p_atmos = qrng.choose(["Flüssiges Helium & Wasserstoff", "Superdichtes Ammoniak & Methan"])
                 p_bio = qrng.choose(["Keine Signaturen erfasst", "Schwebende Plankton-Analoge"])
                 p_res = qrng.choose(["Extrem hoher Druck, Deuterium-Vorkommen", "Heißes Helium-3-Vorkommen"])
             else: # Habitable
-                p_size = qrng.get_range(2.0, 2.6)
+                p_size = qrng.get_range(2.4, 3.2)
                 p_color = qrng.choose(["0x00ff88", "0x0d9488", "0x14b8a6"])
                 p_temp = f"{int(qrng.get_range(8, 38))}°C"
                 p_atmos = qrng.choose(["Stickstoff & Sauerstoff (Klasse M)", "Dichte Aerosole & Wasserdampf"])

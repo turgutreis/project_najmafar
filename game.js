@@ -652,9 +652,9 @@ function spawnPlanetsAndAsteroids() {
         });
     });
 
-    // 3. Spawn asteroids
+    // 3. Spawn asteroids (Realistic cosmic debris & fragment scaling)
     activeSystem.asteroids.forEach((ast) => {
-        const size = 1.2 + Math.random() * 1.2;
+        const size = 0.4 + Math.random() * 0.45;
         const geo = new THREE.DodecahedronGeometry(size, 1);
 
         const posAttr = geo.attributes.position;
@@ -1198,8 +1198,8 @@ function updatePhysics(dt) {
         _inputDir.normalize();
         STATE.playerAcceleration.addScaledVector(_inputDir, STATE.thrustStrength);
 
-        // Expend bio-energy when using thrust (balanced: mid-point 1.2 * dt)
-        STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.2 * dt);
+        // Expend bio-energy when using thrust (balanced: 1.45 * dt for engaging survival)
+        STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.45 * dt);
 
         // Rotate ship group towards movement direction smoothly
         const targetAngle = Math.atan2(_inputDir.x, _inputDir.z);
@@ -1249,6 +1249,24 @@ function updatePhysics(dt) {
 
             STATE.playerAcceleration.x += dx * invDist * forceStrength;
             STATE.playerAcceleration.z += dz * invDist * forceStrength;
+        }
+    }
+
+    // 3. Stellar Radiation / Black Hole Event Horizon Hazard
+    const starSource = STATE.gravitySources.find(s => s.type === 'star');
+    if (starSource) {
+        const sdistSq = STATE.playerPosition.x * STATE.playerPosition.x + STATE.playerPosition.z * STATE.playerPosition.z;
+        const radiationRadius = starSource.radius * 2.4;
+        if (sdistSq < radiationRadius * radiationRadius) {
+            const distance = Math.sqrt(sdistSq);
+            const radRatio = 1 - (distance / radiationRadius);
+            const burnDamage = (3.5 + radRatio * 7.0) * dt;
+            STATE.health = Math.max(0, STATE.health - burnDamage);
+            STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + (3.0 + radRatio * 5.0) * dt));
+            if (Math.random() < 0.012) {
+                addLogEntry("SYSTEM", `⚠️ THERMISCHE WARNUNG: Sonnennähe zu ${starSource.name}! Zellmembranen kochen (+Strahlungsschaden).`);
+                addLogEntry("CREW", encryptCrewMessage("Dr. Song", "Die Hitzeschilde glühen! Wir verbrennen lebendig, wenn wir nicht sofort abdrehen!"));
+            }
         }
     }
 
@@ -1389,8 +1407,12 @@ function respawnAsteroid(sourceObj) {
         sourceObj.position.set(x, 0, z);
         sourceObj.isAbsorbed = false;
 
-        // Recreate the irregular geometry
-        const size = 1.5 + Math.random() * 2;
+        // Recreate the irregular geometry (Realistic debris scaling)
+        const size = 0.4 + Math.random() * 0.45;
+        sourceObj.radius = size;
+        sourceObj.gravityRange = size * 3;
+        sourceObj.mass = size * 4;
+
         const geo = new THREE.DodecahedronGeometry(size, 1);
         const posAttr = geo.attributes.position;
         for (let j = 0; j < posAttr.count; j++) {
@@ -1463,8 +1485,8 @@ function updateCrewSimulation(dt) {
             c.stress = Math.max(0, c.stress - 6.0 * dt);
             c.status = "Gasgelullt";
         } else {
-            // Normal stress behavior (balanced: 1.1x factor for engaging survival)
-            let growth = (c.baseStressRate + speedStressModifier + criticalEnergyModifier) * 1.1 * dt;
+            // Normal stress behavior (balanced: 1.35x factor for engaging survival)
+            let growth = (c.baseStressRate + speedStressModifier + criticalEnergyModifier) * 1.35 * dt;
             if (STATE.mutations.o2.purchased) {
                 growth *= 0.5; // O2 chamber halves stress buildup
             }
@@ -1498,10 +1520,10 @@ function updateCrewSimulation(dt) {
 
     // 3. Crew Sabotage at high stress
     STATE.crew.forEach((c) => {
-        if (c.stress >= 95) {
+        if (c.stress >= 85) {
             // Highly stressed crew damages the ship core out of desperation/sabotage!
-            STATE.health = Math.max(0, STATE.health - 1.5 * dt);
-            if (Math.random() < 0.003) {
+            STATE.health = Math.max(0, STATE.health - 1.8 * dt);
+            if (Math.random() < 0.004) {
                 addLogEntry("CREW", encryptCrewMessage(c.name, "Ich muss dieses Ding aufschneiden! Wir müssen hier raus! (Zellkern erleidet Schaden)"));
             }
         }
@@ -1557,8 +1579,8 @@ function updateCrewSimulation(dt) {
         }
     });
 
-    // Passive decay of bioEnergy over time (balanced: 0.30 * dt for moderate survival challenge)
-    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.30 * dt);
+    // Passive decay of bioEnergy over time (balanced: 0.40 * dt for active survival loop)
+    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.40 * dt);
 
     // Core damages if no energy left
     if (STATE.bioEnergy <= 0) {
