@@ -63,12 +63,13 @@
             <div class="modal-body">
                 <p>Du bist ein kosmisches, biomechanisches Wesen. Überlebe im leeren Raum, halte die Crew in deinem Bauch ruhig und mutiere deinen Körper.</p>
                 <ul>
-                    <li><strong>Fliegen:</strong> W A S D / Pfeiltasten zum Bewegen. Jeder Schub kostet Bio-Energie.</li>
-                    <li><strong>Flugbahn:</strong> Die gepunktete Linie zeigt deine vorhergesagte Flugbahn im Orbit. Nutze Planeten für Sling-Shot-Beschleunigungen!</li>
-                    <li><strong>Ressourcen sammeln:</strong> Fliege in Asteroiden. Grüne heilen dich, blaue laden deine Energie auf. Beide geben dir Mutations-Ressourcen. Asteroiden kondensieren nach kurzer Zeit neu!</li>
-                    <li><strong>Gefangene Crew:</strong> Die Astronauten in deinem Bauch geraten bei Kollisionen in Panik. Halte <strong>LEERTASTE</strong> gedrückt, um sie telepathisch einzulullen (kostet Mentalkraft).</li>
-                    <li><strong>Evolution:</strong> Erwirb Upgrades (Panzerung, O₂-Kern, Synapsen, Dschinn-Übersetzer) unten rechts.</li>
-                    <li><strong>Warp-Antrieb:</strong> Öffne die Galaxie-Karte [M] unten links, um zwischen den 100 Systemen zu warpen!</li>
+                    <li><strong>Steuerung & Flug:</strong> W A S D / Pfeiltasten oder <strong>Linker Gamepad-Stick</strong> zum Schub geben.</li>
+                    <li><strong>🎯 3D-Maus-Zielerfassung:</strong> Klicke direkt auf einen Planeten oder Mond im Raum, um ihn im Scanner zu fixieren (Taste [T] oder Bumper [LB/RB] zum Durchschalten, Taste [X] / [B-Taste] zum Entsperren).</li>
+                    <li><strong>🎮 Gamepad / Steam Deck:</strong> [A] Scannen & Entführen, [X] Ernten, [Y] Psionischer Ruf, [LT] Traum-Matrix beruhigen, [Select] Sternenkarte.</li>
+                    <li><strong>Ressourcen sammeln:</strong> Fliege in Asteroiden. Grüne heilen dich, blaue laden deine Energie auf. Beide geben dir Mutations-Ressourcen.</li>
+                    <li><strong>Gefangene Crew & Traum-Matrix:</strong> Halte <strong>LEERTASTE</strong> oder <strong>Gamepad [LT]</strong> gedrückt, um die Realität zu stabilisieren.</li>
+                    <li><strong>Evolution:</strong> Erwirb Upgrades (Panzerung, O₂-Kern, Synapsen, Faltungsmembran, Dschinn-Übersetzer) im rechten Evolution-Deck.</li>
+                    <li><strong>Warp-Antrieb [M]:</strong> Öffne die Galaxie-Karte, um innerhalb deiner Faltungsreichweite zu neuen Sternensystemen zu springen!</li>
                 </ul>
             </div>
             <button id="close-modal-btn" class="menu-btn secondary">Zurück zum Hauptmenü</button>
@@ -214,8 +215,12 @@
             
             <!-- Scan Action Box -->
             <div class="scan-action-box">
+                <div id="target-lock-badge" class="target-lock-badge" style="display: none;">
+                    <span>🎯 Manuell erfasst</span>
+                    <button id="unlock-target-btn" class="unlock-btn" title="Ziel fixierung aufheben [T / B-Taste]">✕</button>
+                </div>
                 <div class="nearest-planet-info">
-                    <span class="label">Nächster Planet:</span>
+                    <span class="label" id="target-label-text">Nächster Planet:</span>
                     <span id="nearest-planet-name" class="val">Keiner</span>
                 </div>
                 <div class="nearest-planet-dist">

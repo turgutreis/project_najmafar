@@ -40,6 +40,7 @@ const STATE = {
 
     // Scanner, Harvesting & Abduction System
     nearestPlanet: null,
+    lockedTarget: null, // Manually selected target via 3D Raycasting or Gamepad
     scanningPlanet: null,
     scanProgress: 0,
     scannedPlanets: {},
@@ -174,6 +175,9 @@ function initThree() {
 
     // Initialize Trajectory Line
     initTrajectory();
+
+    // Setup Target Raycasting & Reticle
+    setupTargetRaycasting();
 
     // Event Listeners
     window.addEventListener('resize', onWindowResize);
@@ -1271,6 +1275,12 @@ function setupControls() {
         if (key === 'q') {
             triggerPsionicSonar();
         }
+        if (key === 't') {
+            cycleTarget(1);
+        }
+        if (key === 'x') {
+            clearLockedTarget();
+        }
         if (key === 'f') {
             if (STATE.nearestPlanet) {
                 const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
@@ -1573,40 +1583,73 @@ function updatePhysics(dt) {
         }
     });
 
-    // B. Calculate closest planet distance & update Scanner UI
-    let minDist = Infinity;
-    let closestPlanet = null;
-    activePlanets.forEach(p => {
-        const dx = STATE.playerPosition.x - p.mesh.position.x;
-        const dz = STATE.playerPosition.z - p.mesh.position.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < minDist) {
-            minDist = dist;
-            closestPlanet = p;
-        }
-    });
+    // Gamepad / Steam Deck Input Polling
+    pollGamepadControls(dt);
 
-    STATE.nearestPlanet = closestPlanet;
-    updateScannerUI(closestPlanet, minDist);
+    // Update 3D Target Reticle
+    if (STATE.lockedTarget && STATE.lockedTarget.mesh) {
+        if (!targetReticleGroup) createTargetReticle();
+        targetReticleGroup.visible = true;
+        targetReticleGroup.position.copy(STATE.lockedTarget.mesh.position);
+        
+        const scale = (STATE.lockedTarget.size || 2.5) * 1.5;
+        const pulse = 1.0 + Math.sin(Date.now() * 0.008) * 0.08;
+        targetReticleGroup.scale.set(scale * pulse, scale * pulse, scale * pulse);
 
-    // Update Psionic Compass (Points toward closest sentient planet in system)
+        if (targetReticleGroup.children[0]) targetReticleGroup.children[0].rotation.z += dt * 1.2;
+        if (targetReticleGroup.children[1]) targetReticleGroup.children[1].rotation.z -= dt * 0.8;
+    } else {
+        if (targetReticleGroup) targetReticleGroup.visible = false;
+    }
+
+    // B. Calculate closest or locked planet distance & update Scanner UI
+    let targetPlanet = null;
+    let targetDist = Infinity;
+
+    if (STATE.lockedTarget && STATE.lockedTarget.mesh) {
+        targetPlanet = STATE.lockedTarget;
+        const dx = STATE.playerPosition.x - targetPlanet.mesh.position.x;
+        const dz = STATE.playerPosition.z - targetPlanet.mesh.position.z;
+        targetDist = Math.sqrt(dx * dx + dz * dz);
+    } else {
+        let minDist = Infinity;
+        let closestPlanet = null;
+        activePlanets.forEach(p => {
+            const dx = STATE.playerPosition.x - p.mesh.position.x;
+            const dz = STATE.playerPosition.z - p.mesh.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < minDist) {
+                minDist = dist;
+                closestPlanet = p;
+            }
+        });
+        targetPlanet = closestPlanet;
+        targetDist = minDist;
+    }
+
+    STATE.nearestPlanet = targetPlanet;
+    updateScannerUI(targetPlanet, targetDist);
+
+    // Update Psionic Compass (Points toward locked target if set, or closest sentient planet)
     const compassHud = document.getElementById('psionic-compass-hud');
     if (compassHud) {
-        const livingPlanet = activePlanets.find(p => p.attributes && p.attributes.species && p.attributes.species.population > 0);
-        if (livingPlanet) {
+        const targetBody = STATE.lockedTarget || activePlanets.find(p => p.attributes && p.attributes.species && p.attributes.species.population > 0);
+        if (targetBody) {
             compassHud.style.display = 'flex';
-            const cdx = livingPlanet.mesh.position.x - STATE.playerPosition.x;
-            const cdz = livingPlanet.mesh.position.z - STATE.playerPosition.z;
+            const cdx = targetBody.mesh.position.x - STATE.playerPosition.x;
+            const cdz = targetBody.mesh.position.z - STATE.playerPosition.z;
             const cdist = Math.sqrt(cdx * cdx + cdz * cdz);
 
-            // Angle in screen space
             const angle = Math.atan2(cdz, cdx) - Math.PI / 2;
 
             const nameEl = document.getElementById('compass-planet-name');
             const distEl = document.getElementById('compass-distance-text');
             const needleEl = document.getElementById('compass-arrow-needle');
 
-            if (nameEl) nameEl.innerText = `${livingPlanet.name} (${livingPlanet.attributes.species.name})`;
+            if (nameEl) {
+                const specTag = (targetBody.attributes && targetBody.attributes.species) ? ` (${targetBody.attributes.species.name})` : '';
+                nameEl.innerText = `${targetBody.name}${specTag}`;
+            }
             if (distEl) distEl.innerText = `Distanz: ${cdist.toFixed(0)} Einheiten`;
             if (needleEl) needleEl.style.transform = `rotate(${angle * (180 / Math.PI)}deg)`;
         } else {
@@ -2708,6 +2751,285 @@ function playCrashSound() {
     noise.stop(ctx.currentTime + 0.5);
 }
 
+// =========================================================================
+// --- PHASE 17: 3D MOUSE RAYCASTING & GAMEPAD / STEAM DECK CONTROLS ---
+// =========================================================================
+
+let targetReticleGroup = null;
+const raycaster = new THREE.Raycaster();
+const mouseVec = new THREE.Vector2();
+
+function createTargetReticle() {
+    if (targetReticleGroup) return;
+    targetReticleGroup = new THREE.Group();
+
+    // 1. Inner spinning dashed targeting ring
+    const ringGeo = new THREE.RingGeometry(1.2, 1.4, 32);
+    ringGeo.rotateX(Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending
+    });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    targetReticleGroup.add(ringMesh);
+
+    // 2. Outer corner brackets
+    const boxGeo = new THREE.RingGeometry(1.55, 1.7, 4);
+    boxGeo.rotateX(Math.PI / 2);
+    boxGeo.rotateY(Math.PI / 4);
+    const boxMat = new THREE.MeshBasicMaterial({
+        color: 0xd946ef,
+        transparent: true,
+        opacity: 0.75,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending
+    });
+    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+    targetReticleGroup.add(boxMesh);
+
+    targetReticleGroup.visible = false;
+    scene.add(targetReticleGroup);
+}
+
+function setupTargetRaycasting() {
+    createTargetReticle();
+
+    let pointerDownPos = { x: 0, y: 0 };
+    window.addEventListener('pointerdown', (e) => {
+        pointerDownPos = { x: e.clientX, y: e.clientY };
+    });
+
+    window.addEventListener('pointerup', (e) => {
+        const dx = e.clientX - pointerDownPos.x;
+        const dy = e.clientY - pointerDownPos.y;
+        if (Math.sqrt(dx * dx + dy * dy) > 8) return;
+
+        if (e.target.closest('#hud-container') || e.target.closest('#galaxy-map-overlay') || e.target.closest('#main-menu') || e.target.closest('#how-to-play-modal')) {
+            return;
+        }
+
+        if (!STATE.gameStarted || !renderer || !camera) return;
+
+        mouseVec.x = (e.clientX / window.innerWidth) * 2 - 1;
+        mouseVec.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouseVec, camera);
+
+        const targetMeshes = [];
+        activePlanets.forEach(p => {
+            if (p.bodyMesh) targetMeshes.push(p.bodyMesh);
+            if (p.mesh && p.mesh !== p.bodyMesh) targetMeshes.push(p.mesh);
+        });
+
+        const intersects = raycaster.intersectObjects(targetMeshes, true);
+        if (intersects.length > 0) {
+            const hitObject = intersects[0].object;
+            const target = activePlanets.find(p => p.bodyMesh === hitObject || p.mesh === hitObject || (p.mesh && p.mesh.children && p.mesh.children.includes(hitObject)));
+            if (target) {
+                setLockedTarget(target);
+                return;
+            }
+        }
+
+        if (STATE.lockedTarget) {
+            clearLockedTarget();
+        }
+    });
+
+    const unlockBtn = document.getElementById('unlock-target-btn');
+    if (unlockBtn) {
+        unlockBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            clearLockedTarget();
+        });
+    }
+}
+
+function setLockedTarget(target) {
+    if (!target) return;
+    STATE.lockedTarget = target;
+    playLockOnSound();
+    const typeLabel = target.isMoon ? `Mond (${target.type})` : target.type;
+    addLogEntry("SYSTEM", `🎯 ZIEL MANUELL FIXIERT: ${target.name} [${typeLabel}]. Scanner ausgerichtet.`);
+    updateTargetLockBadgeUI();
+}
+
+function clearLockedTarget() {
+    if (STATE.lockedTarget) {
+        addLogEntry("SYSTEM", `Ziel fixierung aufgehoben. Automatischer Distanz-Sensor aktiv.`);
+    }
+    STATE.lockedTarget = null;
+    updateTargetLockBadgeUI();
+}
+
+function cycleTarget(direction = 1) {
+    if (!activePlanets || activePlanets.length === 0) return;
+
+    const sorted = [...activePlanets].sort((a, b) => {
+        const da = a.mesh.position.distanceTo(STATE.playerPosition);
+        const db = b.mesh.position.distanceTo(STATE.playerPosition);
+        return da - db;
+    });
+
+    if (!STATE.lockedTarget) {
+        setLockedTarget(sorted[0]);
+    } else {
+        const curIdx = sorted.findIndex(p => p.name === STATE.lockedTarget.name);
+        let nextIdx = (curIdx + direction + sorted.length) % sorted.length;
+        setLockedTarget(sorted[nextIdx]);
+    }
+}
+
+function updateTargetLockBadgeUI() {
+    const badge = document.getElementById('target-lock-badge');
+    const label = document.getElementById('target-label-text');
+    if (badge) {
+        badge.style.display = STATE.lockedTarget ? 'flex' : 'none';
+    }
+    if (label) {
+        label.innerText = STATE.lockedTarget ? 'Fixiertes Ziel:' : 'Nächster Planet:';
+    }
+}
+
+function playLockOnSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, time);
+    osc.frequency.exponentialRampToValueAtTime(1760, time + 0.12);
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(0.18, time + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(time);
+    osc.stop(time + 0.2);
+}
+
+// --- GAMEPAD & STEAM DECK API HANDLER ---
+let prevGpButtons = [];
+
+window.addEventListener("gamepadconnected", (e) => {
+    addLogEntry("SYSTEM", `🎮 GAMEPAD VERBUNDEN: ${e.gamepad.id} erkannt.`);
+});
+
+window.addEventListener("gamepaddisconnected", () => {
+    addLogEntry("SYSTEM", `Gamepad getrennt.`);
+});
+
+function pollGamepadControls(dt) {
+    if (!navigator.getGamepads) return;
+    const gamepads = navigator.getGamepads();
+    let gp = null;
+    for (let i = 0; i < gamepads.length; i++) {
+        if (gamepads[i] && gamepads[i].connected) {
+            gp = gamepads[i];
+            break;
+        }
+    }
+    if (!gp) return;
+
+    // 1. Left Analog Stick (Axes 0 = X, Axes 1 = Y)
+    const deadzone = 0.15;
+    let stickX = gp.axes[0] || 0;
+    let stickY = gp.axes[1] || 0;
+    if (Math.abs(stickX) < deadzone) stickX = 0;
+    if (Math.abs(stickY) < deadzone) stickY = 0;
+
+    // D-Pad buttons fallback
+    if (gp.buttons[12] && gp.buttons[12].pressed) stickY = -1.0;
+    if (gp.buttons[13] && gp.buttons[13].pressed) stickY = 1.0;
+    if (gp.buttons[14] && gp.buttons[14].pressed) stickX = -1.0;
+    if (gp.buttons[15] && gp.buttons[15].pressed) stickX = 1.0;
+
+    if (Math.abs(stickX) > 0 || Math.abs(stickY) > 0) {
+        const thrust = STATE.thrustStrength * dt;
+        STATE.playerVelocity.x += stickX * thrust;
+        STATE.playerVelocity.z += stickY * thrust;
+        STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.06 * dt);
+
+        if (STATE.playerGroup) {
+            const angle = Math.atan2(stickX, stickY);
+            STATE.playerGroup.rotation.y = angle;
+        }
+
+        setThrusterSound(true);
+        if (typeof spawnEngineParticle === 'function') {
+            spawnEngineParticle();
+        }
+    }
+
+    // 2. Left Trigger (Button 6) = Hold Telepathic Calming Field
+    const ltPressed = (gp.buttons[6] && gp.buttons[6].pressed) || (gp.buttons[6] && gp.buttons[6].value > 0.3);
+    if (ltPressed && !STATE.telepathyActive) {
+        toggleTelepathy();
+    } else if (!ltPressed && STATE.telepathyActive && !STATE.keys.Space) {
+        toggleTelepathy();
+    }
+
+    // 3. Edge-triggered Buttons
+    function isPressedEdge(btnIdx) {
+        const btn = gp.buttons[btnIdx];
+        const isDown = btn ? (btn.pressed || btn.value > 0.5) : false;
+        const wasDown = prevGpButtons[btnIdx] || false;
+        return isDown && !wasDown;
+    }
+
+    // Button A (0): Scan / Abduct
+    if (isPressedEdge(0)) {
+        if (STATE.nearestPlanet) {
+            const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
+            if (isScanned && STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
+                triggerAbductStart();
+            } else {
+                triggerScanStart();
+            }
+        }
+    }
+
+    // Button X (2): Harvest / Assimilate
+    if (isPressedEdge(2)) {
+        triggerHarvestStart();
+    }
+
+    // Button Y (3): Psionic Sonar Call
+    if (isPressedEdge(3)) {
+        triggerPsionicSonar();
+    }
+
+    // Button B (1): Unlock target or close modal
+    if (isPressedEdge(1)) {
+        if (mapOpen) {
+            toggleGalaxyMap();
+        } else if (STATE.lockedTarget) {
+            clearLockedTarget();
+        }
+    }
+
+    // Bumpers LB (4) & RB (5): Cycle Target
+    if (isPressedEdge(4)) cycleTarget(-1);
+    if (isPressedEdge(5)) cycleTarget(1);
+
+    // Select / View (8): Toggle Galaxy Map
+    if (isPressedEdge(8)) toggleGalaxyMap();
+
+    // Start / Menu (9): Toggle Main Menu / Pause
+    if (isPressedEdge(9)) {
+        const mainMenu = document.getElementById('main-menu');
+        if (mainMenu && STATE.gameStarted) {
+            mainMenu.classList.toggle('menu-hidden');
+        }
+    }
+
+    prevGpButtons = gp.buttons.map(b => b ? (b.pressed || b.value > 0.5) : false);
+}
+
 async function checkUniverseData() {
     try {
         const res = await fetch('universe_data.json');
@@ -2755,6 +3077,12 @@ function disposeHierarchy(obj) {
 }
 
 function clearActiveSystem() {
+    if (targetReticleGroup) {
+        targetReticleGroup.visible = false;
+    }
+    STATE.lockedTarget = null;
+    updateTargetLockBadgeUI();
+
     STATE.gravitySources.forEach(source => {
         if (source.mesh) {
             scene.remove(source.mesh);
