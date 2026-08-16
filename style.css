@@ -2016,4 +2016,100 @@ body.game-started .hud-left {
     margin-left: 4px;
 }
 
+/* Galaxy Map Life Filter Button */
+.map-filter-life-btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    background: rgba(30, 41, 59, 0.8);
+    color: #cbd5e1;
+    border: 1px solid rgba(217, 70, 239, 0.3);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    text-transform: uppercase;
+}
+
+.map-filter-life-btn:hover {
+    border-color: #d946ef;
+    color: #f8fafc;
+    box-shadow: 0 0 10px rgba(217, 70, 239, 0.3);
+}
+
+.map-filter-life-btn.active {
+    background: linear-gradient(135deg, #a21caf, #d946ef);
+    color: #ffffff;
+    border-color: #f472b6;
+    box-shadow: 0 0 16px rgba(217, 70, 239, 0.55);
+}
+
+/* Quick Select Life Systems List in Map Sidebar */
+.psionic-beacons-list-section {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow: hidden;
+}
+
+.beacons-list-header {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #d946ef;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: left;
+}
+
+.psionic-beacons-quick-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 140px;
+    overflow-y: auto;
+}
+
+.beacon-quick-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 10px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(217, 70, 239, 0.2);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.72rem;
+}
+
+.beacon-quick-item:hover {
+    background: rgba(217, 70, 239, 0.15);
+    border-color: rgba(217, 70, 239, 0.6);
+    transform: translateX(3px);
+}
+
+.beacon-quick-item.active-item {
+    border-color: #d946ef;
+    background: rgba(217, 70, 239, 0.25);
+    box-shadow: 0 0 8px rgba(217, 70, 239, 0.3);
+}
+
+.beacon-sys-name {
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.beacon-species-tag {
+    font-size: 0.65rem;
+    color: #38bdf8;
+}
+
+
 
