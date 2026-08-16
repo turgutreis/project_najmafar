@@ -2,13 +2,14 @@
   "name": "project-najmafar",
   "version": "1.0.0",
   "description": "Project Najmafar - A Cosmic Survival Game",
+  "author": "Ali Mazlum <a_mazlum@web.de>",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --windows",
-    "build:linux": "electron-builder --linux",
-    "build:all": "electron-builder --win --mac --linux"
+    "build:win": "electron-builder --win --x64",
+    "build:linux": "electron-builder --linux --x64",
+    "build:all": "electron-builder --win --mac --linux --x64"
   },
   "dependencies": {},
   "devDependencies": {
@@ -43,7 +44,8 @@
       "target": [
         "AppImage",
         "deb"
-      ]
+      ],
+      "maintainer": "Ali Mazlum <a_mazlum@web.de>"
     }
   }
 }
