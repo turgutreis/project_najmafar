@@ -23,6 +23,7 @@
       "style.css",
       "game.js",
       "main.js",
+      "universe_data.json",
       "assets/**/*"
     ],
     "mac": {
