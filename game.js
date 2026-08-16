@@ -27528,10 +27528,20 @@ async function checkUniverseData() {
         statusDiv.innerText = `\uD83C\uDF0C Quanten-Universum aktiv: ${sysCount} Systeme geladen.`;
         statusDiv.style.color = "#10b981";
       }
+      const startBtn = document.getElementById("start-game-btn");
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.innerText = "Najmafar betreten";
+      }
       clearActiveSystem();
       spawnPlanetsAndAsteroids();
     } else {
       console.warn("Najmafar: No systems found in universe_data.json");
+      const startBtn = document.getElementById("start-game-btn");
+      if (startBtn) {
+        startBtn.disabled = true;
+        startBtn.innerText = "Zuerst Galaxie generieren";
+      }
     }
   } catch (e) {
     console.warn("Najmafar: Failed to load universe_data.json, fallback generation active.", e);
