@@ -6,6 +6,7 @@ import { targetReticleGroup, createTargetReticle } from '../procedural/meshes';
 import { addLogEntry, updateHUDStats } from '../ui/hud';
 import { updateScannerUI } from '../systems/scanner';
 import { updateMutationUI } from '../ui/deck';
+import { triggerGameOver } from './game-over';
 
 // Cached vectors for zero GC pressure
 const _predPos = new THREE.Vector3();
@@ -27,7 +28,7 @@ export function updatePhysics(dt: number) {
             }
 
             if (p.bodyMesh) {
-                p.bodyMesh.rotation.y += (p.isGasGiant ? 0.06 : 0.035) * dt;
+                p.bodyMesh.rotation.y += (p.type === 'Gas Giant' ? 0.06 : 0.035) * dt;
             }
             if (p.cloudMesh) {
                 p.cloudMesh.rotation.y += 0.05 * dt;
@@ -163,19 +164,19 @@ export function updatePhysics(dt: number) {
         }
     }
 
-    // Stellar Radiation / Star Hazard
+    // Stellar Radiation / Star Hazard (Safe outside R > 16)
     const starSource = STATE.gravitySources.find(s => s.type === 'star');
     if (starSource) {
         const sdistSq = STATE.playerPosition.x * STATE.playerPosition.x + STATE.playerPosition.z * STATE.playerPosition.z;
-        const radiationRadius = starSource.radius * 2.4;
+        const radiationRadius = 16.0;
         if (sdistSq < radiationRadius * radiationRadius) {
             const distance = Math.sqrt(sdistSq);
             const radRatio = 1 - (distance / radiationRadius);
-            const burnDamage = (3.5 + radRatio * 7.0) * dt;
+            const burnDamage = (0.8 + radRatio * radRatio * 8.0) * dt;
             STATE.health = Math.max(0, STATE.health - burnDamage);
-            STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + (3.0 + radRatio * 5.0) * dt));
-            if (Math.random() < 0.012) {
-                addLogEntry("SYSTEM", `⚠️ THERMISCHE WARNUNG: Sonnennähe zu ${starSource.name}! Strahlungsschaden erlitten.`);
+            STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + (1.5 + radRatio * 4.0) * dt));
+            if (Math.random() < 0.01) {
+                addLogEntry("SYSTEM", `⚠️ THERMISCHE WARNUNG: Sonnennähe zu ${starSource.name} (R=${distance.toFixed(1)} < 16)! Strahlungsschaden erlitten.`);
             }
         }
     }
@@ -196,35 +197,39 @@ export function updatePhysics(dt: number) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
     }
 
-    // Camera smoothly follows player
+    // Camera follow (Smooth lag)
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
     camera.position.y = 80;
 
+    // Check for Critical Biological Collapse (Game Over)
+    if (STATE.health <= 0 && !STATE.isGameOver && STATE.gameStarted) {
+        triggerGameOver("Biologischer Zellkern kollabiert durch extreme Umwelteinflüsse & Hüllenschaden.");
+        return;
+    }
+
     // 7. Update Collisions
     updateCollisions(dt);
 
-    // 8. Passive Engineer Repair
-    if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.05 && STATE.health < STATE.maxHealth) {
+    // 8. Passive Engineer Repair (Requires Silicon Nanites)
+    if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.15 && STATE.health < STATE.maxHealth) {
         STATE.health = Math.min(STATE.maxHealth, STATE.health + STATE.crewBuffs.repairRate * dt);
-        STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.04 * dt);
+        STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.25 * dt);
     }
 
-    // 9. Emergency Bio-Photosynthesis Trickle
-    if (STATE.bioEnergy < 15) {
-        const regenRate = STATE.bioEnergy <= 0 ? 1.5 : 0.8;
-        STATE.bioEnergy = Math.min(15, STATE.bioEnergy + regenRate * dt);
-    }
+    // Basal Metabolic Energy Drain: Living bioship consumes 0.65 Bio-Energy/s
+    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.65 * dt);
 
-    // Passive decay of bioEnergy over time
-    if (STATE.bioEnergy > 15) {
-        STATE.bioEnergy = Math.max(15, STATE.bioEnergy - 0.35 * dt);
+    // Emergency Bio-Photosynthesis Trickle (only up to 8% when completely starved)
+    if (STATE.bioEnergy < 8) {
+        const regenRate = STATE.bioEnergy <= 0 ? 0.9 : 0.4;
+        STATE.bioEnergy = Math.min(8, STATE.bioEnergy + regenRate * dt);
     }
 
     if (STATE.bioEnergy <= 0) {
-        STATE.health = Math.max(0, STATE.health - 1.2 * dt);
-        if (Math.random() < 0.004) {
-            addLogEntry("SYSTEM", "Kritischer Nahrungsmangel. Organismus verhungert (-1.2 Kernintegrität).");
+        STATE.health = Math.max(0, STATE.health - 2.0 * dt);
+        if (Math.random() < 0.006) {
+            addLogEntry("SYSTEM", "⚠️ KRITISCHER NAHRUNGSMANGEL: Organismus verhungert (-2.0 HP/s). Assimiliere Bio-Asteroiden!");
         }
     }
 
@@ -232,6 +237,7 @@ export function updatePhysics(dt: number) {
     const uniqueRoles = new Set(STATE.crew.map(c => c.role)).size;
     const isHarmony = uniqueRoles >= 3 && STATE.crew.length >= 3;
 
+    // 11. Update HUD Stats Bars
     updateHUDStats(isHarmony);
 }
 
@@ -271,31 +277,38 @@ export function updateCollisions(dt: number) {
             } else if (source.type === 'planet' || source.type === 'star') {
                 _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
 
+                const isStar = source.type === 'star';
+                const safeClearance = isStar ? 24.0 : colDistance + 0.6;
+
                 // Snap cleanly outside collider radius
-                STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, colDistance + 0.6);
+                STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, safeClearance);
                 if (STATE.playerGroup) STATE.playerGroup.position.copy(STATE.playerPosition);
 
-                // Elastic Repulsion Reflex
+                // Elastic Repulsion Reflex (Solar flare ejection if hitting star)
                 const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-                const bounceForce = Math.max(20, Math.abs(currentOutwardSpeed) * 0.8 + 14);
+                const bounceForce = isStar ? 28.0 : Math.max(22, Math.abs(currentOutwardSpeed) * 0.8 + 16);
                 STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
 
                 if (STATE.collisionCooldown === 0) {
                     STATE.collisionCooldown = 1.2;
 
-                    const damage = STATE.mutations.armor.purchased ? 10 : 20;
+                    const damage = isStar
+                        ? (STATE.mutations.armor.purchased ? 18 : 35)
+                        : (STATE.mutations.armor.purchased ? 15 : 30);
                     STATE.health = Math.max(0, STATE.health - damage);
 
                     playCrashSound();
 
                     const stressMult = (STATE.crewBuffs ? STATE.crewBuffs.stressDampening : 1.0);
-                    const stressAmount = (STATE.mutations.o2.purchased ? 7.5 : 15) * stressMult;
+                    const stressAmount = (STATE.mutations.o2.purchased ? 10 : 22) * stressMult;
                     STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + stressAmount));
 
-                    if (STATE.mutations.armor.purchased) {
-                        addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall & stößt Schiff elastisch ab.`);
+                    if (isStar) {
+                        addLogEntry("SYSTEM", `🔥 SOLAR-ERUPTION: Magnetische Sonneneruption schleudert Schiff in sicheren Orbit (${safeClearance.toFixed(0)} LJ)!`);
+                    } else if (STATE.mutations.armor.purchased) {
+                        addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall (-15 HP).`);
                     } else {
-                        addLogEntry("SYSTEM", `WARNUNG: Kollision mit ${source.name}! Organischer Abstoß-Reflex schleudert Schiff in den Orbit.`);
+                        addLogEntry("SYSTEM", `WARNUNG: Harter Aufprall auf ${source.name}! Zellhülle schwer beschädigt (-30 HP).`);
                     }
                 }
             }

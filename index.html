@@ -139,6 +139,44 @@
         </div>
     </div>
 
+    <!-- Game Over Modal Overlay -->
+    <div id="game-over-modal" class="modal-overlay" style="display: none; z-index: 1200; background: rgba(3, 7, 18, 0.88); backdrop-filter: blur(8px);">
+        <div class="game-over-content glass-panel" style="max-width: 500px; width: 90%; text-align: center; border: 1px solid rgba(244, 63, 94, 0.4); box-shadow: 0 0 50px rgba(244, 63, 94, 0.3); padding: 24px; border-radius: 12px; margin: auto;">
+            <h2 style="color: #f43f5e; font-size: 1.8rem; margin-bottom: 8px; text-shadow: 0 0 15px rgba(244, 63, 94, 0.6); font-family: 'Space Grotesk', sans-serif;">💀 BIOLOGISCHER KOLLAPS</h2>
+            <p id="game-over-reason" style="color: #94a3b8; font-size: 0.95rem; margin-bottom: 20px; line-height: 1.5;">
+                Die lebendige Zellhülle des Organismus hat kritischen Schaden erlitten. Die Psio-Matrix ist zusammengebrochen.
+            </p>
+
+            <div class="game-over-stats" style="background: rgba(15, 23, 42, 0.8); border-radius: 8px; padding: 16px; margin-bottom: 24px; text-align: left; font-size: 0.85rem; border: 1px solid rgba(255, 255, 255, 0.08);">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="color: #94a3b8;">Erforschte Systeme:</span>
+                    <span id="go-stat-systems" style="color: #38bdf8; font-weight: bold;">1</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="color: #94a3b8;">Gescannte Planeten:</span>
+                    <span id="go-stat-scanned" style="color: #10b981; font-weight: bold;">0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="color: #94a3b8;">Symbiotische Besatzung:</span>
+                    <span id="go-stat-crew" style="color: #d946ef; font-weight: bold;">0 Individuen</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span style="color: #94a3b8;">Gesammelte Biomasse / Silizium:</span>
+                    <span id="go-stat-resources" style="color: #f59e0b; font-weight: bold;">0 B / 0 S</span>
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <button id="respawn-btn" class="menu-btn primary" style="background: linear-gradient(135deg, #10b981, #059669); border-color: #34d399; font-weight: bold;">
+                    🧬 Phönix-Zellregeneration (Im Orbit wiederbeleben)
+                </button>
+                <button id="restart-game-btn" class="menu-btn secondary" style="border-color: rgba(244, 63, 94, 0.5); color: #fca5a5;">
+                    🌌 Neues Universum beginnen (Neustart)
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- The WebGL Canvas for 3D simulation -->
     <div id="canvas-container"></div>
 
@@ -213,88 +251,98 @@
             <button id="galaxy-map-btn" class="galaxy-map-trigger-btn">🌌 Galaxie-Karte [M]</button>
             <button id="psionic-sonar-btn" class="psionic-sonar-trigger-btn">📡 Psionischer Ruf [Q]</button>
             
-            <!-- Scan Action Box -->
-            <div class="scan-action-box">
-                <div id="target-lock-badge" class="target-lock-badge" style="display: none;">
-                    <span>🎯 Manuell erfasst</span>
-                    <button id="unlock-target-btn" class="unlock-btn" title="Ziel fixierung aufheben [T / B-Taste]">✕</button>
-                </div>
-                <div class="nearest-planet-info">
-                    <span class="label" id="target-label-text">Nächster Planet:</span>
-                    <span id="nearest-planet-name" class="val">Keiner</span>
-                </div>
-                <div class="nearest-planet-dist">
-                    <span class="label">Distanz:</span>
-                    <span id="nearest-planet-distance" class="val">-</span>
-                </div>
-                
-                <button id="start-scan-btn" class="scan-trigger-btn" disabled>Scan initiieren [F]</button>
-                
-                <!-- Scan Progress -->
-                <div id="scan-progress-container" class="scan-progress-container" style="display: none;">
-                    <div class="scan-progress-label">Frequenz-Sweep aktiv: <span id="scan-progress-text">0%</span></div>
-                    <div class="scan-progress-bar-bg">
-                        <div id="scan-progress-bar" class="scan-progress-bar" style="width: 0%;"></div>
+            <div class="scanner-scroll-body">
+                <!-- Scan Action Box -->
+                <div class="scan-action-box">
+                    <div id="target-lock-badge" class="target-lock-badge" style="display: none;">
+                        <span>🎯 Manuell erfasst</span>
+                        <button id="unlock-target-btn" class="unlock-btn" title="Ziel fixierung aufheben [T / B-Taste]">✕</button>
+                    </div>
+                    <div class="nearest-planet-info">
+                        <span class="label" id="target-label-text">Nächster Planet:</span>
+                        <span id="nearest-planet-name" class="val">Keiner</span>
+                    </div>
+                    <div class="nearest-planet-dist">
+                        <span class="label">Distanz:</span>
+                        <span id="nearest-planet-distance" class="val">-</span>
+                    </div>
+                    
+                    <button id="start-scan-btn" class="scan-trigger-btn" disabled>Scan initiieren [F]</button>
+                    
+                    <!-- Scan Progress -->
+                    <div id="scan-progress-container" class="scan-progress-container" style="display: none;">
+                        <div class="scan-progress-label">Frequenz-Sweep aktiv: <span id="scan-progress-text">0%</span></div>
+                        <div class="scan-progress-bar-bg">
+                            <div id="scan-progress-bar" class="scan-progress-bar" style="width: 0%;"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Scanned Planet Database -->
-            <div id="scan-results-box" class="scan-results-box" style="display: none;">
-                <h3 class="results-title" id="scan-planet-title">Planetenanalyse</h3>
                 
-                <div class="result-row">
-                    <span class="label">Typus:</span>
-                    <span id="scan-planet-type" class="val">-</span>
-                </div>
-                <div class="result-row">
-                    <span class="label">Temperatur:</span>
-                    <span id="scan-planet-temp" class="val">-</span>
-                </div>
-                <div class="result-row">
-                    <span class="label">Biosignatur:</span>
-                    <span id="scan-planet-bio" class="val">-</span>
-                </div>
-                <div class="result-row">
-                    <span class="label">Atmosphäre:</span>
-                    <span id="scan-planet-atmos" class="val">-</span>
-                </div>
-                <div class="result-row" id="scan-planet-species-row" style="display: none;">
-                    <span class="label">Intelligentes Leben:</span>
-                    <span id="scan-planet-species" class="val" style="color: #d946ef; font-weight: bold;">-</span>
-                </div>
-                <div class="result-row" style="flex-direction: column; align-items: flex-start; gap: 4px; border-bottom: none;">
-                    <span class="label">Ressourcendichte:</span>
-                    <span id="scan-planet-resources" class="val" style="color: #06b6d4; font-weight: normal; font-size: 0.72rem; line-height: 1.3;">-</span>
-                </div>
-                
-                <!-- Status Badge -->
-                <div class="result-row" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08);">
-                    <span class="label">Status:</span>
-                    <span id="scan-planet-status" class="planet-badge badge-ready">Bereit zur Assimilation</span>
-                </div>
+                <!-- Scanned Planet Database -->
+                <div id="scan-results-box" class="scan-results-box" style="display: none;">
+                    <h3 class="results-title" id="scan-planet-title">Planetenanalyse</h3>
+                    
+                    <div class="result-row">
+                        <span class="label">Typus:</span>
+                        <span id="scan-planet-type" class="val">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="label">Temperatur:</span>
+                        <span id="scan-planet-temp" class="val">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="label">Biosignatur:</span>
+                        <span id="scan-planet-bio" class="val">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="label">Atmosphäre:</span>
+                        <span id="scan-planet-atmos" class="val">-</span>
+                    </div>
+                    <div class="result-row" id="scan-planet-species-row" style="display: none;">
+                        <span class="label">Intelligentes Leben:</span>
+                        <span id="scan-planet-species" class="val" style="color: #d946ef; font-weight: bold;">-</span>
+                    </div>
+                    <div class="result-row" id="scan-planet-tech-row" style="display: none;">
+                        <span class="label">Zivilisation & Tech:</span>
+                        <span id="scan-planet-tech" class="val" style="color: #6366f1; font-weight: bold;">-</span>
+                    </div>
+                    <div class="result-row" id="scan-planet-fleet-row" style="display: none;">
+                        <span class="label">Orbitale Verteidigung:</span>
+                        <span id="scan-planet-fleet" class="val" style="color: #f43f5e; font-weight: bold;">-</span>
+                    </div>
+                    <div class="result-row" style="flex-direction: column; align-items: flex-start; gap: 4px; border-bottom: none;">
+                        <span class="label">Ressourcendichte:</span>
+                        <span id="scan-planet-resources" class="val" style="color: #06b6d4; font-weight: normal; font-size: 0.72rem; line-height: 1.3;">-</span>
+                    </div>
+                    
+                    <!-- Status Badge -->
+                    <div class="result-row" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08);">
+                        <span class="label">Status:</span>
+                        <span id="scan-planet-status" class="planet-badge badge-ready">Bereit zur Assimilation</span>
+                    </div>
 
-                <!-- Harvest Trigger Button & Progress -->
-                <button id="start-harvest-btn" class="harvest-btn">🌿 Ressourcen assimilieren [E]</button>
-                
-                <div id="harvest-progress-container" class="harvest-progress-container" style="display: none;">
-                    <div class="harvest-progress-label">Bio-Siphon aktiv: <span id="harvest-progress-text">0%</span></div>
-                    <div class="harvest-progress-bar-bg">
-                        <div id="harvest-progress-bar" class="harvest-progress-bar" style="width: 0%;"></div>
+                    <!-- Harvest Trigger Button & Progress -->
+                    <button id="start-harvest-btn" class="harvest-btn">🌿 Ressourcen assimilieren [E]</button>
+                    
+                    <div id="harvest-progress-container" class="harvest-progress-container" style="display: none;">
+                        <div class="harvest-progress-label">Bio-Siphon aktiv: <span id="harvest-progress-text">0%</span></div>
+                        <div class="harvest-progress-bar-bg">
+                            <div id="harvest-progress-bar" class="harvest-progress-bar" style="width: 0%;"></div>
+                        </div>
                     </div>
-                </div>
 
-                <!-- Abduction Trigger Button & Progress -->
-                <button id="start-abduct-btn" class="abduct-btn" style="display: none;">🛸 Psionische Entführung [F]</button>
-                <div id="abduct-progress-container" class="abduct-progress-container" style="display: none;">
-                    <div class="abduct-progress-label">Traum-Matrix-Transfer: <span id="abduct-progress-text">0%</span></div>
-                    <div class="abduct-progress-bar-bg">
-                        <div id="abduct-progress-bar" class="abduct-progress-bar" style="width: 0%;"></div>
+                    <!-- Abduction Trigger Button & Progress -->
+                    <button id="start-abduct-btn" class="abduct-btn" style="display: none;">🛸 Psionische Entführung [F]</button>
+                    <div id="abduct-progress-container" class="abduct-progress-container" style="display: none;">
+                        <div class="abduct-progress-label">Traum-Matrix-Transfer: <span id="abduct-progress-text">0%</span></div>
+                        <div class="abduct-progress-bar-bg">
+                            <div id="abduct-progress-bar" class="abduct-progress-bar" style="width: 0%;"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div id="scan-placeholder-box" class="scan-placeholder-box">
-                Fliege in die Nähe eines Planeten (Abstand &lt; 20), um die Sensoren zu kalibrieren und einen Oberflächendetektor-Scan durchzuführen.
+                <div id="scan-placeholder-box" class="scan-placeholder-box">
+                    Fliege in die Nähe eines Planeten (Abstand &lt; 20), um die Sensoren zu kalibrieren und einen Oberflächendetektor-Scan durchzuführen.
+                </div>
             </div>
         </aside>
 
@@ -376,8 +424,8 @@
                         <div class="mutation-item" id="mut-armor">
                             <div class="mut-details">
                                 <span class="mut-name">Chitin-Panzerung</span>
-                                <span class="mut-desc">Halbiert Planetenschaden</span>
-                                <span class="mut-cost">Kosten: <span class="cost-val bio">50 Bio</span> | <span class="cost-val silicon">30 Silizium</span></span>
+                                <span class="mut-desc">Halbiert Kollisionsschaden</span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">180 Bio</span> | <span class="cost-val silicon">110 Silizium</span></span>
                             </div>
                             <button class="mut-btn" data-mutation="armor">Mutieren</button>
                         </div>
@@ -385,7 +433,7 @@
                             <div class="mut-details">
                                 <span class="mut-name">Sauerstoff-Drüse</span>
                                 <span class="mut-desc">-50% Crew-Stressaufbau</span>
-                                <span class="mut-cost">Kosten: <span class="cost-val bio">60 Bio</span> | <span class="cost-val silicon">40 Silizium</span></span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">140 Bio</span> | <span class="cost-val silicon">60 Silizium</span></span>
                             </div>
                             <button class="mut-btn" data-mutation="o2">Mutieren</button>
                         </div>
@@ -393,7 +441,7 @@
                             <div class="mut-details">
                                 <span class="mut-name">Synapsen-Netzwerk</span>
                                 <span class="mut-desc">150 Max Mentalkraft & +65 LJ Gedanken-Reichweite</span>
-                                <span class="mut-cost">Kosten: <span class="cost-val bio">40 Bio</span> | <span class="cost-val silicon">80 Silizium</span></span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">260 Bio</span> | <span class="cost-val silicon">160 Silizium</span></span>
                             </div>
                             <button class="mut-btn" data-mutation="synapses">Mutieren</button>
                         </div>
@@ -401,7 +449,7 @@
                             <div class="mut-details">
                                 <span class="mut-name">Neuronales Kokon-Gewebe</span>
                                 <span class="mut-desc">Erweitert Crew-Kapazität auf 4 & dämpft Stress</span>
-                                <span class="mut-cost">Kosten: <span class="cost-val bio">50 Bio</span> | <span class="cost-val silicon">40 Silizium</span></span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">320 Bio</span> | <span class="cost-val silicon">140 Silizium</span></span>
                             </div>
                             <button class="mut-btn" data-mutation="cocoon">Mutieren</button>
                         </div>
@@ -409,23 +457,23 @@
                             <div class="mut-details">
                                 <span class="mut-name">Symbiotische Synapsen-Kammer</span>
                                 <span class="mut-desc">Max 6 Crew & +20% auf alle Spezialisten-Buffs</span>
-                                <span class="mut-cost">Kosten: <span class="cost-val bio">80 Bio</span> | <span class="cost-val silicon">70 Silizium</span></span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">500 Bio</span> | <span class="cost-val silicon">320 Silizium</span></span>
                             </div>
                             <button class="mut-btn" data-mutation="hivemind">Mutieren</button>
                         </div>
                         <div class="mutation-item" id="mut-folddrive">
                             <div class="mut-details">
                                 <span class="mut-name">Raumzeit-Faltungsmembran</span>
-                                <span class="mut-desc">+70 LJ Warp-Reichweite (160 LJ) & -30% Kosten</span>
-                                <span class="mut-cost">Kosten: <span class="cost-val bio">90 Bio</span> | <span class="cost-val silicon">70 Silizium</span></span>
+                                <span class="mut-desc">Warp-Reichweite 160 LJ (-30% Energiekosten)</span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">380 Bio</span> | <span class="cost-val silicon">420 Silizium</span></span>
                             </div>
                             <button class="mut-btn" data-mutation="folddrive">Mutieren</button>
                         </div>
                         <div class="mutation-item" id="mut-translator">
                             <div class="mut-details">
                                 <span class="mut-name">Dschinn-Übersetzer</span>
-                                <span class="mut-desc">Übersetzt Crew-Funklogs (Story!)</span>
-                                <span class="mut-cost">Kosten: <span class="cost-val bio">80 Bio</span> | <span class="cost-val silicon">80 Silizium</span></span>
+                                <span class="mut-desc">Dechiffriert Funk & Besatzungs-Gedanken</span>
+                                <span class="mut-cost">Kosten: <span class="cost-val bio">120 Bio</span> | <span class="cost-val silicon">80 Silizium</span></span>
                             </div>
                             <button class="mut-btn" data-mutation="translator">Mutieren</button>
                         </div>
@@ -438,7 +486,7 @@
         <footer class="hud-bottom glass-panel">
             <div class="controls-guide">
                 <div class="control-item"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> Schubdüsen | <span class="key">LEERTASTE</span> Beruhigungsfeld</div>
-                <div class="control-item"><span class="key">F</span> Scan | <span class="key">E</span> Assimilieren | <span class="key">M</span> Sternenkarte | <span class="key">ESC</span> Pause</div>
+                <div class="control-item"><span class="key">F</span> Scan | <span class="key">E</span> Assimilieren | <span class="key">X</span> Bio-EMP | <span class="key">M</span> Sternenkarte | <span class="key">ESC</span> Pause</div>
                 <div class="control-item" style="margin-top: 4px;">
                     <button id="music-toggle-btn" class="music-btn">🔇 Musik: Aus</button>
                 </div>

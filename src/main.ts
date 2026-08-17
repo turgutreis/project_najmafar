@@ -1,19 +1,22 @@
 import * as THREE from 'three';
 import { STATE } from './core/state';
 import { initScene, starfield, renderer, scene, camera } from './engine/scene';
+import { initPostProcessing, renderPostProcessing } from './engine/postprocessing';
 import { initTrajectory, updateTrajectory } from './engine/trajectory';
 import { createPlayerMesh, playerMesh, playerGlowMesh, gravityCircles } from './procedural/meshes';
 import { setupControls, processInput } from './input/controls';
-import { checkUniverseData, clearActiveSystem, spawnPlanetsAndAsteroids } from './systems/universe';
+import { checkUniverseData, clearActiveSystem, spawnPlanetsAndAsteroids, updateUniverseShaders } from './systems/universe';
 import { updatePhysics } from './engine/physics';
 import { updateScanning, triggerScanStart } from './systems/scanner';
 import { updateHarvesting, triggerHarvestStart } from './systems/harvesting';
 import { updateAbduction, triggerAbductStart } from './systems/abduction';
+import { updateFleet } from './systems/fleet';
 import { updateCrewSimulation, renderCrewUI } from './systems/crew';
 import { updateMinimap, updateSonarWave, initHUD, addLogEntry } from './ui/hud';
 import { initDeckUI, updateMutationUI } from './ui/deck';
 import { toggleGalaxyMap, warpToSystem, isMapOpen } from './systems/galaxy-map';
 import { toggleMusic, isMusicPlaying, isMusicUserMuted } from './engine/audio';
+import { initGameOverUI, updateExplosionEffects } from './engine/game-over';
 
 let lastTime = 0;
 
@@ -30,6 +33,9 @@ function animate(time: number) {
     if (starfield) {
         starfield.rotation.y += dt * 0.005;
     }
+
+    // Dynamic solar plasma & atmosphere shaders
+    updateUniverseShaders(dt);
 
     // Pulse gravity rings
     gravityCircles.forEach(c => {
@@ -48,8 +54,10 @@ function animate(time: number) {
         updateScanning(dt);
         updateHarvesting(dt);
         updateAbduction(dt);
+        updateFleet(dt);
         updateCrewSimulation(dt);
         updateSonarWave(dt);
+        updateExplosionEffects(dt);
 
         // Trajectory prediction
         updateTrajectory();
@@ -94,7 +102,7 @@ function animate(time: number) {
         }
     }
 
-    renderer.render(scene, camera);
+    renderPostProcessing();
     requestAnimationFrame(animate);
 }
 
@@ -102,8 +110,9 @@ function init() {
     console.log("Najmafar: Initializing 3D engine and game systems...");
     const container = document.getElementById('canvas-container') || document.body;
 
-    // 1. Three.js Scene Setup
+    // 1. Three.js Scene Setup & Cinematic Post-Processing
     initScene(container);
+    initPostProcessing();
 
     // 2. Meshes & Trajectory
     createPlayerMesh();
@@ -113,6 +122,7 @@ function init() {
     setupControls();
     initHUD();
     initDeckUI();
+    initGameOverUI();
     renderCrewUI();
     updateMutationUI();
 

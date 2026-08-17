@@ -171,6 +171,53 @@ export function updateMinimap() {
         }
     });
 
+    // Draw Fleet Ships (Spacefaring Defense Fleets)
+    STATE.fleetShips.forEach(ship => {
+        const dx = ship.position.x - STATE.playerPosition.x;
+        const dz = ship.position.z - STATE.playerPosition.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+
+        if (dist < range) {
+            const sx = cx + dx * invRangeRadius;
+            const sy = cy + dz * invRangeRadius;
+
+            if (ship.state === 'disabled') {
+                minimapCtx.fillStyle = '#64748b';
+                minimapCtx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
+            } else if (ship.state === 'intercept') {
+                minimapCtx.fillStyle = '#f43f5e';
+                minimapCtx.beginPath();
+                minimapCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+                minimapCtx.fill();
+
+                minimapCtx.strokeStyle = 'rgba(244, 63, 94, 0.8)';
+                minimapCtx.beginPath();
+                minimapCtx.arc(sx, sy, 5.0 + Math.sin(Date.now() * 0.015) * 1.5, 0, Math.PI * 2);
+                minimapCtx.stroke();
+            } else {
+                // Patrol
+                minimapCtx.fillStyle = '#f59e0b';
+                minimapCtx.beginPath();
+                minimapCtx.arc(sx, sy, 2, 0, Math.PI * 2);
+                minimapCtx.fill();
+            }
+        }
+    });
+
+    // Draw Fleet Projectiles
+    STATE.fleetProjectiles.forEach(proj => {
+        const dx = proj.position.x - STATE.playerPosition.x;
+        const dz = proj.position.z - STATE.playerPosition.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+
+        if (dist < range) {
+            const sx = cx + dx * invRangeRadius;
+            const sy = cy + dz * invRangeRadius;
+            minimapCtx.fillStyle = proj.type === 'emp' ? '#a855f7' : '#38bdf8';
+            minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
+        }
+    });
+
     // Draw Player
     minimapCtx.fillStyle = '#10b981';
     minimapCtx.beginPath();

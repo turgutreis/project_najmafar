@@ -142,23 +142,23 @@ export function updateCrewSimulation(dt: number) {
         }
 
         // Panic Sabotage at extreme stress
-        if (c.stress >= 85) {
-            STATE.health = Math.max(0, STATE.health - 1.8 * dt);
-            if (Math.random() < 0.004) {
-                addLogEntry("CREW", `MATRIX-ALARM: ${c.name} greift in Panik die organische Zellwand an! (Zellschaden)`);
+        if (c.stress >= 80) {
+            STATE.health = Math.max(0, STATE.health - 3.2 * dt);
+            if (Math.random() < 0.008) {
+                addLogEntry("CREW", `MATRIX-ALARM: ${c.name} randaliert in Panik und beschädigt Zellwände! Beruhige mit [LEERTASTE]!`);
             }
         }
     });
 
     // 3. Mental Energy Drain / Regen
     if (STATE.telepathyActive) {
-        STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 6 * dt);
+        STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 8.5 * dt);
         if (STATE.mentalEnergy === 0) {
             toggleTelepathy();
             addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
         }
     } else {
-        const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 8 * dt : 4 * dt;
+        const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 7.0 * dt : 3.5 * dt;
         STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
     }
 

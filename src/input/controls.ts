@@ -6,6 +6,7 @@ import { toggleGalaxyMap, isMapOpen } from '../systems/galaxy-map';
 import { triggerScanStart } from '../systems/scanner';
 import { triggerHarvestStart } from '../systems/harvesting';
 import { triggerAbductStart } from '../systems/abduction';
+import { triggerBioDischarge, salvageNearestWreck } from '../systems/fleet';
 import { triggerPsionicSonar, addLogEntry } from '../ui/hud';
 import { buyMutation } from '../ui/deck';
 
@@ -31,7 +32,7 @@ export function setupControls() {
             cycleTarget(1);
         }
         if (key === 'x') {
-            clearLockedTarget();
+            triggerBioDischarge();
         }
         if (key === 'f') {
             if (STATE.nearestPlanet) {
@@ -44,7 +45,10 @@ export function setupControls() {
             }
         }
         if (key === 'e') {
-            triggerHarvestStart();
+            const salvaged = salvageNearestWreck();
+            if (!salvaged) {
+                triggerHarvestStart();
+            }
         }
         if (key === 'w' || e.key === 'ArrowUp') STATE.keys.w = true;
         if (key === 's' || e.key === 'ArrowDown') STATE.keys.s = true;
@@ -127,14 +131,21 @@ export function setupTargetRaycasting() {
 
         const targetMeshes: THREE.Object3D[] = [];
         activePlanets.forEach(p => {
-            if (p.bodyMesh) targetMeshes.push(p.bodyMesh);
-            if (p.mesh && p.mesh !== p.bodyMesh) targetMeshes.push(p.mesh);
+            if (p.mesh) targetMeshes.push(p.mesh);
         });
 
         const intersects = raycaster.intersectObjects(targetMeshes, true);
         if (intersects.length > 0) {
             const hitObject = intersects[0].object;
-            const target = activePlanets.find(p => p.bodyMesh === hitObject || p.mesh === hitObject || (p.mesh && p.mesh.children && p.mesh.children.includes(hitObject)));
+            const target = activePlanets.find(p => {
+                if (p.mesh === hitObject || p.bodyMesh === hitObject) return true;
+                let cur: THREE.Object3D | null = hitObject;
+                while (cur) {
+                    if (cur === p.mesh) return true;
+                    cur = cur.parent;
+                }
+                return false;
+            });
             if (target) {
                 setLockedTarget(target);
                 return;
@@ -335,14 +346,19 @@ export function processInput(dt: number) {
 
     // 3. Movement Integration (via Acceleration, not direct Velocity)
     const isThrusting = inputVec.lengthSq() > 0;
-    if (isThrusting && STATE.bioEnergy > 0) {
+    if (isThrusting) {
         inputVec.normalize();
 
-        // Apply thrust as acceleration (integrated later in physics.ts)
-        STATE.playerAcceleration.addScaledVector(inputVec, STATE.thrustStrength);
+        const hasEnergy = STATE.bioEnergy > 0;
+        const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
 
-        // Fuel consumption
-        STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.45 * dt);
+        // Apply thrust as acceleration (integrated later in physics.ts)
+        STATE.playerAcceleration.addScaledVector(inputVec, effectiveThrust);
+
+        // Fuel consumption: 3.2 Bio-Energy/s during active thrusting
+        if (hasEnergy) {
+            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.2 * dt);
+        }
 
         // Rotate ship towards movement direction smoothly
         if (STATE.playerGroup) {

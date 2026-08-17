@@ -35,11 +35,19 @@ export function generatePlanetAttributes(p: any) {
             pool.push({ ...c2, id: Date.now() + Math.random() + 1, stress: 25, illusionStability: 100, status: "Friedlich", thought: "Führt Atmosphärenmessungen durch..." });
         }
 
+        const techLevels: ('Primitive' | 'Industrial' | 'Spacefaring' | 'Hyper-Advanced')[] = ['Primitive', 'Industrial', 'Spacefaring', 'Hyper-Advanced'];
+        const tech = techLevels[hash % techLevels.length];
+        const defenseRating = tech === 'Primitive' ? 0 : (tech === 'Industrial' ? 20 : (tech === 'Spacefaring' ? 65 : 95));
+        const disposition: 'Pacifist' | 'Defensive' | 'Militaristic' = (hash % 3 === 0) ? 'Militaristic' : ((hash % 3 === 1) ? 'Defensive' : 'Pacifist');
+
         species = {
             hasSentient: true,
             name: pool[0].species.includes("Mensch") ? "Terranische Exploratoren" : `${pool[0].species}-Präsenz`,
             population: pool.length,
-            candidates: pool
+            candidates: pool,
+            techLevel: tech,
+            defenseRating: defenseRating,
+            fleetDisposition: disposition
         };
     } else if (p.type === 'Gas Giant') {
         atmos = hash % 2 === 0 ? "Flüssiges Helium & Wasserstoff" : "Superdichtes Ammoniak & Methan";
@@ -261,14 +269,45 @@ export function updateScannerUI(planet: any, dist: number) {
 
         const speciesRow = document.getElementById('scan-planet-species-row');
         const speciesEl = document.getElementById('scan-planet-species');
-        const hasSentient = planet.attributes.species && planet.attributes.species.population > 0;
+        const techRow = document.getElementById('scan-planet-tech-row');
+        const techEl = document.getElementById('scan-planet-tech');
+        const fleetRow = document.getElementById('scan-planet-fleet-row');
+        const fleetEl = document.getElementById('scan-planet-fleet');
+
+        const spec = planet.attributes.species;
+        const hasSentient = spec && spec.population > 0;
 
         if (speciesRow && speciesEl) {
             if (hasSentient) {
                 speciesRow.style.display = 'flex';
-                speciesEl.innerText = `${planet.attributes.species.name} (Pop: ${planet.attributes.species.population})`;
+                speciesEl.innerText = `${spec.name} (Pop: ${spec.population})`;
             } else {
                 speciesRow.style.display = 'none';
+            }
+        }
+
+        if (techRow && techEl) {
+            if (hasSentient && spec.techLevel) {
+                techRow.style.display = 'flex';
+                let icon = '🏛️';
+                if (spec.techLevel === 'Industrial') icon = '🏭';
+                if (spec.techLevel === 'Spacefaring') icon = '🚀';
+                if (spec.techLevel === 'Hyper-Advanced') icon = '🌌';
+                techEl.innerText = `${icon} ${spec.techLevel} (${spec.fleetDisposition || 'Defensiv'})`;
+            } else {
+                techRow.style.display = 'none';
+            }
+        }
+
+        if (fleetRow && fleetEl) {
+            if (hasSentient && (spec.techLevel === 'Spacefaring' || spec.techLevel === 'Hyper-Advanced')) {
+                fleetRow.style.display = 'flex';
+                const activeShips = STATE.fleetShips.filter(s => s.homePlanet.name === planet.name);
+                const alertText = activeShips.some(s => s.state === 'intercept') ? '🚨 ALARM: Abfangkurs!' : '🛡️ Patrouille aktiv';
+                fleetEl.innerText = `${activeShips.length} Einheiten | ${alertText}`;
+                fleetEl.style.color = activeShips.some(s => s.state === 'intercept') ? '#f43f5e' : '#38bdf8';
+            } else {
+                fleetRow.style.display = 'none';
             }
         }
 

@@ -8341,6 +8341,158 @@ class BoxGeometry extends BufferGeometry {
     return new BoxGeometry(data.width, data.height, data.depth, data.widthSegments, data.heightSegments, data.depthSegments);
   }
 }
+class CylinderGeometry extends BufferGeometry {
+  constructor(radiusTop = 1, radiusBottom = 1, height = 1, radialSegments = 32, heightSegments = 1, openEnded = false, thetaStart = 0, thetaLength = Math.PI * 2) {
+    super();
+    this.type = "CylinderGeometry";
+    this.parameters = {
+      radiusTop,
+      radiusBottom,
+      height,
+      radialSegments,
+      heightSegments,
+      openEnded,
+      thetaStart,
+      thetaLength
+    };
+    const scope = this;
+    radialSegments = Math.floor(radialSegments);
+    heightSegments = Math.floor(heightSegments);
+    const indices = [];
+    const vertices = [];
+    const normals = [];
+    const uvs = [];
+    let index = 0;
+    const indexArray = [];
+    const halfHeight = height / 2;
+    let groupStart = 0;
+    generateTorso();
+    if (openEnded === false) {
+      if (radiusTop > 0)
+        generateCap(true);
+      if (radiusBottom > 0)
+        generateCap(false);
+    }
+    this.setIndex(indices);
+    this.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+    this.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+    this.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+    function generateTorso() {
+      const normal = new Vector3;
+      const vertex = new Vector3;
+      let groupCount = 0;
+      const slope = (radiusBottom - radiusTop) / height;
+      for (let y = 0;y <= heightSegments; y++) {
+        const indexRow = [];
+        const v = y / heightSegments;
+        const radius = v * (radiusBottom - radiusTop) + radiusTop;
+        for (let x = 0;x <= radialSegments; x++) {
+          const u = x / radialSegments;
+          const theta = u * thetaLength + thetaStart;
+          const sinTheta = Math.sin(theta);
+          const cosTheta = Math.cos(theta);
+          vertex.x = radius * sinTheta;
+          vertex.y = -v * height + halfHeight;
+          vertex.z = radius * cosTheta;
+          vertices.push(vertex.x, vertex.y, vertex.z);
+          normal.set(sinTheta, slope, cosTheta).normalize();
+          normals.push(normal.x, normal.y, normal.z);
+          uvs.push(u, 1 - v);
+          indexRow.push(index++);
+        }
+        indexArray.push(indexRow);
+      }
+      for (let x = 0;x < radialSegments; x++) {
+        for (let y = 0;y < heightSegments; y++) {
+          const a = indexArray[y][x];
+          const b = indexArray[y + 1][x];
+          const c = indexArray[y + 1][x + 1];
+          const d = indexArray[y][x + 1];
+          if (radiusTop > 0 || y !== 0) {
+            indices.push(a, b, d);
+            groupCount += 3;
+          }
+          if (radiusBottom > 0 || y !== heightSegments - 1) {
+            indices.push(b, c, d);
+            groupCount += 3;
+          }
+        }
+      }
+      scope.addGroup(groupStart, groupCount, 0);
+      groupStart += groupCount;
+    }
+    function generateCap(top) {
+      const centerIndexStart = index;
+      const uv = new Vector2;
+      const vertex = new Vector3;
+      let groupCount = 0;
+      const radius = top === true ? radiusTop : radiusBottom;
+      const sign = top === true ? 1 : -1;
+      for (let x = 1;x <= radialSegments; x++) {
+        vertices.push(0, halfHeight * sign, 0);
+        normals.push(0, sign, 0);
+        uvs.push(0.5, 0.5);
+        index++;
+      }
+      const centerIndexEnd = index;
+      for (let x = 0;x <= radialSegments; x++) {
+        const u = x / radialSegments;
+        const theta = u * thetaLength + thetaStart;
+        const cosTheta = Math.cos(theta);
+        const sinTheta = Math.sin(theta);
+        vertex.x = radius * sinTheta;
+        vertex.y = halfHeight * sign;
+        vertex.z = radius * cosTheta;
+        vertices.push(vertex.x, vertex.y, vertex.z);
+        normals.push(0, sign, 0);
+        uv.x = cosTheta * 0.5 + 0.5;
+        uv.y = sinTheta * 0.5 * sign + 0.5;
+        uvs.push(uv.x, uv.y);
+        index++;
+      }
+      for (let x = 0;x < radialSegments; x++) {
+        const c = centerIndexStart + x;
+        const i = centerIndexEnd + x;
+        if (top === true) {
+          indices.push(i, i + 1, c);
+        } else {
+          indices.push(i + 1, i, c);
+        }
+        groupCount += 3;
+      }
+      scope.addGroup(groupStart, groupCount, top === true ? 1 : 2);
+      groupStart += groupCount;
+    }
+  }
+  copy(source) {
+    super.copy(source);
+    this.parameters = Object.assign({}, source.parameters);
+    return this;
+  }
+  static fromJSON(data) {
+    return new CylinderGeometry(data.radiusTop, data.radiusBottom, data.height, data.radialSegments, data.heightSegments, data.openEnded, data.thetaStart, data.thetaLength);
+  }
+}
+
+class ConeGeometry extends CylinderGeometry {
+  constructor(radius = 1, height = 1, radialSegments = 32, heightSegments = 1, openEnded = false, thetaStart = 0, thetaLength = Math.PI * 2) {
+    super(0, radius, height, radialSegments, heightSegments, openEnded, thetaStart, thetaLength);
+    this.type = "ConeGeometry";
+    this.parameters = {
+      radius,
+      height,
+      radialSegments,
+      heightSegments,
+      openEnded,
+      thetaStart,
+      thetaLength
+    };
+  }
+  static fromJSON(data) {
+    return new ConeGeometry(data.radius, data.height, data.radialSegments, data.heightSegments, data.openEnded, data.thetaStart, data.thetaLength);
+  }
+}
+
 class PolyhedronGeometry extends BufferGeometry {
   constructor(vertices = [], indices = [], radius = 1, detail = 0) {
     super();
@@ -8883,6 +9035,48 @@ class SphereGeometry extends BufferGeometry {
   }
   static fromJSON(data) {
     return new SphereGeometry(data.radius, data.widthSegments, data.heightSegments, data.phiStart, data.phiLength, data.thetaStart, data.thetaLength);
+  }
+}
+
+class TetrahedronGeometry extends PolyhedronGeometry {
+  constructor(radius = 1, detail = 0) {
+    const vertices = [
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      1,
+      -1,
+      1,
+      -1,
+      1,
+      -1,
+      -1
+    ];
+    const indices = [
+      2,
+      1,
+      0,
+      0,
+      3,
+      2,
+      1,
+      3,
+      0,
+      2,
+      3,
+      1
+    ];
+    super(vertices, indices, radius, detail);
+    this.type = "TetrahedronGeometry";
+    this.parameters = {
+      radius,
+      detail
+    };
+  }
+  static fromJSON(data) {
+    return new TetrahedronGeometry(data.radius, data.detail);
   }
 }
 function cloneUniforms(src) {
@@ -10542,6 +10736,68 @@ class ArrayCamera extends PerspectiveCamera {
     this.isMultiViewCamera = false;
     this.cameras = array;
   }
+}
+
+class Timer {
+  constructor() {
+    this._previousTime = 0;
+    this._currentTime = 0;
+    this._startTime = performance.now();
+    this._delta = 0;
+    this._elapsed = 0;
+    this._timescale = 1;
+    this._document = null;
+    this._pageVisibilityHandler = null;
+  }
+  connect(document2) {
+    this._document = document2;
+    if (document2.hidden !== undefined) {
+      this._pageVisibilityHandler = handleVisibilityChange.bind(this);
+      document2.addEventListener("visibilitychange", this._pageVisibilityHandler, false);
+    }
+  }
+  disconnect() {
+    if (this._pageVisibilityHandler !== null) {
+      this._document.removeEventListener("visibilitychange", this._pageVisibilityHandler);
+      this._pageVisibilityHandler = null;
+    }
+    this._document = null;
+  }
+  getDelta() {
+    return this._delta / 1000;
+  }
+  getElapsed() {
+    return this._elapsed / 1000;
+  }
+  getTimescale() {
+    return this._timescale;
+  }
+  setTimescale(timescale) {
+    this._timescale = timescale;
+    return this;
+  }
+  reset() {
+    this._currentTime = performance.now() - this._startTime;
+    return this;
+  }
+  dispose() {
+    this.disconnect();
+  }
+  update(timestamp) {
+    if (this._pageVisibilityHandler !== null && this._document.hidden === true) {
+      this._delta = 0;
+    } else {
+      this._previousTime = this._currentTime;
+      this._currentTime = (timestamp !== undefined ? timestamp : performance.now()) - this._startTime;
+      this._delta = (this._currentTime - this._previousTime) * this._timescale;
+      this._elapsed += this._delta;
+    }
+    return this;
+  }
+}
+function handleVisibilityChange() {
+  if (this._document.hidden === false)
+    this.reset();
 }
 var _RESERVED_CHARS_RE = "\\[\\]\\.:\\/";
 var _reservedRe = new RegExp("[" + _RESERVED_CHARS_RE + "]", "g");
@@ -26260,19 +26516,21 @@ class WebGLRenderer {
 var STATE = {
   health: 100,
   maxHealth: 100,
-  bioEnergy: 80,
+  bioEnergy: 100,
   maxBioEnergy: 100,
-  mentalEnergy: 90,
+  mentalEnergy: 100,
   maxMentalEnergy: 100,
   telepathyActive: false,
   gameStarted: false,
+  isGameOver: false,
+  systemsVisited: 1,
   bioRes: 0,
   siliconRes: 0,
   psionicRange: 75,
   warpRange: 90,
   maxCrewCapacity: 2,
   crewSatietyTimer: 0,
-  crewDialogueTimer: 18,
+  crewDialogueTimer: 15,
   crewBuffs: {
     thrust: 1,
     bioGain: 1,
@@ -26282,16 +26540,16 @@ var STATE = {
     psionicBonus: 0
   },
   mutations: {
-    armor: { purchased: false, bioCost: 50, siliconCost: 30 },
-    o2: { purchased: false, bioCost: 60, siliconCost: 40 },
-    synapses: { purchased: false, bioCost: 40, siliconCost: 80 },
-    cocoon: { purchased: false, bioCost: 50, siliconCost: 40 },
-    hivemind: { purchased: false, bioCost: 80, siliconCost: 70 },
-    folddrive: { purchased: false, bioCost: 90, siliconCost: 70 },
-    translator: { purchased: false, bioCost: 80, siliconCost: 80 }
+    armor: { purchased: false, bioCost: 180, siliconCost: 110 },
+    o2: { purchased: false, bioCost: 140, siliconCost: 60 },
+    synapses: { purchased: false, bioCost: 260, siliconCost: 160 },
+    cocoon: { purchased: false, bioCost: 320, siliconCost: 140 },
+    hivemind: { purchased: false, bioCost: 500, siliconCost: 320 },
+    folddrive: { purchased: false, bioCost: 380, siliconCost: 420 },
+    translator: { purchased: false, bioCost: 120, siliconCost: 80 }
   },
-  playerPosition: new Vector3(0, 0, 65),
-  playerVelocity: new Vector3(5, 0, 0),
+  playerPosition: new Vector3(0, 0, 75),
+  playerVelocity: new Vector3(5.2, 0, 0),
   playerAcceleration: new Vector3(0, 0, 0),
   thrustStrength: 25,
   drag: 0.4,
@@ -26304,7 +26562,8 @@ var STATE = {
     s: false,
     a: false,
     d: false,
-    Space: false
+    Space: false,
+    x: false
   },
   universe: null,
   currentSystemId: 0,
@@ -26322,9 +26581,873 @@ var STATE = {
   loneliness: 80,
   gravitySources: [],
   asteroids: [],
-  playerGroup: null
+  playerGroup: null,
+  fleetShips: [],
+  fleetProjectiles: [],
+  bioDischargeCooldown: 0
 };
 var activePlanets = [];
+
+// node_modules/three/examples/jsm/shaders/CopyShader.js
+var CopyShader = {
+  name: "CopyShader",
+  uniforms: {
+    tDiffuse: { value: null },
+    opacity: { value: 1 }
+  },
+  vertexShader: `
+
+		varying vec2 vUv;
+
+		void main() {
+
+			vUv = uv;
+			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+		}`,
+  fragmentShader: `
+
+		uniform float opacity;
+
+		uniform sampler2D tDiffuse;
+
+		varying vec2 vUv;
+
+		void main() {
+
+			vec4 texel = texture2D( tDiffuse, vUv );
+			gl_FragColor = opacity * texel;
+
+
+		}`
+};
+
+// node_modules/three/examples/jsm/postprocessing/Pass.js
+class Pass {
+  constructor() {
+    this.isPass = true;
+    this.enabled = true;
+    this.needsSwap = true;
+    this.clear = false;
+    this.renderToScreen = false;
+  }
+  setSize() {}
+  render() {
+    console.error("THREE.Pass: .render() must be implemented in derived pass.");
+  }
+  dispose() {}
+}
+var _camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+class FullscreenTriangleGeometry extends BufferGeometry {
+  constructor() {
+    super();
+    this.setAttribute("position", new Float32BufferAttribute([-1, 3, 0, -1, -1, 0, 3, -1, 0], 3));
+    this.setAttribute("uv", new Float32BufferAttribute([0, 2, 0, 0, 2, 0], 2));
+  }
+}
+var _geometry = new FullscreenTriangleGeometry;
+
+class FullScreenQuad {
+  constructor(material) {
+    this._mesh = new Mesh(_geometry, material);
+  }
+  dispose() {
+    this._mesh.geometry.dispose();
+  }
+  render(renderer) {
+    renderer.render(this._mesh, _camera);
+  }
+  get material() {
+    return this._mesh.material;
+  }
+  set material(value) {
+    this._mesh.material = value;
+  }
+}
+
+// node_modules/three/examples/jsm/postprocessing/ShaderPass.js
+class ShaderPass extends Pass {
+  constructor(shader, textureID = "tDiffuse") {
+    super();
+    this.textureID = textureID;
+    this.uniforms = null;
+    this.material = null;
+    if (shader instanceof ShaderMaterial) {
+      this.uniforms = shader.uniforms;
+      this.material = shader;
+    } else if (shader) {
+      this.uniforms = UniformsUtils.clone(shader.uniforms);
+      this.material = new ShaderMaterial({
+        name: shader.name !== undefined ? shader.name : "unspecified",
+        defines: Object.assign({}, shader.defines),
+        uniforms: this.uniforms,
+        vertexShader: shader.vertexShader,
+        fragmentShader: shader.fragmentShader
+      });
+    }
+    this._fsQuad = new FullScreenQuad(this.material);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    if (this.uniforms[this.textureID]) {
+      this.uniforms[this.textureID].value = readBuffer.texture;
+    }
+    this._fsQuad.material = this.material;
+    if (this.renderToScreen) {
+      renderer.setRenderTarget(null);
+      this._fsQuad.render(renderer);
+    } else {
+      renderer.setRenderTarget(writeBuffer);
+      if (this.clear)
+        renderer.clear(renderer.autoClearColor, renderer.autoClearDepth, renderer.autoClearStencil);
+      this._fsQuad.render(renderer);
+    }
+  }
+  dispose() {
+    this.material.dispose();
+    this._fsQuad.dispose();
+  }
+}
+
+// node_modules/three/examples/jsm/postprocessing/MaskPass.js
+class MaskPass extends Pass {
+  constructor(scene, camera) {
+    super();
+    this.scene = scene;
+    this.camera = camera;
+    this.clear = true;
+    this.needsSwap = false;
+    this.inverse = false;
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    const context = renderer.getContext();
+    const state = renderer.state;
+    state.buffers.color.setMask(false);
+    state.buffers.depth.setMask(false);
+    state.buffers.color.setLocked(true);
+    state.buffers.depth.setLocked(true);
+    let writeValue, clearValue;
+    if (this.inverse) {
+      writeValue = 0;
+      clearValue = 1;
+    } else {
+      writeValue = 1;
+      clearValue = 0;
+    }
+    state.buffers.stencil.setTest(true);
+    state.buffers.stencil.setOp(context.REPLACE, context.REPLACE, context.REPLACE);
+    state.buffers.stencil.setFunc(context.ALWAYS, writeValue, 4294967295);
+    state.buffers.stencil.setClear(clearValue);
+    state.buffers.stencil.setLocked(true);
+    renderer.setRenderTarget(readBuffer);
+    if (this.clear)
+      renderer.clear();
+    renderer.render(this.scene, this.camera);
+    renderer.setRenderTarget(writeBuffer);
+    if (this.clear)
+      renderer.clear();
+    renderer.render(this.scene, this.camera);
+    state.buffers.color.setLocked(false);
+    state.buffers.depth.setLocked(false);
+    state.buffers.color.setMask(true);
+    state.buffers.depth.setMask(true);
+    state.buffers.stencil.setLocked(false);
+    state.buffers.stencil.setFunc(context.EQUAL, 1, 4294967295);
+    state.buffers.stencil.setOp(context.KEEP, context.KEEP, context.KEEP);
+    state.buffers.stencil.setLocked(true);
+  }
+}
+
+class ClearMaskPass extends Pass {
+  constructor() {
+    super();
+    this.needsSwap = false;
+  }
+  render(renderer) {
+    renderer.state.buffers.stencil.setLocked(false);
+    renderer.state.buffers.stencil.setTest(false);
+  }
+}
+
+// node_modules/three/examples/jsm/postprocessing/EffectComposer.js
+class EffectComposer {
+  constructor(renderer, renderTarget) {
+    this.renderer = renderer;
+    this._pixelRatio = renderer.getPixelRatio();
+    if (renderTarget === undefined) {
+      const size = renderer.getSize(new Vector2);
+      this._width = size.width;
+      this._height = size.height;
+      renderTarget = new WebGLRenderTarget(this._width * this._pixelRatio, this._height * this._pixelRatio, { type: HalfFloatType });
+      renderTarget.texture.name = "EffectComposer.rt1";
+    } else {
+      this._width = renderTarget.width;
+      this._height = renderTarget.height;
+    }
+    this.renderTarget1 = renderTarget;
+    this.renderTarget2 = renderTarget.clone();
+    this.renderTarget2.texture.name = "EffectComposer.rt2";
+    this.writeBuffer = this.renderTarget1;
+    this.readBuffer = this.renderTarget2;
+    this.renderToScreen = true;
+    this.passes = [];
+    this.copyPass = new ShaderPass(CopyShader);
+    this.copyPass.material.blending = NoBlending;
+    this.timer = new Timer;
+  }
+  swapBuffers() {
+    const tmp = this.readBuffer;
+    this.readBuffer = this.writeBuffer;
+    this.writeBuffer = tmp;
+  }
+  addPass(pass) {
+    this.passes.push(pass);
+    pass.setSize(this._width * this._pixelRatio, this._height * this._pixelRatio);
+  }
+  insertPass(pass, index) {
+    this.passes.splice(index, 0, pass);
+    pass.setSize(this._width * this._pixelRatio, this._height * this._pixelRatio);
+  }
+  removePass(pass) {
+    const index = this.passes.indexOf(pass);
+    if (index !== -1) {
+      this.passes.splice(index, 1);
+    }
+  }
+  isLastEnabledPass(passIndex) {
+    for (let i = passIndex + 1;i < this.passes.length; i++) {
+      if (this.passes[i].enabled) {
+        return false;
+      }
+    }
+    return true;
+  }
+  render(deltaTime) {
+    this.timer.update();
+    if (deltaTime === undefined) {
+      deltaTime = this.timer.getDelta();
+    }
+    const currentRenderTarget = this.renderer.getRenderTarget();
+    let maskActive = false;
+    for (let i = 0, il = this.passes.length;i < il; i++) {
+      const pass = this.passes[i];
+      if (pass.enabled === false)
+        continue;
+      pass.renderToScreen = this.renderToScreen && this.isLastEnabledPass(i);
+      pass.render(this.renderer, this.writeBuffer, this.readBuffer, deltaTime, maskActive);
+      if (pass.needsSwap) {
+        if (maskActive) {
+          const context = this.renderer.getContext();
+          const stencil = this.renderer.state.buffers.stencil;
+          stencil.setFunc(context.NOTEQUAL, 1, 4294967295);
+          this.copyPass.render(this.renderer, this.writeBuffer, this.readBuffer, deltaTime);
+          stencil.setFunc(context.EQUAL, 1, 4294967295);
+        }
+        this.swapBuffers();
+      }
+      if (MaskPass !== undefined) {
+        if (pass instanceof MaskPass) {
+          maskActive = true;
+        } else if (pass instanceof ClearMaskPass) {
+          maskActive = false;
+        }
+      }
+    }
+    this.renderer.setRenderTarget(currentRenderTarget);
+  }
+  reset(renderTarget) {
+    if (renderTarget === undefined) {
+      const size = this.renderer.getSize(new Vector2);
+      this._pixelRatio = this.renderer.getPixelRatio();
+      this._width = size.width;
+      this._height = size.height;
+      renderTarget = this.renderTarget1.clone();
+      renderTarget.setSize(this._width * this._pixelRatio, this._height * this._pixelRatio);
+    }
+    this.renderTarget1.dispose();
+    this.renderTarget2.dispose();
+    this.renderTarget1 = renderTarget;
+    this.renderTarget2 = renderTarget.clone();
+    this.writeBuffer = this.renderTarget1;
+    this.readBuffer = this.renderTarget2;
+  }
+  setSize(width, height) {
+    this._width = width;
+    this._height = height;
+    const effectiveWidth = this._width * this._pixelRatio;
+    const effectiveHeight = this._height * this._pixelRatio;
+    this.renderTarget1.setSize(effectiveWidth, effectiveHeight);
+    this.renderTarget2.setSize(effectiveWidth, effectiveHeight);
+    for (let i = 0;i < this.passes.length; i++) {
+      this.passes[i].setSize(effectiveWidth, effectiveHeight);
+    }
+  }
+  setPixelRatio(pixelRatio) {
+    this._pixelRatio = pixelRatio;
+    this.setSize(this._width, this._height);
+  }
+  dispose() {
+    this.renderTarget1.dispose();
+    this.renderTarget2.dispose();
+    this.copyPass.dispose();
+  }
+}
+
+// node_modules/three/examples/jsm/postprocessing/RenderPass.js
+class RenderPass extends Pass {
+  constructor(scene, camera, overrideMaterial = null, clearColor = null, clearAlpha = null) {
+    super();
+    this.scene = scene;
+    this.camera = camera;
+    this.overrideMaterial = overrideMaterial;
+    this.clearColor = clearColor;
+    this.clearAlpha = clearAlpha;
+    this.clear = true;
+    this.clearDepth = false;
+    this.needsSwap = false;
+    this.isRenderPass = true;
+    this._oldClearColor = new Color;
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    const oldAutoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    let oldClearAlpha, oldOverrideMaterial;
+    if (this.overrideMaterial !== null) {
+      oldOverrideMaterial = this.scene.overrideMaterial;
+      this.scene.overrideMaterial = this.overrideMaterial;
+    }
+    if (this.clearColor !== null) {
+      renderer.getClearColor(this._oldClearColor);
+      renderer.setClearColor(this.clearColor, renderer.getClearAlpha());
+    }
+    if (this.clearAlpha !== null) {
+      oldClearAlpha = renderer.getClearAlpha();
+      renderer.setClearAlpha(this.clearAlpha);
+    }
+    if (this.clearDepth == true) {
+      renderer.clearDepth();
+    }
+    renderer.setRenderTarget(this.renderToScreen ? null : readBuffer);
+    if (this.clear === true) {
+      renderer.clear(renderer.autoClearColor, renderer.autoClearDepth, renderer.autoClearStencil);
+    }
+    renderer.render(this.scene, this.camera);
+    if (this.clearColor !== null) {
+      renderer.setClearColor(this._oldClearColor);
+    }
+    if (this.clearAlpha !== null) {
+      renderer.setClearAlpha(oldClearAlpha);
+    }
+    if (this.overrideMaterial !== null) {
+      this.scene.overrideMaterial = oldOverrideMaterial;
+    }
+    renderer.autoClear = oldAutoClear;
+  }
+}
+
+// node_modules/three/examples/jsm/shaders/LuminosityHighPassShader.js
+var LuminosityHighPassShader = {
+  name: "LuminosityHighPassShader",
+  uniforms: {
+    tDiffuse: { value: null },
+    luminosityThreshold: { value: 1 },
+    smoothWidth: { value: 1 },
+    defaultColor: { value: new Color(0) },
+    defaultOpacity: { value: 0 }
+  },
+  vertexShader: `
+
+		varying vec2 vUv;
+
+		void main() {
+
+			vUv = uv;
+
+			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+		}`,
+  fragmentShader: `
+
+		uniform sampler2D tDiffuse;
+		uniform vec3 defaultColor;
+		uniform float defaultOpacity;
+		uniform float luminosityThreshold;
+		uniform float smoothWidth;
+
+		varying vec2 vUv;
+
+		void main() {
+
+			vec4 texel = texture2D( tDiffuse, vUv );
+
+			float v = luminance( texel.xyz );
+
+			vec4 outputColor = vec4( defaultColor.rgb, defaultOpacity );
+
+			float alpha = smoothstep( luminosityThreshold, luminosityThreshold + smoothWidth, v );
+
+			gl_FragColor = mix( outputColor, texel, alpha );
+
+		}`
+};
+
+// node_modules/three/examples/jsm/postprocessing/UnrealBloomPass.js
+class UnrealBloomPass extends Pass {
+  constructor(resolution, strength = 1, radius, threshold) {
+    super();
+    this.strength = strength;
+    this.radius = radius;
+    this.threshold = threshold;
+    this.resolution = resolution !== undefined ? new Vector2(resolution.x, resolution.y) : new Vector2(256, 256);
+    this.clearColor = new Color(0, 0, 0);
+    this.needsSwap = false;
+    this.renderTargetsHorizontal = [];
+    this.renderTargetsVertical = [];
+    this.nMips = 5;
+    let resx = Math.round(this.resolution.x / 2);
+    let resy = Math.round(this.resolution.y / 2);
+    this.renderTargetBright = new WebGLRenderTarget(resx, resy, { type: HalfFloatType });
+    this.renderTargetBright.texture.name = "UnrealBloomPass.bright";
+    this.renderTargetBright.texture.generateMipmaps = false;
+    for (let i = 0;i < this.nMips; i++) {
+      const renderTargetHorizontal = new WebGLRenderTarget(resx, resy, { type: HalfFloatType });
+      renderTargetHorizontal.texture.name = "UnrealBloomPass.h" + i;
+      renderTargetHorizontal.texture.generateMipmaps = false;
+      this.renderTargetsHorizontal.push(renderTargetHorizontal);
+      const renderTargetVertical = new WebGLRenderTarget(resx, resy, { type: HalfFloatType });
+      renderTargetVertical.texture.name = "UnrealBloomPass.v" + i;
+      renderTargetVertical.texture.generateMipmaps = false;
+      this.renderTargetsVertical.push(renderTargetVertical);
+      resx = Math.round(resx / 2);
+      resy = Math.round(resy / 2);
+    }
+    const highPassShader = LuminosityHighPassShader;
+    this.highPassUniforms = UniformsUtils.clone(highPassShader.uniforms);
+    this.highPassUniforms["luminosityThreshold"].value = threshold;
+    this.highPassUniforms["smoothWidth"].value = 0.01;
+    this.materialHighPassFilter = new ShaderMaterial({
+      uniforms: this.highPassUniforms,
+      vertexShader: highPassShader.vertexShader,
+      fragmentShader: highPassShader.fragmentShader
+    });
+    this.separableBlurMaterials = [];
+    const kernelSizeArray = [6, 10, 14, 18, 22];
+    resx = Math.round(this.resolution.x / 2);
+    resy = Math.round(this.resolution.y / 2);
+    for (let i = 0;i < this.nMips; i++) {
+      this.separableBlurMaterials.push(this._getSeparableBlurMaterial(kernelSizeArray[i]));
+      this.separableBlurMaterials[i].uniforms["invSize"].value = new Vector2(1 / resx, 1 / resy);
+      resx = Math.round(resx / 2);
+      resy = Math.round(resy / 2);
+    }
+    this.compositeMaterial = this._getCompositeMaterial(this.nMips);
+    this.compositeMaterial.uniforms["blurTexture1"].value = this.renderTargetsVertical[0].texture;
+    this.compositeMaterial.uniforms["blurTexture2"].value = this.renderTargetsVertical[1].texture;
+    this.compositeMaterial.uniforms["blurTexture3"].value = this.renderTargetsVertical[2].texture;
+    this.compositeMaterial.uniforms["blurTexture4"].value = this.renderTargetsVertical[3].texture;
+    this.compositeMaterial.uniforms["blurTexture5"].value = this.renderTargetsVertical[4].texture;
+    this.compositeMaterial.uniforms["bloomStrength"].value = strength;
+    this.compositeMaterial.uniforms["bloomRadius"].value = 0.1;
+    const bloomFactors = [1, 0.8, 0.6, 0.4, 0.2];
+    this.compositeMaterial.uniforms["bloomFactors"].value = bloomFactors;
+    this.bloomTintColors = [new Vector3(1, 1, 1), new Vector3(1, 1, 1), new Vector3(1, 1, 1), new Vector3(1, 1, 1), new Vector3(1, 1, 1)];
+    this.compositeMaterial.uniforms["bloomTintColors"].value = this.bloomTintColors;
+    this.copyUniforms = UniformsUtils.clone(CopyShader.uniforms);
+    this.blendMaterial = new ShaderMaterial({
+      uniforms: this.copyUniforms,
+      vertexShader: CopyShader.vertexShader,
+      fragmentShader: CopyShader.fragmentShader,
+      premultipliedAlpha: true,
+      blending: AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+      transparent: true
+    });
+    this._oldClearColor = new Color;
+    this._oldClearAlpha = 1;
+    this._basic = new MeshBasicMaterial;
+    this._fsQuad = new FullScreenQuad(null);
+  }
+  dispose() {
+    for (let i = 0;i < this.renderTargetsHorizontal.length; i++) {
+      this.renderTargetsHorizontal[i].dispose();
+    }
+    for (let i = 0;i < this.renderTargetsVertical.length; i++) {
+      this.renderTargetsVertical[i].dispose();
+    }
+    this.renderTargetBright.dispose();
+    for (let i = 0;i < this.separableBlurMaterials.length; i++) {
+      this.separableBlurMaterials[i].dispose();
+    }
+    this.compositeMaterial.dispose();
+    this.blendMaterial.dispose();
+    this._basic.dispose();
+    this._fsQuad.dispose();
+  }
+  setSize(width, height) {
+    let resx = Math.round(width / 2);
+    let resy = Math.round(height / 2);
+    this.renderTargetBright.setSize(resx, resy);
+    for (let i = 0;i < this.nMips; i++) {
+      this.renderTargetsHorizontal[i].setSize(resx, resy);
+      this.renderTargetsVertical[i].setSize(resx, resy);
+      this.separableBlurMaterials[i].uniforms["invSize"].value = new Vector2(1 / resx, 1 / resy);
+      resx = Math.round(resx / 2);
+      resy = Math.round(resy / 2);
+    }
+  }
+  render(renderer, writeBuffer, readBuffer, deltaTime, maskActive) {
+    renderer.getClearColor(this._oldClearColor);
+    this._oldClearAlpha = renderer.getClearAlpha();
+    const oldAutoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.setClearColor(this.clearColor, 0);
+    if (maskActive)
+      renderer.state.buffers.stencil.setTest(false);
+    if (this.renderToScreen) {
+      this._fsQuad.material = this._basic;
+      this._basic.map = readBuffer.texture;
+      renderer.setRenderTarget(null);
+      renderer.clear();
+      this._fsQuad.render(renderer);
+    }
+    this.highPassUniforms["tDiffuse"].value = readBuffer.texture;
+    this.highPassUniforms["luminosityThreshold"].value = this.threshold;
+    this._fsQuad.material = this.materialHighPassFilter;
+    renderer.setRenderTarget(this.renderTargetBright);
+    renderer.clear();
+    this._fsQuad.render(renderer);
+    let inputRenderTarget = this.renderTargetBright;
+    for (let i = 0;i < this.nMips; i++) {
+      this._fsQuad.material = this.separableBlurMaterials[i];
+      this.separableBlurMaterials[i].uniforms["colorTexture"].value = inputRenderTarget.texture;
+      this.separableBlurMaterials[i].uniforms["direction"].value = UnrealBloomPass.BlurDirectionX;
+      renderer.setRenderTarget(this.renderTargetsHorizontal[i]);
+      renderer.clear();
+      this._fsQuad.render(renderer);
+      this.separableBlurMaterials[i].uniforms["colorTexture"].value = this.renderTargetsHorizontal[i].texture;
+      this.separableBlurMaterials[i].uniforms["direction"].value = UnrealBloomPass.BlurDirectionY;
+      renderer.setRenderTarget(this.renderTargetsVertical[i]);
+      renderer.clear();
+      this._fsQuad.render(renderer);
+      inputRenderTarget = this.renderTargetsVertical[i];
+    }
+    this._fsQuad.material = this.compositeMaterial;
+    this.compositeMaterial.uniforms["bloomStrength"].value = this.strength;
+    this.compositeMaterial.uniforms["bloomRadius"].value = this.radius;
+    this.compositeMaterial.uniforms["bloomTintColors"].value = this.bloomTintColors;
+    renderer.setRenderTarget(this.renderTargetsHorizontal[0]);
+    renderer.clear();
+    this._fsQuad.render(renderer);
+    this._fsQuad.material = this.blendMaterial;
+    this.copyUniforms["tDiffuse"].value = this.renderTargetsHorizontal[0].texture;
+    if (maskActive)
+      renderer.state.buffers.stencil.setTest(true);
+    if (this.renderToScreen) {
+      renderer.setRenderTarget(null);
+      this._fsQuad.render(renderer);
+    } else {
+      renderer.setRenderTarget(readBuffer);
+      this._fsQuad.render(renderer);
+    }
+    renderer.setClearColor(this._oldClearColor, this._oldClearAlpha);
+    renderer.autoClear = oldAutoClear;
+  }
+  _getSeparableBlurMaterial(kernelRadius) {
+    const coefficients = [];
+    const sigma = kernelRadius / 3;
+    for (let i = 0;i < kernelRadius; i++) {
+      coefficients.push(0.39894 * Math.exp(-0.5 * i * i / (sigma * sigma)) / sigma);
+    }
+    return new ShaderMaterial({
+      defines: {
+        KERNEL_RADIUS: kernelRadius
+      },
+      uniforms: {
+        colorTexture: { value: null },
+        invSize: { value: new Vector2(0.5, 0.5) },
+        direction: { value: new Vector2(0.5, 0.5) },
+        gaussianCoefficients: { value: coefficients }
+      },
+      vertexShader: `
+
+				varying vec2 vUv;
+
+				void main() {
+
+					vUv = uv;
+					gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+				}`,
+      fragmentShader: `
+
+				#include <common>
+
+				varying vec2 vUv;
+
+				uniform sampler2D colorTexture;
+				uniform vec2 invSize;
+				uniform vec2 direction;
+				uniform float gaussianCoefficients[KERNEL_RADIUS];
+
+				void main() {
+
+					float weightSum = gaussianCoefficients[0];
+					vec3 diffuseSum = texture2D( colorTexture, vUv ).rgb * weightSum;
+
+					for ( int i = 1; i < KERNEL_RADIUS; i ++ ) {
+
+						float x = float( i );
+						float w = gaussianCoefficients[i];
+						vec2 uvOffset = direction * invSize * x;
+						vec3 sample1 = texture2D( colorTexture, vUv + uvOffset ).rgb;
+						vec3 sample2 = texture2D( colorTexture, vUv - uvOffset ).rgb;
+						diffuseSum += ( sample1 + sample2 ) * w;
+
+					}
+
+					gl_FragColor = vec4( diffuseSum, 1.0 );
+
+				}`
+    });
+  }
+  _getCompositeMaterial(nMips) {
+    return new ShaderMaterial({
+      defines: {
+        NUM_MIPS: nMips
+      },
+      uniforms: {
+        blurTexture1: { value: null },
+        blurTexture2: { value: null },
+        blurTexture3: { value: null },
+        blurTexture4: { value: null },
+        blurTexture5: { value: null },
+        bloomStrength: { value: 1 },
+        bloomFactors: { value: null },
+        bloomTintColors: { value: null },
+        bloomRadius: { value: 0 }
+      },
+      vertexShader: `
+
+				varying vec2 vUv;
+
+				void main() {
+
+					vUv = uv;
+					gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+				}`,
+      fragmentShader: `
+
+				varying vec2 vUv;
+
+				uniform sampler2D blurTexture1;
+				uniform sampler2D blurTexture2;
+				uniform sampler2D blurTexture3;
+				uniform sampler2D blurTexture4;
+				uniform sampler2D blurTexture5;
+				uniform float bloomStrength;
+				uniform float bloomRadius;
+				uniform float bloomFactors[NUM_MIPS];
+				uniform vec3 bloomTintColors[NUM_MIPS];
+
+				float lerpBloomFactor( const in float factor ) {
+
+					float mirrorFactor = 1.2 - factor;
+					return mix( factor, mirrorFactor, bloomRadius );
+
+				}
+
+				void main() {
+
+					// 3.0 for backwards compatibility with previous alpha-based intensity
+					vec3 bloom = 3.0 * bloomStrength * (
+						lerpBloomFactor( bloomFactors[ 0 ] ) * bloomTintColors[ 0 ] * texture2D( blurTexture1, vUv ).rgb +
+						lerpBloomFactor( bloomFactors[ 1 ] ) * bloomTintColors[ 1 ] * texture2D( blurTexture2, vUv ).rgb +
+						lerpBloomFactor( bloomFactors[ 2 ] ) * bloomTintColors[ 2 ] * texture2D( blurTexture3, vUv ).rgb +
+						lerpBloomFactor( bloomFactors[ 3 ] ) * bloomTintColors[ 3 ] * texture2D( blurTexture4, vUv ).rgb +
+						lerpBloomFactor( bloomFactors[ 4 ] ) * bloomTintColors[ 4 ] * texture2D( blurTexture5, vUv ).rgb
+					);
+
+					float bloomAlpha = max( bloom.r, max( bloom.g, bloom.b ) );
+					gl_FragColor = vec4( bloom, bloomAlpha );
+
+				}`
+    });
+  }
+}
+UnrealBloomPass.BlurDirectionX = new Vector2(1, 0);
+UnrealBloomPass.BlurDirectionY = new Vector2(0, 1);
+
+// node_modules/three/examples/jsm/shaders/OutputShader.js
+var OutputShader = {
+  name: "OutputShader",
+  uniforms: {
+    tDiffuse: { value: null },
+    toneMappingExposure: { value: 1 }
+  },
+  vertexShader: `
+		precision highp float;
+
+		uniform mat4 modelViewMatrix;
+		uniform mat4 projectionMatrix;
+
+		attribute vec3 position;
+		attribute vec2 uv;
+
+		varying vec2 vUv;
+
+		void main() {
+
+			vUv = uv;
+			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+
+		}`,
+  fragmentShader: `
+
+		precision highp float;
+
+		uniform sampler2D tDiffuse;
+
+		#include <tonemapping_pars_fragment>
+		#include <colorspace_pars_fragment>
+
+		varying vec2 vUv;
+
+		void main() {
+
+			gl_FragColor = texture2D( tDiffuse, vUv );
+
+			// tone mapping
+
+			#ifdef LINEAR_TONE_MAPPING
+
+				gl_FragColor.rgb = LinearToneMapping( gl_FragColor.rgb );
+
+			#elif defined( REINHARD_TONE_MAPPING )
+
+				gl_FragColor.rgb = ReinhardToneMapping( gl_FragColor.rgb );
+
+			#elif defined( CINEON_TONE_MAPPING )
+
+				gl_FragColor.rgb = CineonToneMapping( gl_FragColor.rgb );
+
+			#elif defined( ACES_FILMIC_TONE_MAPPING )
+
+				gl_FragColor.rgb = ACESFilmicToneMapping( gl_FragColor.rgb );
+
+			#elif defined( AGX_TONE_MAPPING )
+
+				gl_FragColor.rgb = AgXToneMapping( gl_FragColor.rgb );
+
+			#elif defined( NEUTRAL_TONE_MAPPING )
+
+				gl_FragColor.rgb = NeutralToneMapping( gl_FragColor.rgb );
+
+			#elif defined( CUSTOM_TONE_MAPPING )
+
+				gl_FragColor.rgb = CustomToneMapping( gl_FragColor.rgb );
+
+			#endif
+
+			// color space
+
+			#ifdef SRGB_TRANSFER
+
+				gl_FragColor = sRGBTransferOETF( gl_FragColor );
+
+			#endif
+
+		}`
+};
+
+// node_modules/three/examples/jsm/postprocessing/OutputPass.js
+class OutputPass extends Pass {
+  constructor() {
+    super();
+    this.isOutputPass = true;
+    this.uniforms = UniformsUtils.clone(OutputShader.uniforms);
+    this.material = new RawShaderMaterial({
+      name: OutputShader.name,
+      uniforms: this.uniforms,
+      vertexShader: OutputShader.vertexShader,
+      fragmentShader: OutputShader.fragmentShader
+    });
+    this._fsQuad = new FullScreenQuad(this.material);
+    this._outputColorSpace = null;
+    this._toneMapping = null;
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    this.uniforms["tDiffuse"].value = readBuffer.texture;
+    this.uniforms["toneMappingExposure"].value = renderer.toneMappingExposure;
+    if (this._outputColorSpace !== renderer.outputColorSpace || this._toneMapping !== renderer.toneMapping) {
+      this._outputColorSpace = renderer.outputColorSpace;
+      this._toneMapping = renderer.toneMapping;
+      this.material.defines = {};
+      if (ColorManagement.getTransfer(this._outputColorSpace) === SRGBTransfer)
+        this.material.defines.SRGB_TRANSFER = "";
+      if (this._toneMapping === LinearToneMapping)
+        this.material.defines.LINEAR_TONE_MAPPING = "";
+      else if (this._toneMapping === ReinhardToneMapping)
+        this.material.defines.REINHARD_TONE_MAPPING = "";
+      else if (this._toneMapping === CineonToneMapping)
+        this.material.defines.CINEON_TONE_MAPPING = "";
+      else if (this._toneMapping === ACESFilmicToneMapping)
+        this.material.defines.ACES_FILMIC_TONE_MAPPING = "";
+      else if (this._toneMapping === AgXToneMapping)
+        this.material.defines.AGX_TONE_MAPPING = "";
+      else if (this._toneMapping === NeutralToneMapping)
+        this.material.defines.NEUTRAL_TONE_MAPPING = "";
+      else if (this._toneMapping === CustomToneMapping)
+        this.material.defines.CUSTOM_TONE_MAPPING = "";
+      this.material.needsUpdate = true;
+    }
+    if (this.renderToScreen === true) {
+      renderer.setRenderTarget(null);
+      this._fsQuad.render(renderer);
+    } else {
+      renderer.setRenderTarget(writeBuffer);
+      if (this.clear)
+        renderer.clear(renderer.autoClearColor, renderer.autoClearDepth, renderer.autoClearStencil);
+      this._fsQuad.render(renderer);
+    }
+  }
+  dispose() {
+    this.material.dispose();
+    this._fsQuad.dispose();
+  }
+}
+
+// src/engine/postprocessing.ts
+var composer = null;
+var bloomPass = null;
+function initPostProcessing() {
+  if (!renderer || !scene || !camera)
+    return;
+  composer = new EffectComposer(renderer);
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+  const bloomResolution = new Vector2(window.innerWidth, window.innerHeight);
+  bloomPass = new UnrealBloomPass(bloomResolution, 0.85, 0.45, 0.65);
+  composer.addPass(bloomPass);
+  const outputPass = new OutputPass;
+  composer.addPass(outputPass);
+}
+function resizePostProcessing(width, height) {
+  if (composer) {
+    composer.setSize(width, height);
+  }
+  if (bloomPass) {
+    bloomPass.resolution.set(width, height);
+  }
+}
+function renderPostProcessing() {
+  if (composer) {
+    composer.render();
+  } else if (renderer && scene && camera) {
+    renderer.render(scene, camera);
+  }
+}
 
 // src/engine/scene.ts
 var scene;
@@ -26401,6 +27524,7 @@ function onWindowResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  resizePostProcessing(window.innerWidth, window.innerHeight);
 }
 
 // src/engine/trajectory.ts
@@ -26805,6 +27929,43 @@ function playSonarChime() {
   osc.start(time);
   osc.stop(time + 0.95);
 }
+function playExplosionSound() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const time = ctx.currentTime;
+  const bufferSize = Math.floor(ctx.sampleRate * 1.5);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0;i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  const noiseFilter = ctx.createBiquadFilter();
+  noiseFilter.type = "lowpass";
+  noiseFilter.frequency.setValueAtTime(900, time);
+  noiseFilter.frequency.exponentialRampToValueAtTime(30, time + 1.4);
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(0.6, time);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 1.4);
+  noise.connect(noiseFilter);
+  noiseFilter.connect(noiseGain);
+  noiseGain.connect(ctx.destination);
+  const subOsc = ctx.createOscillator();
+  const subGain = ctx.createGain();
+  subOsc.type = "sawtooth";
+  subOsc.frequency.setValueAtTime(140, time);
+  subOsc.frequency.exponentialRampToValueAtTime(25, time + 1.3);
+  subGain.gain.setValueAtTime(0.7, time);
+  subGain.gain.exponentialRampToValueAtTime(0.001, time + 1.5);
+  subOsc.connect(subGain);
+  subGain.connect(ctx.destination);
+  noise.start(time);
+  subOsc.start(time);
+  noise.stop(time + 1.5);
+  subOsc.stop(time + 1.5);
+}
 function setThrusterSound(active) {
   const ctx = getAudioContext();
   if (!ctx)
@@ -27042,6 +28203,44 @@ function updateMinimap() {
         minimapCtx.fillStyle = source.resourceType === "bio" ? "#00ff88" : "#38bdf8";
         minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
       }
+    }
+  });
+  STATE.fleetShips.forEach((ship) => {
+    const dx = ship.position.x - STATE.playerPosition.x;
+    const dz = ship.position.z - STATE.playerPosition.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < range) {
+      const sx = cx + dx * invRangeRadius;
+      const sy = cy + dz * invRangeRadius;
+      if (ship.state === "disabled") {
+        minimapCtx.fillStyle = "#64748b";
+        minimapCtx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
+      } else if (ship.state === "intercept") {
+        minimapCtx.fillStyle = "#f43f5e";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+        minimapCtx.fill();
+        minimapCtx.strokeStyle = "rgba(244, 63, 94, 0.8)";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 5 + Math.sin(Date.now() * 0.015) * 1.5, 0, Math.PI * 2);
+        minimapCtx.stroke();
+      } else {
+        minimapCtx.fillStyle = "#f59e0b";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 2, 0, Math.PI * 2);
+        minimapCtx.fill();
+      }
+    }
+  });
+  STATE.fleetProjectiles.forEach((proj) => {
+    const dx = proj.position.x - STATE.playerPosition.x;
+    const dz = proj.position.z - STATE.playerPosition.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < range) {
+      const sx = cx + dx * invRangeRadius;
+      const sy = cy + dz * invRangeRadius;
+      minimapCtx.fillStyle = proj.type === "emp" ? "#a855f7" : "#38bdf8";
+      minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
     }
   });
   minimapCtx.fillStyle = "#10b981";
@@ -27531,11 +28730,18 @@ function generatePlanetAttributes(p) {
     if (hash % 2 === 0) {
       pool.push({ ...c2, id: Date.now() + Math.random() + 1, stress: 25, illusionStability: 100, status: "Friedlich", thought: "Führt Atmosphärenmessungen durch..." });
     }
+    const techLevels = ["Primitive", "Industrial", "Spacefaring", "Hyper-Advanced"];
+    const tech = techLevels[hash % techLevels.length];
+    const defenseRating = tech === "Primitive" ? 0 : tech === "Industrial" ? 20 : tech === "Spacefaring" ? 65 : 95;
+    const disposition = hash % 3 === 0 ? "Militaristic" : hash % 3 === 1 ? "Defensive" : "Pacifist";
     species = {
       hasSentient: true,
       name: pool[0].species.includes("Mensch") ? "Terranische Exploratoren" : `${pool[0].species}-Präsenz`,
       population: pool.length,
-      candidates: pool
+      candidates: pool,
+      techLevel: tech,
+      defenseRating,
+      fleetDisposition: disposition
     };
   } else if (p.type === "Gas Giant") {
     atmos = hash % 2 === 0 ? "Flüssiges Helium & Wasserstoff" : "Superdichtes Ammoniak & Methan";
@@ -27743,13 +28949,44 @@ function updateScannerUI(planet, dist) {
       resEl.innerText = planet.attributes.res;
     const speciesRow = document.getElementById("scan-planet-species-row");
     const speciesEl = document.getElementById("scan-planet-species");
-    const hasSentient = planet.attributes.species && planet.attributes.species.population > 0;
+    const techRow = document.getElementById("scan-planet-tech-row");
+    const techEl = document.getElementById("scan-planet-tech");
+    const fleetRow = document.getElementById("scan-planet-fleet-row");
+    const fleetEl = document.getElementById("scan-planet-fleet");
+    const spec = planet.attributes.species;
+    const hasSentient = spec && spec.population > 0;
     if (speciesRow && speciesEl) {
       if (hasSentient) {
         speciesRow.style.display = "flex";
-        speciesEl.innerText = `${planet.attributes.species.name} (Pop: ${planet.attributes.species.population})`;
+        speciesEl.innerText = `${spec.name} (Pop: ${spec.population})`;
       } else {
         speciesRow.style.display = "none";
+      }
+    }
+    if (techRow && techEl) {
+      if (hasSentient && spec.techLevel) {
+        techRow.style.display = "flex";
+        let icon = "\uD83C\uDFDB️";
+        if (spec.techLevel === "Industrial")
+          icon = "\uD83C\uDFED";
+        if (spec.techLevel === "Spacefaring")
+          icon = "\uD83D\uDE80";
+        if (spec.techLevel === "Hyper-Advanced")
+          icon = "\uD83C\uDF0C";
+        techEl.innerText = `${icon} ${spec.techLevel} (${spec.fleetDisposition || "Defensiv"})`;
+      } else {
+        techRow.style.display = "none";
+      }
+    }
+    if (fleetRow && fleetEl) {
+      if (hasSentient && (spec.techLevel === "Spacefaring" || spec.techLevel === "Hyper-Advanced")) {
+        fleetRow.style.display = "flex";
+        const activeShips = STATE.fleetShips.filter((s) => s.homePlanet.name === planet.name);
+        const alertText = activeShips.some((s) => s.state === "intercept") ? "\uD83D\uDEA8 ALARM: Abfangkurs!" : "\uD83D\uDEE1️ Patrouille aktiv";
+        fleetEl.innerText = `${activeShips.length} Einheiten | ${alertText}`;
+        fleetEl.style.color = activeShips.some((s) => s.state === "intercept") ? "#f43f5e" : "#38bdf8";
+      } else {
+        fleetRow.style.display = "none";
       }
     }
     if (harvestBtn) {
@@ -27770,7 +29007,1038 @@ function updateScannerUI(planet, dist) {
   }
 }
 
+// src/systems/crew.ts
+function calculateCrewBuffs() {
+  let thrustMult = 1;
+  let bioMult = 1;
+  let scanMult = 1;
+  let repair = 0;
+  let stressDamp = 1;
+  let psioBonus = 0;
+  const hiveBonus = STATE.mutations.hivemind && STATE.mutations.hivemind.purchased ? 1.2 : 1;
+  STATE.crew.forEach((c) => {
+    if (c.role === "pilot")
+      thrustMult += 0.15 * hiveBonus;
+    if (c.role === "biologist") {
+      bioMult += 0.3 * hiveBonus;
+      scanMult += 0.25 * hiveBonus;
+    }
+    if (c.role === "engineer")
+      repair += 0.6 * hiveBonus;
+    if (c.role === "psychologist")
+      stressDamp *= 1 - 0.4 * hiveBonus;
+    if (c.role === "cryptologist")
+      psioBonus += 30 * hiveBonus;
+  });
+  STATE.crewBuffs = {
+    thrust: thrustMult,
+    bioGain: bioMult,
+    scanSpeed: scanMult,
+    repairRate: repair,
+    stressDampening: stressDamp,
+    psionicBonus: Math.round(psioBonus)
+  };
+  const basePsio = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 140 : 75;
+  STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
+}
+var STORY_LOGS = [
+  { time: 6, sender: "Capt. Miller", text: "Das Ding lebt! Wir sind im Bauch eines Lovecraft-Monsters gefangen! Wo ist die Luft?" },
+  { time: 24, sender: "Dr. Song", text: "Die Schiffswände atmen... Valeria, das Schiff absorbiert Weltraummaterie um sich zu heilen!" },
+  { time: 48, sender: "Valeria", text: "Jamal, guck dir die Messgeräte an. Die kosmische Hintergrundstrahlung... Die Expansion verlangsamt sich!" },
+  { time: 70, sender: "Jamal", text: "Das ist kein Fehler. Jemand macht eine kosmische Vollbremsung. Dieses Wesen... versucht es uns zu warnen?" },
+  { time: 95, sender: "Capt. Miller", text: "Es sendet Gedankenwellen. Die Software übersetzt es als... Dschinn? Es ist einsam." }
+];
+var storyIndex = 0;
+var playTime = 0;
+function encryptText(text) {
+  const alienGlyphs = "⏁⊑⟒⋔⍜⋏☿⏁⟒⍃⍜⌰⎍⌇⌇⊑⟟⌿⌇⏃⋏⎅⌇⏁⏃⍀⌇⏁⍀⟒☍⏁⊑⟒⌇⊑⟟⌿⟟⌇⏃⌰⟟⎎⟒";
+  return text.split("").map((char) => {
+    if (char === " " || char === '"' || char === "'" || char === ":" || char === "." || char === "," || char === "?" || char === "!" || char === "-" || char === "(" || char === ")")
+      return char;
+    return alienGlyphs[Math.floor(Math.random() * alienGlyphs.length)];
+  }).join("");
+}
+function encryptCrewMessage(sender, text) {
+  let outText = text;
+  if (!STATE.mutations.translator.purchased) {
+    outText = encryptText(text);
+  }
+  return `${sender}: "${outText}"`;
+}
+function updateCrewSimulation(dt) {
+  playTime += dt;
+  if (storyIndex < STORY_LOGS.length && playTime >= STORY_LOGS[storyIndex].time) {
+    const logObj = STORY_LOGS[storyIndex];
+    storyIndex++;
+    addLogEntry("CREW", encryptCrewMessage(logObj.sender, logObj.text));
+  }
+  const totalCrew = STATE.crew.length;
+  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
+  let targetLoneliness = 100;
+  let isHarmony = false;
+  if (totalCrew === 0) {
+    targetLoneliness = 100;
+  } else if (totalCrew === 1) {
+    STATE.crewSatietyTimer += dt;
+    const decay = Math.min(25, STATE.crewSatietyTimer / 90 * 25);
+    targetLoneliness = 40 + decay;
+  } else if (uniqueRoles === 2) {
+    targetLoneliness = 25;
+  } else if (uniqueRoles >= 3) {
+    targetLoneliness = 5;
+    isHarmony = true;
+  }
+  if (STATE.loneliness < targetLoneliness) {
+    STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
+  } else if (STATE.loneliness > targetLoneliness) {
+    STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
+  }
+  if (isHarmony) {
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
+    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
+  }
+  let speed = STATE.playerVelocity.length();
+  let speedStressModifier = speed > 10 ? 0.6 : 0;
+  STATE.crew.forEach((c) => {
+    const decayRate = (0.35 + c.stress * 0.006) * dt;
+    c.illusionStability = Math.max(0, c.illusionStability - decayRate);
+    if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
+      c.stress = Math.max(0, c.stress - 7.5 * dt);
+      c.illusionStability = Math.min(100, c.illusionStability + 8 * dt);
+      c.status = "Traum-Trance";
+      c.thought = "Fühlt eine warme, beruhigende Welle... 'Alles ist friedlich.'";
+    } else {
+      if (c.illusionStability < 35) {
+        c.stress = Math.min(100, c.stress + (4.5 + speedStressModifier) * dt);
+        c.status = "Panik";
+        c.thought = "Verzweifelt: 'Die Wände pulsieren... das ist keine Station!'";
+      } else if (c.illusionStability < 65) {
+        c.stress = Math.min(100, c.stress + (1.2 + speedStressModifier) * dt);
+        c.status = "Misstrauisch";
+        c.thought = "Stutzt: 'Höre ich ein Atmen in den Lüftungsschächten?'";
+      } else {
+        c.stress = Math.max(0, c.stress - 2 * dt);
+        c.status = "Arbeitet";
+        c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
+      }
+    }
+    if (c.illusionStability >= 50) {
+      if (c.role === "engineer") {
+        STATE.health = Math.min(STATE.maxHealth, STATE.health + 0.25 * dt);
+      } else if (c.role === "biologist") {
+        STATE.bioRes += 0.1 * dt;
+      } else if (c.role === "psychologist") {
+        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 1.5 * dt);
+      }
+    }
+    if (c.stress >= 80) {
+      STATE.health = Math.max(0, STATE.health - 3.2 * dt);
+      if (Math.random() < 0.008) {
+        addLogEntry("CREW", `MATRIX-ALARM: ${c.name} randaliert in Panik und beschädigt Zellwände! Beruhige mit [LEERTASTE]!`);
+      }
+    }
+  });
+  if (STATE.telepathyActive) {
+    STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 8.5 * dt);
+    if (STATE.mentalEnergy === 0) {
+      toggleTelepathy();
+      addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
+    }
+  } else {
+    const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 7 * dt : 3.5 * dt;
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
+  }
+  STATE.crewDialogueTimer -= dt;
+  if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
+    STATE.crewDialogueTimer = 20 + Math.random() * 8;
+    triggerMultiCrewDialogue();
+  }
+  renderCrewUI();
+}
+function renderCrewUI() {
+  const container = document.getElementById("crew-list-container");
+  const badge = document.getElementById("crew-count-badge");
+  const capText = document.getElementById("crew-capacity-text");
+  const synTitle = document.getElementById("crew-synergy-title");
+  const synDesc = document.getElementById("crew-synergy-desc");
+  const synBanner = document.getElementById("crew-synergy-banner");
+  if (badge)
+    badge.innerText = String(STATE.crew.length);
+  if (capText)
+    capText.innerText = `${STATE.crew.length} / ${STATE.maxCrewCapacity}`;
+  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
+  const totalCrew = STATE.crew.length;
+  if (synBanner && synTitle && synDesc) {
+    if (totalCrew === 0) {
+      synBanner.className = "crew-synergy-banner";
+      synTitle.innerText = "\uD83C\uDF0C Kosmische Einsamkeit";
+      synDesc.innerText = "Keine Geister an Bord. Das Wesen sehnt sich nach Gedanken-Resonanz.";
+    } else if (totalCrew === 1) {
+      if (STATE.crewSatietyTimer > 45) {
+        synBanner.className = "crew-synergy-banner satiety-decay";
+        synTitle.innerText = "⏳ Geistige Sättigung (Eintönigkeit)";
+        synDesc.innerText = "Alle Gedanken des Individuums erforscht. Das Wesen verlangt nach neuen Perspektiven!";
+      } else {
+        synBanner.className = "crew-synergy-banner";
+        synTitle.innerText = "\uD83C\uDF31 Erste Gedanken-Resonanz";
+        synDesc.innerText = "1 Geist an Bord. Erweitere das Kollektiv für stärkere Synergien.";
+      }
+    } else if (uniqueRoles === 2) {
+      synBanner.className = "crew-synergy-banner";
+      synTitle.innerText = "✨ Duale Resonanz";
+      synDesc.innerText = "2 Rollen im Einklang. Einsamkeit stabil, passive Buffs verstärkt.";
+    } else if (uniqueRoles >= 3) {
+      synBanner.className = "crew-synergy-banner harmony";
+      synTitle.innerText = "\uD83D\uDCAB Kosmische Harmonie";
+      synDesc.innerText = "Diverses Kollektiv aktiv! Einsamkeit auf 0% & +15% Bio/Mental-Regeneration!";
+    }
+  }
+  if (!container)
+    return;
+  if (STATE.crew.length === 0) {
+    container.innerHTML = `
+            <div class="matrix-empty-card">
+                <span class="highlight">Keine Vernunftbegabten Wesen</span>
+                Die psionische Traum-Matrix ist leer. Das Schiff leidet unter existenzieller kosmischer Einsamkeit.<br><br>
+                <em>Scanne habitable Planeten nach intelligentem Leben und starte eine psionische Entführung [F]!</em>
+            </div>
+        `;
+    return;
+  }
+  let html = "";
+  STATE.crew.forEach((c) => {
+    let cardClass = "crew-member";
+    if (c.illusionStability < 35 || c.stress > 70)
+      cardClass += " panic";
+    else if (c.illusionStability < 65 || c.stress > 45)
+      cardClass += " suspicious";
+    html += `
+            <div class="${cardClass}">
+                <div class="crew-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
+                    <span class="crew-role-badge">${c.roleIcon || "\uD83D\uDC64"} ${c.roleName || c.role}</span>
+                </div>
+                <div class="crew-buff-tag">⚡ ${c.buffDesc || c.perk}</div>
+                
+                <div class="stability-container">
+                    <span class="stability-label">Traum-Stabilität:</span>
+                    <div class="stability-bar-bg">
+                        <div class="stability-bar" style="width: ${c.illusionStability}%;"></div>
+                    </div>
+                    <span style="color: #a855f7; font-size: 0.68rem; font-weight: 700;">${Math.round(c.illusionStability)}%</span>
+                </div>
+
+                <div class="stress-container" style="display: flex; align-items: center; gap: 6px;">
+                    <span class="stress-label" style="width: 90px; font-size: 0.68rem; color: #94a3b8;">Stress:</span>
+                    <div class="stress-bar-bg" style="flex: 1; height: 5px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden;">
+                        <div class="stress-bar" style="width: ${c.stress}%; height: 100%; background: ${c.stress > 70 ? "#ef4444" : "#f59e0b"};"></div>
+                    </div>
+                    <span class="stress-percentage" style="font-size: 0.68rem;">${Math.round(c.stress)}%</span>
+                </div>
+
+                <div class="thought-whisper ${c.illusionStability < 35 ? "terrified" : ""}">
+                    \uD83D\uDCAD "${c.thought}"
+                </div>
+            </div>
+        `;
+  });
+  container.innerHTML = html;
+}
+var crewDialogueBank = {
+  pilot_engineer: [
+    { lineA: 'Miller: "Petrov, diese biomolekularen Trägheitsdämpfer... das Schiff richtet die Schubvektoren aus, bevor ich überhaupt lenke."', lineB: 'Petrov: "Die Naniten im Chitin leiten unsere Gedanken direkt weiter. Das ist kein Raumschiff, das ist ein lebendes Cockpit."' },
+    { lineA: 'Miller: "Wie sieht die Hüllenintegrität aus, wenn wir durch Asteroidengürtel tauchen?"', lineB: 'Petrov: "Silizium-Naniten schließen Risse im Flug. Solange wir Mineralien aufnehmen, hält die organische Panzerung stand."' }
+  ],
+  biologist_psychologist: [
+    { lineA: 'Dr. Song: "Die Traum-Matrix synchronisiert unsere neuronalen REM-Phasen. Es absorbiert nicht unsere Körper, sondern unsere Gefühle."', lineB: 'Dr. Vance: "Ein psionischer Stoffwechsel. Solange wir Gelassenheit und Zuversicht ausstrahlen, ernährt sich die Entität von Harmonie statt Verzweiflung."' },
+    { lineA: 'Dr. Song: "Die Biolumineszenz an den Synapsen-Wänden pulsiert im Takt unseres Herzschlags."', lineB: 'Dr. Vance: "Ein biologischer Resonanzraum. Wir halten das Wesen am Leben – und es beschützt uns vor der tödlichen Kälte des Alls."' }
+  ],
+  cryptologist_pilot: [
+    { lineA: 'Novak: "Ich fange schwache Tachyonen-Echos aus dem nächsten Sternensystem auf. Psio-Sensorhorizont erweitert."', lineB: 'Miller: "Kurs ist korrigiert, Novak. Bringen wir uns in den nächsten planetaren Orbit."' }
+  ],
+  engineer_biologist: [
+    { lineA: 'Petrov: "Dr. Song, die organischen Leitungen um die Faltungsmembran regenerieren erstaunlich schnell."', lineB: 'Dr. Song: "Es ist ein symbiotisches Ökosystem. Jede Ressource, die wir assimilieren, stärkt die Zellwände des Schiffes."' }
+  ],
+  general: [
+    { lineA: 'Crew-Funk: "Die Traum-Matrix flüstert Erinnerungen an Sternensysteme, die Lichtjahre entfernt liegen..."', lineB: 'Crew-Funk: "Wir reisen durch das Herz einer Galaxie, die kein Mensch zuvor erblickt hat."' }
+  ]
+};
+function triggerMultiCrewDialogue() {
+  if (STATE.crew.length < 2)
+    return;
+  const hasTranslator = STATE.mutations.translator && STATE.mutations.translator.purchased;
+  const c1 = STATE.crew[Math.floor(Math.random() * STATE.crew.length)];
+  const others = STATE.crew.filter((c) => c !== c1);
+  const c2 = others[Math.floor(Math.random() * others.length)];
+  let pairKey = `${c1.role}_${c2.role}`;
+  let revPairKey = `${c2.role}_${c1.role}`;
+  let dialogues = crewDialogueBank[pairKey] || crewDialogueBank[revPairKey] || crewDialogueBank.general;
+  const dialog = dialogues[Math.floor(Math.random() * dialogues.length)];
+  const name1 = c1.name.split(" ")[1] || c1.name;
+  const name2 = c2.name.split(" ")[1] || c2.name;
+  if (hasTranslator) {
+    addLogEntry("CREW", dialog.lineA.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name1));
+    setTimeout(() => {
+      addLogEntry("CREW", dialog.lineB.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name2));
+    }, 3200);
+  } else {
+    addLogEntry("CREW", `[Verschlüsselter Datenstrom zwischen ${c1.name} & ${c2.name}... Dschinn-Übersetzer benötigt!]`);
+  }
+}
+
+// src/ui/deck.ts
+function initDeckUI() {
+  const leftCollapseBtn = document.getElementById("left-collapse-btn");
+  const leftDeckPanel = document.getElementById("left-deck-panel");
+  if (leftCollapseBtn && leftDeckPanel) {
+    leftCollapseBtn.addEventListener("click", () => {
+      leftDeckPanel.classList.toggle("collapsed");
+      if (leftDeckPanel.classList.contains("collapsed")) {
+        leftCollapseBtn.innerText = "›";
+        leftCollapseBtn.title = "Sensoren ausklappen";
+      } else {
+        leftCollapseBtn.innerText = "‹";
+        leftCollapseBtn.title = "Sensoren einklappen";
+      }
+    });
+  }
+  const rightCollapseBtn = document.getElementById("right-collapse-btn");
+  const rightDeckPanel = document.getElementById("right-deck-panel");
+  if (rightCollapseBtn && rightDeckPanel) {
+    rightCollapseBtn.addEventListener("click", () => {
+      rightDeckPanel.classList.toggle("collapsed");
+      if (rightDeckPanel.classList.contains("collapsed")) {
+        rightCollapseBtn.innerText = "‹";
+        rightCollapseBtn.title = "Status-Deck ausklappen";
+      } else {
+        rightCollapseBtn.innerText = "›";
+        rightCollapseBtn.title = "Status-Deck einklappen";
+      }
+    });
+  }
+  const tabButtons = document.querySelectorAll("#right-deck-tabs .tab-btn");
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetTab = btn.getAttribute("data-tab");
+      tabButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const crewContent = document.getElementById("tab-content-crew");
+      const evoContent = document.getElementById("tab-content-evolution");
+      if (targetTab === "crew") {
+        if (crewContent)
+          crewContent.classList.add("active");
+        if (evoContent)
+          evoContent.classList.remove("active");
+      } else if (targetTab === "evolution") {
+        if (crewContent)
+          crewContent.classList.remove("active");
+        if (evoContent)
+          evoContent.classList.add("active");
+      }
+    });
+  });
+  const mutButtons = document.querySelectorAll(".mut-btn");
+  mutButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mutType = btn.getAttribute("data-mutation");
+      if (mutType) {
+        buyMutation(mutType);
+      }
+    });
+  });
+}
+function buyMutation(type) {
+  const mut = STATE.mutations[type];
+  if (!mut || mut.purchased)
+    return;
+  if (STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost) {
+    STATE.bioRes -= mut.bioCost;
+    STATE.siliconRes -= mut.siliconCost;
+    mut.purchased = true;
+    playSiliconCollectSound();
+    const btn = document.querySelector(`.mut-btn[data-mutation="${type}"]`);
+    if (btn) {
+      btn.classList.add("purchased");
+      btn.innerHTML = "Aktiviert ✓";
+    }
+    if (type === "armor") {
+      addLogEntry("EVOLUTION", "Organische Chitin-Panzerung gehärtet. Kollisionsschaden um 50% reduziert.");
+      const hull = document.getElementById("schematic-hull");
+      if (hull)
+        hull.setAttribute("stroke-width", "4");
+    } else if (type === "o2") {
+      addLogEntry("EVOLUTION", "Metabolische O2-Synthese aktiviert. Stress-Zuwachs halbiert.");
+    } else if (type === "synapses") {
+      STATE.psionicRange = 140;
+      calculateCrewBuffs();
+      addLogEntry("EVOLUTION", "Psionische Synapsen erweitert! Gedanken-Echo Reichweite auf 140 LJ vergrößert.");
+    } else if (type === "cocoon") {
+      STATE.maxCrewCapacity = 4;
+      addLogEntry("EVOLUTION", "Neuronales Kokon-Gewebe mutiert! Maximale Crew-Kapazität auf 4 erweitert.");
+      renderCrewUI();
+    } else if (type === "hivemind") {
+      STATE.maxCrewCapacity = 6;
+      calculateCrewBuffs();
+      addLogEntry("EVOLUTION", "Symbiotische Synapsen-Kammer erwacht! Kapazität auf 6 erhöht & alle Spezialisten-Buffs um +20% verstärkt!");
+      renderCrewUI();
+    } else if (type === "folddrive") {
+      STATE.warpRange = 160;
+      addLogEntry("EVOLUTION", "Raumfaltungs-Membran mutiert! Warp-Reichweite auf 160 LJ erweitert, Faltungskosten um 30% gesenkt.");
+    } else if (type === "translator") {
+      addLogEntry("EVOLUTION", "Dschinn-Übersetzer integriert! Alien-Funksignale & Crew-Dialoge werden vollautomatisch dechiffriert.");
+    }
+    updateMutationUI();
+  } else {
+    addLogEntry("SYSTEM", `Evolution fehlgeschlagen: Nicht genügend Ressourcen (${mut.bioCost} Bio | ${mut.siliconCost} Silizium benötigt)!`);
+  }
+}
+function updateMutationUI() {
+  const bioEl = document.getElementById("res-bio-count");
+  const silEl = document.getElementById("res-silicon-count");
+  if (bioEl)
+    bioEl.innerText = `${Math.floor(STATE.bioRes)}`;
+  if (silEl)
+    silEl.innerText = `${Math.floor(STATE.siliconRes)}`;
+  Object.keys(STATE.mutations).forEach((key) => {
+    const mut = STATE.mutations[key];
+    const btn = document.querySelector(`.mut-btn[data-mutation="${key}"]`);
+    if (btn) {
+      if (mut.purchased) {
+        btn.disabled = true;
+        btn.classList.add("purchased");
+        btn.innerText = "Aktiviert ✓";
+      } else {
+        const canAfford = STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost;
+        btn.disabled = !canAfford;
+      }
+    }
+  });
+}
+
+// src/engine/game-over.ts
+var activeDebris = [];
+var explosionShockwave = null;
+var shockwaveLife = 0;
+var cameraShakeDuration = 0;
+function initGameOverUI() {
+  const respawnBtn = document.getElementById("respawn-btn");
+  if (respawnBtn) {
+    respawnBtn.addEventListener("click", () => {
+      respawnPlayer();
+    });
+  }
+  const restartBtn = document.getElementById("restart-game-btn");
+  if (restartBtn) {
+    restartBtn.addEventListener("click", () => {
+      restartGame();
+    });
+  }
+}
+function triggerGameOver(reason = "Kritischer Hüllenschaden und Kollaps des biologischen Zellkerns.") {
+  if (STATE.isGameOver)
+    return;
+  STATE.isGameOver = true;
+  STATE.health = 0;
+  playExplosionSound();
+  cameraShakeDuration = 0.8;
+  spawnExplosionFX(STATE.playerPosition);
+  if (STATE.playerGroup) {
+    STATE.playerGroup.visible = false;
+  }
+  addLogEntry("SYSTEM", `\uD83D\uDCA5 KATASTROPHALER ZELLKORNBRENN-SCHADEN: ${reason}`);
+  setTimeout(() => {
+    const modal = document.getElementById("game-over-modal");
+    const reasonEl = document.getElementById("game-over-reason");
+    const systemsEl = document.getElementById("go-stat-systems");
+    const scannedEl = document.getElementById("go-stat-scanned");
+    const crewEl = document.getElementById("go-stat-crew");
+    const resEl = document.getElementById("go-stat-resources");
+    if (reasonEl)
+      reasonEl.innerText = reason;
+    if (systemsEl)
+      systemsEl.innerText = `${STATE.systemsVisited} Sternensysteme`;
+    if (scannedEl)
+      scannedEl.innerText = `${Object.keys(STATE.scannedPlanets).length} Welten`;
+    if (crewEl)
+      crewEl.innerText = `${STATE.crew.length} Individuen`;
+    if (resEl)
+      resEl.innerText = `${Math.floor(STATE.bioRes)} Bio / ${Math.floor(STATE.siliconRes)} Silizium`;
+    if (modal) {
+      modal.style.display = "flex";
+    }
+  }, 750);
+}
+function spawnExplosionFX(pos) {
+  const shockGeo = new RingGeometry(0.5, 2.5, 32);
+  shockGeo.rotateX(Math.PI / 2);
+  const shockMat = new MeshBasicMaterial({
+    color: 16347926,
+    transparent: true,
+    opacity: 0.9,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  explosionShockwave = new Mesh(shockGeo, shockMat);
+  explosionShockwave.position.copy(pos);
+  scene.add(explosionShockwave);
+  shockwaveLife = 1;
+  const particleCount = 65;
+  const colors = [16347926, 15680580, 16436245, 65416, 3718648];
+  for (let i = 0;i < particleCount; i++) {
+    const size = 0.2 + Math.random() * 0.5;
+    const geo = Math.random() > 0.5 ? new DodecahedronGeometry(size, 0) : new TetrahedronGeometry(size, 0);
+    const col = colors[Math.floor(Math.random() * colors.length)];
+    const mat = new MeshBasicMaterial({
+      color: col,
+      transparent: true,
+      opacity: 1,
+      blending: AdditiveBlending
+    });
+    const mesh = new Mesh(geo, mat);
+    mesh.position.copy(pos);
+    scene.add(mesh);
+    const angle = Math.random() * Math.PI * 2;
+    const elevation = (Math.random() - 0.5) * 0.4;
+    const speed = 12 + Math.random() * 32;
+    const velocity = new Vector3(Math.cos(angle) * speed, elevation * speed, Math.sin(angle) * speed);
+    const rotSpeed = new Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12);
+    activeDebris.push({
+      mesh,
+      velocity,
+      rotSpeed,
+      life: 1.2 + Math.random() * 0.6,
+      maxLife: 1.8
+    });
+  }
+}
+function updateExplosionEffects(dt) {
+  if (cameraShakeDuration > 0) {
+    cameraShakeDuration -= dt;
+    const shakeStrength = Math.min(1.5, cameraShakeDuration * 2.5);
+    camera.position.x += (Math.random() - 0.5) * shakeStrength;
+    camera.position.z += (Math.random() - 0.5) * shakeStrength;
+  }
+  if (explosionShockwave && shockwaveLife > 0) {
+    shockwaveLife -= dt;
+    const progress = 1 - shockwaveLife / 1;
+    const scale = 1 + progress * 35;
+    explosionShockwave.scale.set(scale, 1, scale);
+    explosionShockwave.material.opacity = (1 - progress) * 0.9;
+    if (shockwaveLife <= 0) {
+      scene.remove(explosionShockwave);
+      explosionShockwave.geometry.dispose();
+      explosionShockwave.material.dispose();
+      explosionShockwave = null;
+    }
+  }
+  for (let i = activeDebris.length - 1;i >= 0; i--) {
+    const p = activeDebris[i];
+    p.life -= dt;
+    p.mesh.position.addScaledVector(p.velocity, dt);
+    p.velocity.multiplyScalar(Math.exp(-1.5 * dt));
+    p.mesh.rotation.x += p.rotSpeed.x * dt;
+    p.mesh.rotation.y += p.rotSpeed.y * dt;
+    p.mesh.rotation.z += p.rotSpeed.z * dt;
+    const alpha = Math.max(0, p.life / p.maxLife);
+    p.mesh.material.opacity = alpha;
+    if (p.life <= 0) {
+      scene.remove(p.mesh);
+      p.mesh.geometry.dispose();
+      p.mesh.material.dispose();
+      activeDebris.splice(i, 1);
+    }
+  }
+}
+function respawnPlayer() {
+  clearExplosionFX();
+  STATE.health = STATE.maxHealth;
+  STATE.bioEnergy = STATE.maxBioEnergy;
+  STATE.mentalEnergy = STATE.maxMentalEnergy;
+  STATE.isGameOver = false;
+  STATE.playerPosition.set(0, 0, 75);
+  STATE.playerVelocity.set(5.2, 0, 0);
+  STATE.playerAcceleration.set(0, 0, 0);
+  if (STATE.playerGroup) {
+    STATE.playerGroup.position.set(0, 0, 75);
+    STATE.playerGroup.visible = true;
+  }
+  const modal = document.getElementById("game-over-modal");
+  if (modal)
+    modal.style.display = "none";
+  playSiliconCollectSound();
+  addLogEntry("SYSTEM", "\uD83E\uDDEC Phönix-Zellregeneration abgeschlossen. Zellkern & Traum-Matrix auf 100% wiederhergestellt.");
+}
+function restartGame() {
+  clearExplosionFX();
+  STATE.health = STATE.maxHealth;
+  STATE.bioEnergy = STATE.maxBioEnergy;
+  STATE.mentalEnergy = STATE.maxMentalEnergy;
+  STATE.isGameOver = false;
+  STATE.systemsVisited = 1;
+  STATE.bioRes = 0;
+  STATE.siliconRes = 0;
+  STATE.crew = [];
+  STATE.scannedPlanets = {};
+  STATE.currentSystemId = 0;
+  Object.keys(STATE.mutations).forEach((key) => {
+    STATE.mutations[key].purchased = false;
+  });
+  const modal = document.getElementById("game-over-modal");
+  if (modal)
+    modal.style.display = "none";
+  clearActiveSystem();
+  spawnPlanetsAndAsteroids();
+  STATE.playerPosition.set(0, 0, 75);
+  STATE.playerVelocity.set(5.2, 0, 0);
+  STATE.playerAcceleration.set(0, 0, 0);
+  if (STATE.playerGroup) {
+    STATE.playerGroup.position.set(0, 0, 75);
+    STATE.playerGroup.visible = true;
+  }
+  renderCrewUI();
+  updateMutationUI();
+  addLogEntry("SYSTEM", "\uD83C\uDF0C Neues Universum initialisiert. Sternensystem 0 erreicht.");
+}
+function clearExplosionFX() {
+  if (explosionShockwave) {
+    scene.remove(explosionShockwave);
+    explosionShockwave = null;
+  }
+  activeDebris.forEach((p) => {
+    scene.remove(p.mesh);
+  });
+  activeDebris.length = 0;
+  cameraShakeDuration = 0;
+}
+
+// src/systems/fleet.ts
+var shockwaveMesh = null;
+var shockwaveTimer = 0;
+function initPlanetDefenseFleets() {
+  clearFleet();
+  let shipIdCounter = 1;
+  activePlanets.forEach((p) => {
+    if (!p.attributes || !p.attributes.species)
+      return;
+    const spec = p.attributes.species;
+    if (spec.techLevel === "Spacefaring" || spec.techLevel === "Hyper-Advanced") {
+      const shipCount = spec.techLevel === "Hyper-Advanced" ? 6 : 4;
+      const planetPos = p.mesh.position;
+      for (let i = 0;i < shipCount; i++) {
+        const orbitRadius = p.size * 2.2 + 3 + i * 2.2;
+        const orbitAngle = i / shipCount * Math.PI * 2;
+        const isCorvette = i < (spec.techLevel === "Hyper-Advanced" ? 2 : 1);
+        const shipGroup = new Group;
+        const hullGeo = isCorvette ? new ConeGeometry(1, 2.4, 5) : new ConeGeometry(0.55, 1.5, 4);
+        hullGeo.rotateX(Math.PI / 2);
+        const hullMat = new MeshStandardMaterial({
+          color: spec.techLevel === "Hyper-Advanced" ? 6514417 : 14739455,
+          metalness: 0.9,
+          roughness: 0.2,
+          flatShading: true
+        });
+        const hullMesh = new Mesh(hullGeo, hullMat);
+        shipGroup.add(hullMesh);
+        const engineGeo = new SphereGeometry(isCorvette ? 0.38 : 0.22, 8, 8);
+        const engineMat = new MeshBasicMaterial({
+          color: spec.techLevel === "Hyper-Advanced" ? 8490232 : 3718648
+        });
+        const engineMesh = new Mesh(engineGeo, engineMat);
+        engineMesh.position.set(0, 0, isCorvette ? -1.1 : -0.75);
+        shipGroup.add(engineMesh);
+        const wingGeo = new BoxGeometry(isCorvette ? 2.6 : 1.6, 0.08, 0.6);
+        const wingMat = new MeshStandardMaterial({
+          color: 3359061,
+          metalness: 0.8,
+          roughness: 0.4
+        });
+        const wingMesh = new Mesh(wingGeo, wingMat);
+        wingMesh.position.set(0, 0, -0.2);
+        shipGroup.add(wingMesh);
+        const sx = planetPos.x + Math.cos(orbitAngle) * orbitRadius;
+        const sz = planetPos.z + Math.sin(orbitAngle) * orbitRadius;
+        shipGroup.position.set(sx, 0, sz);
+        scene.add(shipGroup);
+        const fleetShip = {
+          id: shipIdCounter++,
+          mesh: shipGroup,
+          bodyMesh: hullMesh,
+          type: isCorvette ? "corvette" : "interceptor",
+          name: `${spec.name} ${isCorvette ? "Schwere Korvette" : "Abfangjäger"} #${i + 1}`,
+          position: shipGroup.position,
+          velocity: new Vector3(0, 0, 0),
+          homePlanet: p,
+          orbitRadius,
+          orbitAngle,
+          orbitSpeed: 0.45 / Math.sqrt(orbitRadius) * (i % 2 === 0 ? 1 : -1),
+          health: isCorvette ? 80 : 35,
+          maxHealth: isCorvette ? 80 : 35,
+          state: "patrol",
+          attackCooldown: 0.5 + Math.random() * 1.5,
+          alertTimer: 0
+        };
+        STATE.fleetShips.push(fleetShip);
+      }
+    }
+  });
+  if (STATE.fleetShips.length > 0) {
+    addLogEntry("SYSTEM", `Sensoren geortet: ${STATE.fleetShips.length} planetare Abfangjäger & Patrouillenschiffe im Sektor aktiv.`);
+  }
+}
+function updateFleet(dt) {
+  if (STATE.bioDischargeCooldown > 0) {
+    STATE.bioDischargeCooldown = Math.max(0, STATE.bioDischargeCooldown - dt);
+  }
+  if (shockwaveMesh && shockwaveTimer > 0) {
+    shockwaveTimer -= dt;
+    const progress = 1 - shockwaveTimer / 0.5;
+    const scale = 2 + progress * 24;
+    shockwaveMesh.scale.set(scale, 1, scale);
+    shockwaveMesh.material.opacity = (1 - progress) * 0.7;
+    if (shockwaveTimer <= 0) {
+      scene.remove(shockwaveMesh);
+      shockwaveMesh.geometry.dispose();
+      shockwaveMesh.material.dispose();
+      shockwaveMesh = null;
+    }
+  }
+  const playerPos = STATE.playerPosition;
+  STATE.fleetShips.forEach((ship) => {
+    if (ship.state === "disabled") {
+      ship.position.addScaledVector(ship.velocity, dt);
+      ship.velocity.multiplyScalar(Math.exp(-0.8 * dt));
+      ship.mesh.rotation.y += 0.8 * dt;
+      ship.mesh.rotation.z += 0.5 * dt;
+      const dPlayer = ship.position.distanceTo(playerPos);
+      if (dPlayer < 6) {
+        if (Math.random() < 0.02) {
+          addLogEntry("SYSTEM", `Deaktiviertes Wrack von ${ship.name} in Reichweite. Drücke [E] zum Absorbieren!`);
+        }
+      }
+      return;
+    }
+    const planetPos = ship.homePlanet.mesh.position;
+    const distToPlayer = ship.position.distanceTo(playerPos);
+    const distPlanetToPlayer = planetPos.distanceTo(playerPos);
+    const isPlayerThreatening = distPlanetToPlayer < 35 || STATE.scanningPlanet && STATE.scanningPlanet.name === ship.homePlanet.name || STATE.abductActive && STATE.abductTarget && STATE.abductTarget.name === ship.homePlanet.name;
+    if (isPlayerThreatening && ship.state === "patrol") {
+      ship.state = "intercept";
+      ship.alertTimer = 15;
+      addLogEntry("CREW", `Capt. Miller: 'Militärische Abfangjäger von ${ship.homePlanet.name} lösen sich aus dem Orbit! Sie formieren Abfangkurs!'`);
+    }
+    if (ship.state === "intercept") {
+      ship.alertTimer -= dt;
+      if (ship.alertTimer <= 0 && distToPlayer > 40) {
+        ship.state = "patrol";
+        addLogEntry("SYSTEM", `${ship.name} bricht Verfolgung ab und kehrt in planetaren Patrouillen-Orbit zurück.`);
+      }
+      const toPlayer = new Vector3().subVectors(playerPos, ship.position);
+      const dist = toPlayer.length();
+      toPlayer.normalize();
+      const desiredDist = 12;
+      const distDiff = dist - desiredDist;
+      const tangent = new Vector3(-toPlayer.z, 0, toPlayer.x);
+      const accel = new Vector3;
+      accel.addScaledVector(toPlayer, Math.min(28, distDiff * 3.5));
+      accel.addScaledVector(tangent, 18);
+      ship.velocity.addScaledVector(accel, dt);
+      ship.velocity.clampLength(0, ship.type === "corvette" ? 24 : 34);
+      ship.velocity.multiplyScalar(Math.exp(-0.35 * dt));
+      ship.position.addScaledVector(ship.velocity, dt);
+      if (ship.velocity.lengthSq() > 0.1) {
+        const angle = Math.atan2(ship.velocity.x, ship.velocity.z);
+        ship.mesh.rotation.y = angle;
+      }
+      ship.attackCooldown -= dt;
+      if (ship.attackCooldown <= 0 && dist < 30) {
+        ship.attackCooldown = ship.type === "corvette" ? 1.4 : 1.8;
+        fireFleetProjectile(ship, playerPos);
+      }
+    } else {
+      ship.orbitAngle += ship.orbitSpeed * dt;
+      const targetX = planetPos.x + Math.cos(ship.orbitAngle) * ship.orbitRadius;
+      const targetZ = planetPos.z + Math.sin(ship.orbitAngle) * ship.orbitRadius;
+      ship.position.x = MathUtils.lerp(ship.position.x, targetX, 0.1);
+      ship.position.z = MathUtils.lerp(ship.position.z, targetZ, 0.1);
+      ship.position.y = 0;
+      const forwardAngle = ship.orbitAngle + (ship.orbitSpeed > 0 ? Math.PI / 2 : -Math.PI / 2);
+      ship.mesh.rotation.y = forwardAngle;
+    }
+  });
+  for (let pIdx = STATE.fleetProjectiles.length - 1;pIdx >= 0; pIdx--) {
+    const proj = STATE.fleetProjectiles[pIdx];
+    proj.life -= dt;
+    proj.position.addScaledVector(proj.velocity, dt);
+    const dToPlayer = proj.position.distanceTo(playerPos);
+    if (dToPlayer < 2.5) {
+      playCrashSound();
+      const damage = STATE.mutations.armor.purchased ? proj.damage * 0.5 : proj.damage;
+      STATE.health = Math.max(0, STATE.health - damage);
+      STATE.crew.forEach((c) => {
+        c.stress = Math.min(100, c.stress + 14);
+        c.illusionStability = Math.max(0, c.illusionStability - 18);
+      });
+      if (STATE.health <= 0 && !STATE.isGameOver) {
+        triggerGameOver("Biologischer Zellkern zerstört durch planetare Abfanggeschwader.");
+      } else {
+        addLogEntry("CREW", `ALARM: EMP-Geschoss durchschlägt Hülle! Die Illusion flackert (+Stress). Stabilisiere mit [LEERTASTE]!`);
+      }
+      scene.remove(proj.mesh);
+      proj.mesh.geometry.dispose();
+      proj.mesh.material.dispose();
+      STATE.fleetProjectiles.splice(pIdx, 1);
+      continue;
+    }
+    if (proj.life <= 0) {
+      scene.remove(proj.mesh);
+      proj.mesh.geometry.dispose();
+      proj.mesh.material.dispose();
+      STATE.fleetProjectiles.splice(pIdx, 1);
+    }
+  }
+}
+function fireFleetProjectile(ship, targetPos) {
+  const isCorvette = ship.type === "corvette";
+  const projGeo = new CylinderGeometry(0.14, 0.14, 1.4, 6);
+  projGeo.rotateX(Math.PI / 2);
+  const projMat = new MeshBasicMaterial({
+    color: isCorvette ? 8490232 : 3718648
+  });
+  const projMesh = new Mesh(projGeo, projMat);
+  projMesh.position.copy(ship.position);
+  scene.add(projMesh);
+  const dir = new Vector3().subVectors(targetPos, ship.position).normalize();
+  dir.x += (Math.random() - 0.5) * 0.08;
+  dir.z += (Math.random() - 0.5) * 0.08;
+  dir.normalize();
+  const speed = 44;
+  const velocity = dir.clone().multiplyScalar(speed);
+  projMesh.rotation.y = Math.atan2(dir.x, dir.z);
+  const projectile = {
+    mesh: projMesh,
+    position: projMesh.position,
+    velocity,
+    life: 2.5,
+    damage: isCorvette ? 14 : 7,
+    type: isCorvette ? "emp" : "laser"
+  };
+  STATE.fleetProjectiles.push(projectile);
+}
+function triggerBioDischarge() {
+  if (!STATE.gameStarted)
+    return;
+  if (STATE.bioDischargeCooldown > 0) {
+    addLogEntry("SYSTEM", `Bio-Elektrische Entladung noch in Kalibrierung (${STATE.bioDischargeCooldown.toFixed(1)}s Cooldown).`);
+    return;
+  }
+  if (STATE.bioEnergy < 15 || STATE.mentalEnergy < 10) {
+    addLogEntry("SYSTEM", `Zu wenig Bio-Energie oder Mentalkraft für Bio-Elektrische Entladung!`);
+    return;
+  }
+  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 15);
+  STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 10);
+  STATE.bioDischargeCooldown = 4.5;
+  if (shockwaveMesh) {
+    scene.remove(shockwaveMesh);
+    shockwaveMesh.geometry.dispose();
+    shockwaveMesh.material.dispose();
+  }
+  const shockGeo = new RingGeometry(0.8, 1.8, 48);
+  shockGeo.rotateX(Math.PI / 2);
+  const shockMat = new MeshBasicMaterial({
+    color: 65416,
+    transparent: true,
+    opacity: 0.85,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  shockwaveMesh = new Mesh(shockGeo, shockMat);
+  shockwaveMesh.position.copy(STATE.playerPosition);
+  scene.add(shockwaveMesh);
+  shockwaveTimer = 0.5;
+  playCrashSound();
+  addLogEntry("SYSTEM", `⚡ BIO-ELEKTRISCHE EMP-ENTLADUNG GEZÜNDET! Elektromagnetische Schockwelle expandiert.`);
+  const radius = 20;
+  let disabledCount = 0;
+  STATE.fleetShips.forEach((ship) => {
+    if (ship.state !== "disabled") {
+      const dist = ship.position.distanceTo(STATE.playerPosition);
+      if (dist <= radius) {
+        ship.state = "disabled";
+        ship.velocity.copy(new Vector3().subVectors(ship.position, STATE.playerPosition).normalize().multiplyScalar(12));
+        ship.bodyMesh.material.color.setHex(4674921);
+        ship.bodyMesh.material.emissive.setHex(0);
+        disabledCount++;
+      }
+    }
+  });
+  if (disabledCount > 0) {
+    addLogEntry("CREW", `Capt. Miller: 'Feindliche Abfangjäger durch EMP lahmgelegt! Ihre Systeme sind kollabiert!'`);
+    addLogEntry("SYSTEM", `${disabledCount} Abfangjäger deaktiviert. Wrackteile können assimiliert werden [E].`);
+    playSiliconCollectSound();
+  }
+}
+function salvageNearestWreck() {
+  const playerPos = STATE.playerPosition;
+  const disabledShips = STATE.fleetShips.filter((s) => s.state === "disabled");
+  for (let i = 0;i < disabledShips.length; i++) {
+    const ship = disabledShips[i];
+    if (ship.position.distanceTo(playerPos) <= 7) {
+      scene.remove(ship.mesh);
+      STATE.siliconRes += 35;
+      STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 30);
+      addLogEntry("SYSTEM", `Schiffswrack von ${ship.name} assimiliert: +35 Silizium & +30 Bio-Energie gewonnen!`);
+      playSiliconCollectSound();
+      const idx = STATE.fleetShips.findIndex((s) => s.id === ship.id);
+      if (idx !== -1) {
+        STATE.fleetShips.splice(idx, 1);
+      }
+      return true;
+    }
+  }
+  return false;
+}
+function clearFleet() {
+  STATE.fleetShips.forEach((ship) => {
+    if (ship.mesh)
+      scene.remove(ship.mesh);
+  });
+  STATE.fleetProjectiles.forEach((proj) => {
+    if (proj.mesh)
+      scene.remove(proj.mesh);
+  });
+  if (shockwaveMesh) {
+    scene.remove(shockwaveMesh);
+    shockwaveMesh = null;
+  }
+  STATE.fleetShips = [];
+  STATE.fleetProjectiles = [];
+}
+
+// src/procedural/sun-shader.ts
+var coronaVertexShader = `
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vViewDir;
+
+void main() {
+    vUv = uv;
+    vNormal = normalize(normalMatrix * normal);
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewDir = normalize(-mvPosition.xyz);
+    gl_Position = projectionMatrix * mvPosition;
+}
+`;
+var coronaFragmentShader = `
+uniform vec3 starColor;
+uniform float time;
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vViewDir;
+
+// Simplex/Perlin-inspired procedural noise function
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+}
+
+float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = hash(i);
+    float b = hash(i + vec2(1.0, 0.0));
+    float c = hash(i + vec2(0.0, 1.0));
+    float d = hash(i + vec2(1.0, 1.0));
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+void main() {
+    // Dynamic swirling noise coordinates
+    vec2 uvCoord = vUv * 6.0;
+    float n1 = noise(uvCoord + vec2(time * 0.25, time * 0.15));
+    float n2 = noise(uvCoord * 2.0 - vec2(time * 0.35, time * 0.2));
+    float plasma = (n1 + n2 * 0.5) / 1.5;
+
+    // Outer rim glow with Fresnel
+    float fresnel = pow(1.0 - max(dot(vViewDir, vNormal), 0.0), 2.2);
+    float alpha = fresnel * (0.6 + plasma * 0.65);
+
+    vec3 finalGlow = starColor * (1.2 + plasma * 0.8);
+    gl_FragColor = vec4(finalGlow, alpha);
+}
+`;
+function createSunCoronaMesh(starRadius, hexColor) {
+  const color = new Color(hexColor);
+  const coronaGeo = new SphereGeometry(starRadius * 1.35, 32, 32);
+  const coronaMat = new ShaderMaterial({
+    vertexShader: coronaVertexShader,
+    fragmentShader: coronaFragmentShader,
+    uniforms: {
+      starColor: { value: color },
+      time: { value: 0 }
+    },
+    blending: AdditiveBlending,
+    side: BackSide,
+    transparent: true,
+    depthWrite: false
+  });
+  const mesh = new Mesh(coronaGeo, coronaMat);
+  return {
+    mesh,
+    update: (dt) => {
+      coronaMat.uniforms.time.value += dt;
+    }
+  };
+}
+
+// src/procedural/atmosphere-shader.ts
+var atmosphereVertexShader = `
+varying vec3 vNormal;
+varying vec3 vViewDir;
+
+void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    vViewDir = normalize(-mvPosition.xyz);
+    gl_Position = projectionMatrix * mvPosition;
+}
+`;
+var atmosphereFragmentShader = `
+uniform vec3 glowColor;
+uniform float intensityMultiplier;
+varying vec3 vNormal;
+varying vec3 vViewDir;
+
+void main() {
+    float fresnel = 1.0 - max(dot(vViewDir, vNormal), 0.0);
+    float glow = pow(fresnel, 2.8) * intensityMultiplier;
+    gl_FragColor = vec4(glowColor, glow);
+}
+`;
+function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.4) {
+  const color = new Color(hexColor);
+  const atmosphereGeo = new SphereGeometry(planetRadius * 1.14, 32, 32);
+  const atmosphereMat = new ShaderMaterial({
+    vertexShader: atmosphereVertexShader,
+    fragmentShader: atmosphereFragmentShader,
+    uniforms: {
+      glowColor: { value: color },
+      intensityMultiplier: { value: intensity }
+    },
+    blending: AdditiveBlending,
+    side: BackSide,
+    transparent: true,
+    depthWrite: false
+  });
+  return new Mesh(atmosphereGeo, atmosphereMat);
+}
+
 // src/systems/universe.ts
+var activeCoronaMeshes = [];
+var activeCoronaUpdaters = [];
+function updateUniverseShaders(dt) {
+  activeCoronaUpdaters.forEach((fn) => fn(dt));
+}
 async function checkUniverseData() {
   try {
     let data = null;
@@ -27834,6 +30102,9 @@ function clearActiveSystem() {
       scene.remove(source.ringMesh);
     }
   });
+  activeCoronaMeshes.forEach((m) => scene.remove(m));
+  activeCoronaMeshes.length = 0;
+  activeCoronaUpdaters.length = 0;
   STATE.gravitySources = [];
   STATE.asteroids = [];
   activePlanets.length = 0;
@@ -27846,6 +30117,7 @@ function clearActiveSystem() {
   STATE.scanProgress = 0;
   STATE.harvestProgress = 0;
   STATE.abductProgress = 0;
+  clearFleet();
   const badge = document.getElementById("target-lock-badge");
   const label = document.getElementById("target-label-text");
   if (badge)
@@ -27869,34 +30141,39 @@ function spawnPlanetsAndAsteroids() {
     const starMat = new MeshStandardMaterial({
       map: starTex.map,
       emissive: parseInt(starData.color),
-      emissiveIntensity: 0.85,
+      emissiveIntensity: 0.9,
       roughness: 0.2,
       metalness: 0.1
     });
     const starMesh = new Mesh(starGeo, starMat);
     starMesh.position.set(0, 0, 0);
     scene.add(starMesh);
-    const starLight = new PointLight(parseInt(starData.color), 3, 300, 0.4);
+    const corona = createSunCoronaMesh(starData.size, parseInt(starData.color));
+    scene.add(corona.mesh);
+    activeCoronaMeshes.push(corona.mesh);
+    activeCoronaUpdaters.push(corona.update);
+    const starLight = new PointLight(parseInt(starData.color), 3.2, 400, 0.4);
     starLight.position.set(0, 0, 0);
     scene.add(starLight);
     starData.colorCss = starData.color.replace("0x", "#");
-    const starRange = starData.size * 3.5;
+    const starRange = 24;
     const starSource = {
       mesh: starMesh,
       type: "star",
       name: `${activeSystem.name} (Zentralstern)`,
-      mass: starData.mass * 0.4,
+      mass: starData.mass * 0.35,
       radius: starData.size,
       gravityRange: starRange,
       position: new Vector3(0, 0, 0)
     };
     STATE.gravitySources.push(starSource);
-    starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.08);
+    starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.06);
   }
   activeSystem.planets.forEach((p, idx) => {
+    const scaledDist = 38 + p.distance * 1.55 + idx * 12;
     const angle = idx * 1.8 + STATE.currentSystemId * 0.5;
-    const px = p.distance * Math.cos(angle);
-    const pz = p.distance * Math.sin(angle);
+    const px = scaledDist * Math.cos(angle);
+    const pz = scaledDist * Math.sin(angle);
     const seed = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) + idx * 77;
     const isGas = p.type === "Gas Giant";
     const isHab = p.type === "Habitable";
@@ -27922,6 +30199,11 @@ function spawnPlanetsAndAsteroids() {
     const planetGroup = new Group;
     planetGroup.position.set(px, 0, pz);
     planetGroup.add(mesh);
+    if (isHab || isGas) {
+      const atmoHex = isHab ? 3718648 : parseInt(p.color);
+      const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.5 : 1.15);
+      planetGroup.add(atmoMesh);
+    }
     let cloudMesh = null;
     if (cloudTexture && isHab) {
       const cloudGeo = new SphereGeometry(p.size * 1.025, 32, 32);
@@ -27962,7 +30244,7 @@ function spawnPlanetsAndAsteroids() {
     };
     STATE.gravitySources.push(sourceObj);
     const ring = createGravityRing(px, pz, pRange, parseInt(p.color), 0.08);
-    const orbitSpeed = 0.045 / Math.sqrt(p.distance);
+    const orbitSpeed = 0.055 / Math.sqrt(scaledDist);
     const pColorCss = p.color.replace("0x", "#");
     const generated = generatePlanetAttributes(p);
     let finalSpecies = p.species || generated.species;
@@ -27980,7 +30262,7 @@ function spawnPlanetsAndAsteroids() {
       ringMesh: ring,
       angle,
       speed: orbitSpeed,
-      distance: p.distance,
+      distance: scaledDist,
       name: p.name,
       type: p.type,
       size: p.size,
@@ -28110,13 +30392,15 @@ function spawnPlanetsAndAsteroids() {
     STATE.asteroids.push(sourceObj);
     sourceObj.ringMesh = createGravityRing(ast.x, ast.z, range, color, 0.05);
   });
+  initPlanetDefenseFleets();
 }
 function generateFallbackAsteroids() {
   const list = [];
-  const count = 35;
+  const count = 40;
   for (let i = 0;i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const dist = 35 + Math.random() * 110;
+    const isOuter = i % 2 === 0;
+    const dist = isOuter ? 115 + Math.random() * 115 : 48 + Math.random() * 27;
     list.push({
       x: Math.cos(angle) * dist,
       z: Math.sin(angle) * dist,
@@ -28625,13 +30909,14 @@ function warpToSystem(systemId) {
   playCrashSound();
   setTimeout(() => {
     STATE.currentSystemId = systemId;
+    STATE.systemsVisited++;
     const activeSystem = STATE.universe.systems[systemId];
     clearActiveSystem();
     spawnPlanetsAndAsteroids();
-    STATE.playerPosition.set(0, 0, 65);
-    STATE.playerVelocity.set(5, 0, 0);
+    STATE.playerPosition.set(0, 0, 75);
+    STATE.playerVelocity.set(5.2, 0, 0);
     if (STATE.playerGroup) {
-      STATE.playerGroup.position.set(0, 0, 65);
+      STATE.playerGroup.position.set(0, 0, 75);
     }
     addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} (${dist.toFixed(0)} LJ, -${warpCost}% Energie) stabilisiert.`);
     if (warpOverlay) {
@@ -28639,414 +30924,6 @@ function warpToSystem(systemId) {
     }
     toggleGalaxyMap();
   }, 600);
-}
-
-// src/systems/crew.ts
-function calculateCrewBuffs() {
-  let thrustMult = 1;
-  let bioMult = 1;
-  let scanMult = 1;
-  let repair = 0;
-  let stressDamp = 1;
-  let psioBonus = 0;
-  const hiveBonus = STATE.mutations.hivemind && STATE.mutations.hivemind.purchased ? 1.2 : 1;
-  STATE.crew.forEach((c) => {
-    if (c.role === "pilot")
-      thrustMult += 0.15 * hiveBonus;
-    if (c.role === "biologist") {
-      bioMult += 0.3 * hiveBonus;
-      scanMult += 0.25 * hiveBonus;
-    }
-    if (c.role === "engineer")
-      repair += 0.6 * hiveBonus;
-    if (c.role === "psychologist")
-      stressDamp *= 1 - 0.4 * hiveBonus;
-    if (c.role === "cryptologist")
-      psioBonus += 30 * hiveBonus;
-  });
-  STATE.crewBuffs = {
-    thrust: thrustMult,
-    bioGain: bioMult,
-    scanSpeed: scanMult,
-    repairRate: repair,
-    stressDampening: stressDamp,
-    psionicBonus: Math.round(psioBonus)
-  };
-  const basePsio = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 140 : 75;
-  STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
-}
-var STORY_LOGS = [
-  { time: 6, sender: "Capt. Miller", text: "Das Ding lebt! Wir sind im Bauch eines Lovecraft-Monsters gefangen! Wo ist die Luft?" },
-  { time: 24, sender: "Dr. Song", text: "Die Schiffswände atmen... Valeria, das Schiff absorbiert Weltraummaterie um sich zu heilen!" },
-  { time: 48, sender: "Valeria", text: "Jamal, guck dir die Messgeräte an. Die kosmische Hintergrundstrahlung... Die Expansion verlangsamt sich!" },
-  { time: 70, sender: "Jamal", text: "Das ist kein Fehler. Jemand macht eine kosmische Vollbremsung. Dieses Wesen... versucht es uns zu warnen?" },
-  { time: 95, sender: "Capt. Miller", text: "Es sendet Gedankenwellen. Die Software übersetzt es als... Dschinn? Es ist einsam." }
-];
-var storyIndex = 0;
-var playTime = 0;
-function encryptText(text) {
-  const alienGlyphs = "⏁⊑⟒⋔⍜⋏☿⏁⟒⍃⍜⌰⎍⌇⌇⊑⟟⌿⌇⏃⋏⎅⌇⏁⏃⍀⌇⏁⍀⟒☍⏁⊑⟒⌇⊑⟟⌿⟟⌇⏃⌰⟟⎎⟒";
-  return text.split("").map((char) => {
-    if (char === " " || char === '"' || char === "'" || char === ":" || char === "." || char === "," || char === "?" || char === "!" || char === "-" || char === "(" || char === ")")
-      return char;
-    return alienGlyphs[Math.floor(Math.random() * alienGlyphs.length)];
-  }).join("");
-}
-function encryptCrewMessage(sender, text) {
-  let outText = text;
-  if (!STATE.mutations.translator.purchased) {
-    outText = encryptText(text);
-  }
-  return `${sender}: "${outText}"`;
-}
-function updateCrewSimulation(dt) {
-  playTime += dt;
-  if (storyIndex < STORY_LOGS.length && playTime >= STORY_LOGS[storyIndex].time) {
-    const logObj = STORY_LOGS[storyIndex];
-    storyIndex++;
-    addLogEntry("CREW", encryptCrewMessage(logObj.sender, logObj.text));
-  }
-  const totalCrew = STATE.crew.length;
-  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
-  let targetLoneliness = 100;
-  let isHarmony = false;
-  if (totalCrew === 0) {
-    targetLoneliness = 100;
-  } else if (totalCrew === 1) {
-    STATE.crewSatietyTimer += dt;
-    const decay = Math.min(25, STATE.crewSatietyTimer / 90 * 25);
-    targetLoneliness = 40 + decay;
-  } else if (uniqueRoles === 2) {
-    targetLoneliness = 25;
-  } else if (uniqueRoles >= 3) {
-    targetLoneliness = 5;
-    isHarmony = true;
-  }
-  if (STATE.loneliness < targetLoneliness) {
-    STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
-  } else if (STATE.loneliness > targetLoneliness) {
-    STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
-  }
-  if (isHarmony) {
-    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
-    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
-  }
-  let speed = STATE.playerVelocity.length();
-  let speedStressModifier = speed > 10 ? 0.6 : 0;
-  STATE.crew.forEach((c) => {
-    const decayRate = (0.35 + c.stress * 0.006) * dt;
-    c.illusionStability = Math.max(0, c.illusionStability - decayRate);
-    if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
-      c.stress = Math.max(0, c.stress - 7.5 * dt);
-      c.illusionStability = Math.min(100, c.illusionStability + 8 * dt);
-      c.status = "Traum-Trance";
-      c.thought = "Fühlt eine warme, beruhigende Welle... 'Alles ist friedlich.'";
-    } else {
-      if (c.illusionStability < 35) {
-        c.stress = Math.min(100, c.stress + (4.5 + speedStressModifier) * dt);
-        c.status = "Panik";
-        c.thought = "Verzweifelt: 'Die Wände pulsieren... das ist keine Station!'";
-      } else if (c.illusionStability < 65) {
-        c.stress = Math.min(100, c.stress + (1.2 + speedStressModifier) * dt);
-        c.status = "Misstrauisch";
-        c.thought = "Stutzt: 'Höre ich ein Atmen in den Lüftungsschächten?'";
-      } else {
-        c.stress = Math.max(0, c.stress - 2 * dt);
-        c.status = "Arbeitet";
-        c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
-      }
-    }
-    if (c.illusionStability >= 50) {
-      if (c.role === "engineer") {
-        STATE.health = Math.min(STATE.maxHealth, STATE.health + 0.25 * dt);
-      } else if (c.role === "biologist") {
-        STATE.bioRes += 0.1 * dt;
-      } else if (c.role === "psychologist") {
-        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 1.5 * dt);
-      }
-    }
-    if (c.stress >= 85) {
-      STATE.health = Math.max(0, STATE.health - 1.8 * dt);
-      if (Math.random() < 0.004) {
-        addLogEntry("CREW", `MATRIX-ALARM: ${c.name} greift in Panik die organische Zellwand an! (Zellschaden)`);
-      }
-    }
-  });
-  if (STATE.telepathyActive) {
-    STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 6 * dt);
-    if (STATE.mentalEnergy === 0) {
-      toggleTelepathy();
-      addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
-    }
-  } else {
-    const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 8 * dt : 4 * dt;
-    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
-  }
-  STATE.crewDialogueTimer -= dt;
-  if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
-    STATE.crewDialogueTimer = 20 + Math.random() * 8;
-    triggerMultiCrewDialogue();
-  }
-  renderCrewUI();
-}
-function renderCrewUI() {
-  const container = document.getElementById("crew-list-container");
-  const badge = document.getElementById("crew-count-badge");
-  const capText = document.getElementById("crew-capacity-text");
-  const synTitle = document.getElementById("crew-synergy-title");
-  const synDesc = document.getElementById("crew-synergy-desc");
-  const synBanner = document.getElementById("crew-synergy-banner");
-  if (badge)
-    badge.innerText = String(STATE.crew.length);
-  if (capText)
-    capText.innerText = `${STATE.crew.length} / ${STATE.maxCrewCapacity}`;
-  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
-  const totalCrew = STATE.crew.length;
-  if (synBanner && synTitle && synDesc) {
-    if (totalCrew === 0) {
-      synBanner.className = "crew-synergy-banner";
-      synTitle.innerText = "\uD83C\uDF0C Kosmische Einsamkeit";
-      synDesc.innerText = "Keine Geister an Bord. Das Wesen sehnt sich nach Gedanken-Resonanz.";
-    } else if (totalCrew === 1) {
-      if (STATE.crewSatietyTimer > 45) {
-        synBanner.className = "crew-synergy-banner satiety-decay";
-        synTitle.innerText = "⏳ Geistige Sättigung (Eintönigkeit)";
-        synDesc.innerText = "Alle Gedanken des Individuums erforscht. Das Wesen verlangt nach neuen Perspektiven!";
-      } else {
-        synBanner.className = "crew-synergy-banner";
-        synTitle.innerText = "\uD83C\uDF31 Erste Gedanken-Resonanz";
-        synDesc.innerText = "1 Geist an Bord. Erweitere das Kollektiv für stärkere Synergien.";
-      }
-    } else if (uniqueRoles === 2) {
-      synBanner.className = "crew-synergy-banner";
-      synTitle.innerText = "✨ Duale Resonanz";
-      synDesc.innerText = "2 Rollen im Einklang. Einsamkeit stabil, passive Buffs verstärkt.";
-    } else if (uniqueRoles >= 3) {
-      synBanner.className = "crew-synergy-banner harmony";
-      synTitle.innerText = "\uD83D\uDCAB Kosmische Harmonie";
-      synDesc.innerText = "Diverses Kollektiv aktiv! Einsamkeit auf 0% & +15% Bio/Mental-Regeneration!";
-    }
-  }
-  if (!container)
-    return;
-  if (STATE.crew.length === 0) {
-    container.innerHTML = `
-            <div class="matrix-empty-card">
-                <span class="highlight">Keine Vernunftbegabten Wesen</span>
-                Die psionische Traum-Matrix ist leer. Das Schiff leidet unter existenzieller kosmischer Einsamkeit.<br><br>
-                <em>Scanne habitable Planeten nach intelligentem Leben und starte eine psionische Entführung [F]!</em>
-            </div>
-        `;
-    return;
-  }
-  let html = "";
-  STATE.crew.forEach((c) => {
-    let cardClass = "crew-member";
-    if (c.illusionStability < 35 || c.stress > 70)
-      cardClass += " panic";
-    else if (c.illusionStability < 65 || c.stress > 45)
-      cardClass += " suspicious";
-    html += `
-            <div class="${cardClass}">
-                <div class="crew-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
-                    <span class="crew-role-badge">${c.roleIcon || "\uD83D\uDC64"} ${c.roleName || c.role}</span>
-                </div>
-                <div class="crew-buff-tag">⚡ ${c.buffDesc || c.perk}</div>
-                
-                <div class="stability-container">
-                    <span class="stability-label">Traum-Stabilität:</span>
-                    <div class="stability-bar-bg">
-                        <div class="stability-bar" style="width: ${c.illusionStability}%;"></div>
-                    </div>
-                    <span style="color: #a855f7; font-size: 0.68rem; font-weight: 700;">${Math.round(c.illusionStability)}%</span>
-                </div>
-
-                <div class="stress-container" style="display: flex; align-items: center; gap: 6px;">
-                    <span class="stress-label" style="width: 90px; font-size: 0.68rem; color: #94a3b8;">Stress:</span>
-                    <div class="stress-bar-bg" style="flex: 1; height: 5px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden;">
-                        <div class="stress-bar" style="width: ${c.stress}%; height: 100%; background: ${c.stress > 70 ? "#ef4444" : "#f59e0b"};"></div>
-                    </div>
-                    <span class="stress-percentage" style="font-size: 0.68rem;">${Math.round(c.stress)}%</span>
-                </div>
-
-                <div class="thought-whisper ${c.illusionStability < 35 ? "terrified" : ""}">
-                    \uD83D\uDCAD "${c.thought}"
-                </div>
-            </div>
-        `;
-  });
-  container.innerHTML = html;
-}
-var crewDialogueBank = {
-  pilot_engineer: [
-    { lineA: 'Miller: "Petrov, diese biomolekularen Trägheitsdämpfer... das Schiff richtet die Schubvektoren aus, bevor ich überhaupt lenke."', lineB: 'Petrov: "Die Naniten im Chitin leiten unsere Gedanken direkt weiter. Das ist kein Raumschiff, das ist ein lebendes Cockpit."' },
-    { lineA: 'Miller: "Wie sieht die Hüllenintegrität aus, wenn wir durch Asteroidengürtel tauchen?"', lineB: 'Petrov: "Silizium-Naniten schließen Risse im Flug. Solange wir Mineralien aufnehmen, hält die organische Panzerung stand."' }
-  ],
-  biologist_psychologist: [
-    { lineA: 'Dr. Song: "Die Traum-Matrix synchronisiert unsere neuronalen REM-Phasen. Es absorbiert nicht unsere Körper, sondern unsere Gefühle."', lineB: 'Dr. Vance: "Ein psionischer Stoffwechsel. Solange wir Gelassenheit und Zuversicht ausstrahlen, ernährt sich die Entität von Harmonie statt Verzweiflung."' },
-    { lineA: 'Dr. Song: "Die Biolumineszenz an den Synapsen-Wänden pulsiert im Takt unseres Herzschlags."', lineB: 'Dr. Vance: "Ein biologischer Resonanzraum. Wir halten das Wesen am Leben – und es beschützt uns vor der tödlichen Kälte des Alls."' }
-  ],
-  cryptologist_pilot: [
-    { lineA: 'Novak: "Ich fange schwache Tachyonen-Echos aus dem nächsten Sternensystem auf. Psio-Sensorhorizont erweitert."', lineB: 'Miller: "Kurs ist korrigiert, Novak. Bringen wir uns in den nächsten planetaren Orbit."' }
-  ],
-  engineer_biologist: [
-    { lineA: 'Petrov: "Dr. Song, die organischen Leitungen um die Faltungsmembran regenerieren erstaunlich schnell."', lineB: 'Dr. Song: "Es ist ein symbiotisches Ökosystem. Jede Ressource, die wir assimilieren, stärkt die Zellwände des Schiffes."' }
-  ],
-  general: [
-    { lineA: 'Crew-Funk: "Die Traum-Matrix flüstert Erinnerungen an Sternensysteme, die Lichtjahre entfernt liegen..."', lineB: 'Crew-Funk: "Wir reisen durch das Herz einer Galaxie, die kein Mensch zuvor erblickt hat."' }
-  ]
-};
-function triggerMultiCrewDialogue() {
-  if (STATE.crew.length < 2)
-    return;
-  const hasTranslator = STATE.mutations.translator && STATE.mutations.translator.purchased;
-  const c1 = STATE.crew[Math.floor(Math.random() * STATE.crew.length)];
-  const others = STATE.crew.filter((c) => c !== c1);
-  const c2 = others[Math.floor(Math.random() * others.length)];
-  let pairKey = `${c1.role}_${c2.role}`;
-  let revPairKey = `${c2.role}_${c1.role}`;
-  let dialogues = crewDialogueBank[pairKey] || crewDialogueBank[revPairKey] || crewDialogueBank.general;
-  const dialog = dialogues[Math.floor(Math.random() * dialogues.length)];
-  const name1 = c1.name.split(" ")[1] || c1.name;
-  const name2 = c2.name.split(" ")[1] || c2.name;
-  if (hasTranslator) {
-    addLogEntry("CREW", dialog.lineA.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name1));
-    setTimeout(() => {
-      addLogEntry("CREW", dialog.lineB.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name2));
-    }, 3200);
-  } else {
-    addLogEntry("CREW", `[Verschlüsselter Datenstrom zwischen ${c1.name} & ${c2.name}... Dschinn-Übersetzer benötigt!]`);
-  }
-}
-
-// src/ui/deck.ts
-function initDeckUI() {
-  const leftCollapseBtn = document.getElementById("left-collapse-btn");
-  const leftDeckPanel = document.getElementById("left-deck-panel");
-  if (leftCollapseBtn && leftDeckPanel) {
-    leftCollapseBtn.addEventListener("click", () => {
-      leftDeckPanel.classList.toggle("collapsed");
-      if (leftDeckPanel.classList.contains("collapsed")) {
-        leftCollapseBtn.innerText = "›";
-        leftCollapseBtn.title = "Sensoren ausklappen";
-      } else {
-        leftCollapseBtn.innerText = "‹";
-        leftCollapseBtn.title = "Sensoren einklappen";
-      }
-    });
-  }
-  const rightCollapseBtn = document.getElementById("right-collapse-btn");
-  const rightDeckPanel = document.getElementById("right-deck-panel");
-  if (rightCollapseBtn && rightDeckPanel) {
-    rightCollapseBtn.addEventListener("click", () => {
-      rightDeckPanel.classList.toggle("collapsed");
-      if (rightDeckPanel.classList.contains("collapsed")) {
-        rightCollapseBtn.innerText = "‹";
-        rightCollapseBtn.title = "Status-Deck ausklappen";
-      } else {
-        rightCollapseBtn.innerText = "›";
-        rightCollapseBtn.title = "Status-Deck einklappen";
-      }
-    });
-  }
-  const tabButtons = document.querySelectorAll("#right-deck-tabs .tab-btn");
-  tabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetTab = btn.getAttribute("data-tab");
-      tabButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const crewContent = document.getElementById("tab-content-crew");
-      const evoContent = document.getElementById("tab-content-evolution");
-      if (targetTab === "crew") {
-        if (crewContent)
-          crewContent.classList.add("active");
-        if (evoContent)
-          evoContent.classList.remove("active");
-      } else if (targetTab === "evolution") {
-        if (crewContent)
-          crewContent.classList.remove("active");
-        if (evoContent)
-          evoContent.classList.add("active");
-      }
-    });
-  });
-  const mutButtons = document.querySelectorAll(".mut-btn");
-  mutButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const mutType = btn.getAttribute("data-mutation");
-      if (mutType) {
-        buyMutation(mutType);
-      }
-    });
-  });
-}
-function buyMutation(type) {
-  const mut = STATE.mutations[type];
-  if (!mut || mut.purchased)
-    return;
-  if (STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost) {
-    STATE.bioRes -= mut.bioCost;
-    STATE.siliconRes -= mut.siliconCost;
-    mut.purchased = true;
-    playSiliconCollectSound();
-    const btn = document.querySelector(`.mut-btn[data-mutation="${type}"]`);
-    if (btn) {
-      btn.classList.add("purchased");
-      btn.innerHTML = "Aktiviert ✓";
-    }
-    if (type === "armor") {
-      addLogEntry("EVOLUTION", "Organische Chitin-Panzerung gehärtet. Kollisionsschaden um 50% reduziert.");
-      const hull = document.getElementById("schematic-hull");
-      if (hull)
-        hull.setAttribute("stroke-width", "4");
-    } else if (type === "o2") {
-      addLogEntry("EVOLUTION", "Metabolische O2-Synthese aktiviert. Stress-Zuwachs halbiert.");
-    } else if (type === "synapses") {
-      STATE.psionicRange = 140;
-      calculateCrewBuffs();
-      addLogEntry("EVOLUTION", "Psionische Synapsen erweitert! Gedanken-Echo Reichweite auf 140 LJ vergrößert.");
-    } else if (type === "cocoon") {
-      STATE.maxCrewCapacity = 4;
-      addLogEntry("EVOLUTION", "Neuronales Kokon-Gewebe mutiert! Maximale Crew-Kapazität auf 4 erweitert.");
-      renderCrewUI();
-    } else if (type === "hivemind") {
-      STATE.maxCrewCapacity = 6;
-      calculateCrewBuffs();
-      addLogEntry("EVOLUTION", "Symbiotische Synapsen-Kammer erwacht! Kapazität auf 6 erhöht & alle Spezialisten-Buffs um +20% verstärkt!");
-      renderCrewUI();
-    } else if (type === "folddrive") {
-      STATE.warpRange = 160;
-      addLogEntry("EVOLUTION", "Raumfaltungs-Membran mutiert! Warp-Reichweite auf 160 LJ erweitert, Faltungskosten um 30% gesenkt.");
-    } else if (type === "translator") {
-      addLogEntry("EVOLUTION", "Dschinn-Übersetzer integriert! Alien-Funksignale & Crew-Dialoge werden vollautomatisch dechiffriert.");
-    }
-    updateMutationUI();
-  } else {
-    addLogEntry("SYSTEM", `Evolution fehlgeschlagen: Nicht genügend Ressourcen (${mut.bioCost} Bio | ${mut.siliconCost} Silizium benötigt)!`);
-  }
-}
-function updateMutationUI() {
-  const bioEl = document.getElementById("res-bio-count");
-  const silEl = document.getElementById("res-silicon-count");
-  if (bioEl)
-    bioEl.innerText = `${Math.floor(STATE.bioRes)}`;
-  if (silEl)
-    silEl.innerText = `${Math.floor(STATE.siliconRes)}`;
-  Object.keys(STATE.mutations).forEach((key) => {
-    const mut = STATE.mutations[key];
-    const btn = document.querySelector(`.mut-btn[data-mutation="${key}"]`);
-    if (btn) {
-      if (mut.purchased) {
-        btn.disabled = true;
-        btn.classList.add("purchased");
-        btn.innerText = "Aktiviert ✓";
-      } else {
-        const canAfford = STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost;
-        btn.disabled = !canAfford;
-      }
-    }
-  });
 }
 
 // src/systems/harvesting.ts
@@ -29305,7 +31182,7 @@ function setupControls() {
       cycleTarget(1);
     }
     if (key === "x") {
-      clearLockedTarget();
+      triggerBioDischarge();
     }
     if (key === "f") {
       if (STATE.nearestPlanet) {
@@ -29318,7 +31195,10 @@ function setupControls() {
       }
     }
     if (key === "e") {
-      triggerHarvestStart();
+      const salvaged = salvageNearestWreck();
+      if (!salvaged) {
+        triggerHarvestStart();
+      }
     }
     if (key === "w" || e.key === "ArrowUp")
       STATE.keys.w = true;
@@ -29393,15 +31273,23 @@ function setupTargetRaycasting() {
     raycaster.setFromCamera(mouseVec, camera);
     const targetMeshes = [];
     activePlanets.forEach((p) => {
-      if (p.bodyMesh)
-        targetMeshes.push(p.bodyMesh);
-      if (p.mesh && p.mesh !== p.bodyMesh)
+      if (p.mesh)
         targetMeshes.push(p.mesh);
     });
     const intersects = raycaster.intersectObjects(targetMeshes, true);
     if (intersects.length > 0) {
       const hitObject = intersects[0].object;
-      const target = activePlanets.find((p) => p.bodyMesh === hitObject || p.mesh === hitObject || p.mesh && p.mesh.children && p.mesh.children.includes(hitObject));
+      const target = activePlanets.find((p) => {
+        if (p.mesh === hitObject || p.bodyMesh === hitObject)
+          return true;
+        let cur = hitObject;
+        while (cur) {
+          if (cur === p.mesh)
+            return true;
+          cur = cur.parent;
+        }
+        return false;
+      });
       if (target) {
         setLockedTarget(target);
         return;
@@ -29591,10 +31479,14 @@ function processInput(dt) {
     prevGpButtons = gp.buttons.map((b) => b ? b.pressed || b.value > 0.5 : false);
   }
   const isThrusting = inputVec.lengthSq() > 0;
-  if (isThrusting && STATE.bioEnergy > 0) {
+  if (isThrusting) {
     inputVec.normalize();
-    STATE.playerAcceleration.addScaledVector(inputVec, STATE.thrustStrength);
-    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.45 * dt);
+    const hasEnergy = STATE.bioEnergy > 0;
+    const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
+    STATE.playerAcceleration.addScaledVector(inputVec, effectiveThrust);
+    if (hasEnergy) {
+      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.2 * dt);
+    }
     if (STATE.playerGroup) {
       const targetAngle = Math.atan2(inputVec.x, inputVec.z);
       STATE.playerGroup.rotation.y = MathUtils.lerp(STATE.playerGroup.rotation.y, targetAngle, 0.1);
@@ -29623,7 +31515,7 @@ function updatePhysics(dt) {
         p.ringMesh.position.set(px, 0, pz);
       }
       if (p.bodyMesh) {
-        p.bodyMesh.rotation.y += (p.isGasGiant ? 0.06 : 0.035) * dt;
+        p.bodyMesh.rotation.y += (p.type === "Gas Giant" ? 0.06 : 0.035) * dt;
       }
       if (p.cloudMesh) {
         p.cloudMesh.rotation.y += 0.05 * dt;
@@ -29744,15 +31636,15 @@ function updatePhysics(dt) {
   const starSource = STATE.gravitySources.find((s) => s.type === "star");
   if (starSource) {
     const sdistSq = STATE.playerPosition.x * STATE.playerPosition.x + STATE.playerPosition.z * STATE.playerPosition.z;
-    const radiationRadius = starSource.radius * 2.4;
+    const radiationRadius = 16;
     if (sdistSq < radiationRadius * radiationRadius) {
       const distance = Math.sqrt(sdistSq);
       const radRatio = 1 - distance / radiationRadius;
-      const burnDamage = (3.5 + radRatio * 7) * dt;
+      const burnDamage = (0.8 + radRatio * radRatio * 8) * dt;
       STATE.health = Math.max(0, STATE.health - burnDamage);
-      STATE.crew.forEach((c) => c.stress = Math.min(100, c.stress + (3 + radRatio * 5) * dt));
-      if (Math.random() < 0.012) {
-        addLogEntry("SYSTEM", `⚠️ THERMISCHE WARNUNG: Sonnennähe zu ${starSource.name}! Strahlungsschaden erlitten.`);
+      STATE.crew.forEach((c) => c.stress = Math.min(100, c.stress + (1.5 + radRatio * 4) * dt));
+      if (Math.random() < 0.01) {
+        addLogEntry("SYSTEM", `⚠️ THERMISCHE WARNUNG: Sonnennähe zu ${starSource.name} (R=${distance.toFixed(1)} < 16)! Strahlungsschaden erlitten.`);
       }
     }
   }
@@ -29778,22 +31670,24 @@ function updatePhysics(dt) {
   camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
   camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
   camera.position.y = 80;
+  if (STATE.health <= 0 && !STATE.isGameOver && STATE.gameStarted) {
+    triggerGameOver("Biologischer Zellkern kollabiert durch extreme Umwelteinflüsse & Hüllenschaden.");
+    return;
+  }
   updateCollisions(dt);
-  if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.05 && STATE.health < STATE.maxHealth) {
+  if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.15 && STATE.health < STATE.maxHealth) {
     STATE.health = Math.min(STATE.maxHealth, STATE.health + STATE.crewBuffs.repairRate * dt);
-    STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.04 * dt);
+    STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.25 * dt);
   }
-  if (STATE.bioEnergy < 15) {
-    const regenRate = STATE.bioEnergy <= 0 ? 1.5 : 0.8;
-    STATE.bioEnergy = Math.min(15, STATE.bioEnergy + regenRate * dt);
-  }
-  if (STATE.bioEnergy > 15) {
-    STATE.bioEnergy = Math.max(15, STATE.bioEnergy - 0.35 * dt);
+  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.65 * dt);
+  if (STATE.bioEnergy < 8) {
+    const regenRate = STATE.bioEnergy <= 0 ? 0.9 : 0.4;
+    STATE.bioEnergy = Math.min(8, STATE.bioEnergy + regenRate * dt);
   }
   if (STATE.bioEnergy <= 0) {
-    STATE.health = Math.max(0, STATE.health - 1.2 * dt);
-    if (Math.random() < 0.004) {
-      addLogEntry("SYSTEM", "Kritischer Nahrungsmangel. Organismus verhungert (-1.2 Kernintegrität).");
+    STATE.health = Math.max(0, STATE.health - 2 * dt);
+    if (Math.random() < 0.006) {
+      addLogEntry("SYSTEM", "⚠️ KRITISCHER NAHRUNGSMANGEL: Organismus verhungert (-2.0 HP/s). Assimiliere Bio-Asteroiden!");
     }
   }
   const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
@@ -29832,24 +31726,28 @@ function updateCollisions(dt) {
         respawnAsteroid(source);
       } else if (source.type === "planet" || source.type === "star") {
         _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
-        STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, colDistance + 0.6);
+        const isStar = source.type === "star";
+        const safeClearance = isStar ? 24 : colDistance + 0.6;
+        STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, safeClearance);
         if (STATE.playerGroup)
           STATE.playerGroup.position.copy(STATE.playerPosition);
         const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-        const bounceForce = Math.max(20, Math.abs(currentOutwardSpeed) * 0.8 + 14);
+        const bounceForce = isStar ? 28 : Math.max(22, Math.abs(currentOutwardSpeed) * 0.8 + 16);
         STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
         if (STATE.collisionCooldown === 0) {
           STATE.collisionCooldown = 1.2;
-          const damage = STATE.mutations.armor.purchased ? 10 : 20;
+          const damage = isStar ? STATE.mutations.armor.purchased ? 18 : 35 : STATE.mutations.armor.purchased ? 15 : 30;
           STATE.health = Math.max(0, STATE.health - damage);
           playCrashSound();
           const stressMult = STATE.crewBuffs ? STATE.crewBuffs.stressDampening : 1;
-          const stressAmount = (STATE.mutations.o2.purchased ? 7.5 : 15) * stressMult;
+          const stressAmount = (STATE.mutations.o2.purchased ? 10 : 22) * stressMult;
           STATE.crew.forEach((c) => c.stress = Math.min(100, c.stress + stressAmount));
-          if (STATE.mutations.armor.purchased) {
-            addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall & stößt Schiff elastisch ab.`);
+          if (isStar) {
+            addLogEntry("SYSTEM", `\uD83D\uDD25 SOLAR-ERUPTION: Magnetische Sonneneruption schleudert Schiff in sicheren Orbit (${safeClearance.toFixed(0)} LJ)!`);
+          } else if (STATE.mutations.armor.purchased) {
+            addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall (-15 HP).`);
           } else {
-            addLogEntry("SYSTEM", `WARNUNG: Kollision mit ${source.name}! Organischer Abstoß-Reflex schleudert Schiff in den Orbit.`);
+            addLogEntry("SYSTEM", `WARNUNG: Harter Aufprall auf ${source.name}! Zellhülle schwer beschädigt (-30 HP).`);
           }
         }
       }
@@ -29919,6 +31817,7 @@ function animate(time) {
   if (starfield) {
     starfield.rotation.y += dt * 0.005;
   }
+  updateUniverseShaders(dt);
   gravityCircles.forEach((c) => {
     const timePulse = Math.sin(Date.now() * 0.003 * c.pulseSpeed);
     c.mesh.material.opacity = c.baseOpacity + timePulse * (c.baseOpacity * 0.5);
@@ -29929,8 +31828,10 @@ function animate(time) {
     updateScanning(dt);
     updateHarvesting(dt);
     updateAbduction(dt);
+    updateFleet(dt);
     updateCrewSimulation(dt);
     updateSonarWave(dt);
+    updateExplosionEffects(dt);
     updateTrajectory();
     updateMinimap();
     if (STATE.playerGroup) {
@@ -29965,18 +31866,20 @@ function animate(time) {
       }
     }
   }
-  renderer.render(scene, camera);
+  renderPostProcessing();
   requestAnimationFrame(animate);
 }
 function init() {
   console.log("Najmafar: Initializing 3D engine and game systems...");
   const container = document.getElementById("canvas-container") || document.body;
   initScene(container);
+  initPostProcessing();
   createPlayerMesh();
   initTrajectory();
   setupControls();
   initHUD();
   initDeckUI();
+  initGameOverUI();
   renderCrewUI();
   updateMutationUI();
   checkUniverseData();

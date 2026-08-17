@@ -1,10 +1,21 @@
 import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
 import { scene } from '../engine/scene';
+import { PlanetEntry, StarSystem } from '../types/game';
 import { createGravityRing } from '../procedural/meshes';
 import { createHabitableTextures, createGasGiantTextures, createRockyTextures, createIceMoonTextures, createVolcanicMoonTextures, createStarTexture, createCloudTexture } from '../procedural/textures';
 import { generatePlanetAttributes, generateFallbackMoons, updateScannerUI } from './scanner';
+import { initPlanetDefenseFleets, clearFleet } from './fleet';
 import { addLogEntry } from '../ui/hud';
+import { createSunCoronaMesh } from '../procedural/sun-shader';
+import { createAtmosphereMesh } from '../procedural/atmosphere-shader';
+
+export const activeCoronaMeshes: THREE.Mesh[] = [];
+export const activeCoronaUpdaters: ((dt: number) => void)[] = [];
+
+export function updateUniverseShaders(dt: number) {
+    activeCoronaUpdaters.forEach(fn => fn(dt));
+}
 
 export async function checkUniverseData() {
     try {
@@ -75,6 +86,11 @@ export function clearActiveSystem() {
             scene.remove(source.ringMesh);
         }
     });
+
+    activeCoronaMeshes.forEach(m => scene.remove(m));
+    activeCoronaMeshes.length = 0;
+    activeCoronaUpdaters.length = 0;
+
     STATE.gravitySources = [];
     STATE.asteroids = [];
     activePlanets.length = 0;
@@ -89,6 +105,8 @@ export function clearActiveSystem() {
     STATE.scanProgress = 0;
     STATE.harvestProgress = 0;
     STATE.abductProgress = 0;
+
+    clearFleet();
 
     const badge = document.getElementById('target-lock-badge');
     const label = document.getElementById('target-label-text');
@@ -116,7 +134,7 @@ export function spawnPlanetsAndAsteroids() {
         const starMat = new THREE.MeshStandardMaterial({
             map: starTex.map,
             emissive: parseInt(starData.color),
-            emissiveIntensity: 0.85,
+            emissiveIntensity: 0.9,
             roughness: 0.2,
             metalness: 0.1
         });
@@ -124,31 +142,38 @@ export function spawnPlanetsAndAsteroids() {
         starMesh.position.set(0, 0, 0);
         scene.add(starMesh);
 
-        const starLight = new THREE.PointLight(parseInt(starData.color), 3, 300, 0.4);
+        // Animated Procedural Solar Corona Plasma Layer
+        const corona = createSunCoronaMesh(starData.size, parseInt(starData.color));
+        scene.add(corona.mesh);
+        activeCoronaMeshes.push(corona.mesh);
+        activeCoronaUpdaters.push(corona.update);
+
+        const starLight = new THREE.PointLight(parseInt(starData.color), 3.2, 400, 0.4);
         starLight.position.set(0, 0, 0);
         scene.add(starLight);
 
         starData.colorCss = starData.color.replace("0x", "#");
 
-        const starRange = starData.size * 3.5;
+        const starRange = 24.0;
         const starSource: any = {
             mesh: starMesh,
             type: 'star',
             name: `${activeSystem.name} (Zentralstern)`,
-            mass: starData.mass * 0.4,
+            mass: starData.mass * 0.35,
             radius: starData.size,
             gravityRange: starRange,
             position: new THREE.Vector3(0, 0, 0)
         };
         STATE.gravitySources.push(starSource);
-        starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.08);
+        starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.06);
     }
 
-    // 2. Planets & Moons
+    // 2. Planets & Moons (Astronomical 5-Zone Distance Scaling: Innermost >= 38)
     activeSystem.planets.forEach((p, idx) => {
+        const scaledDist = 38.0 + (p.distance * 1.55) + (idx * 12.0);
         const angle = (idx * 1.8) + (STATE.currentSystemId * 0.5);
-        const px = p.distance * Math.cos(angle);
-        const pz = p.distance * Math.sin(angle);
+        const px = scaledDist * Math.cos(angle);
+        const pz = scaledDist * Math.sin(angle);
 
         const seed = p.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) + idx * 77;
         const isGas = p.type === 'Gas Giant';
@@ -178,6 +203,13 @@ export function spawnPlanetsAndAsteroids() {
         const planetGroup = new THREE.Group();
         planetGroup.position.set(px, 0, pz);
         planetGroup.add(mesh);
+
+        // Rayleigh Atmospheric Scattering Halo
+        if (isHab || isGas) {
+            const atmoHex = isHab ? 0x38bdf8 : parseInt(p.color);
+            const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.5 : 1.15);
+            planetGroup.add(atmoMesh);
+        }
 
         let cloudMesh: THREE.Mesh | null = null;
         if (cloudTexture && isHab) {
@@ -225,7 +257,7 @@ export function spawnPlanetsAndAsteroids() {
 
         const ring = createGravityRing(px, pz, pRange, parseInt(p.color), 0.08);
 
-        const orbitSpeed = 0.045 / Math.sqrt(p.distance);
+        const orbitSpeed = 0.055 / Math.sqrt(scaledDist);
         const pColorCss = p.color.replace("0x", "#");
         const generated = generatePlanetAttributes(p);
 
@@ -245,7 +277,7 @@ export function spawnPlanetsAndAsteroids() {
             ringMesh: ring,
             angle: angle,
             speed: orbitSpeed,
-            distance: p.distance,
+            distance: scaledDist,
             name: p.name,
             type: p.type,
             size: p.size,
@@ -390,14 +422,19 @@ export function spawnPlanetsAndAsteroids() {
         STATE.asteroids.push(sourceObj);
         sourceObj.ringMesh = createGravityRing(ast.x, ast.z, range, color, 0.05);
     });
+
+    // 4. Initialize Spacefaring Planetary Defense Fleets (Phase B)
+    initPlanetDefenseFleets();
 }
 
 function generateFallbackAsteroids() {
     const list = [];
-    const count = 35;
+    const count = 40;
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const dist = 35 + Math.random() * 110;
+        // Split between inner temperate belt (48 - 75) and outer Kuiper belt (115 - 230)
+        const isOuter = i % 2 === 0;
+        const dist = isOuter ? (115 + Math.random() * 115) : (48 + Math.random() * 27);
         list.push({
             x: Math.cos(angle) * dist,
             z: Math.sin(angle) * dist,

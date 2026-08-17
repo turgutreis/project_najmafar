@@ -131,6 +131,54 @@ export function playSonarChime() {
     osc.stop(time + 0.95);
 }
 
+export function playExplosionSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    // 1. White noise burst with lowpass filter sweep
+    const bufferSize = Math.floor(ctx.sampleRate * 1.5);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.setValueAtTime(900, time);
+    noiseFilter.frequency.exponentialRampToValueAtTime(30, time + 1.4);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.6, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 1.4);
+
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+
+    // 2. Sub-bass rumble boom
+    const subOsc = ctx.createOscillator();
+    const subGain = ctx.createGain();
+    subOsc.type = 'sawtooth';
+    subOsc.frequency.setValueAtTime(140, time);
+    subOsc.frequency.exponentialRampToValueAtTime(25, time + 1.3);
+
+    subGain.gain.setValueAtTime(0.7, time);
+    subGain.gain.exponentialRampToValueAtTime(0.001, time + 1.5);
+
+    subOsc.connect(subGain);
+    subGain.connect(ctx.destination);
+
+    noise.start(time);
+    subOsc.start(time);
+    noise.stop(time + 1.5);
+    subOsc.stop(time + 1.5);
+}
+
 export function setThrusterSound(active: boolean) {
     const ctx = getAudioContext();
     if (!ctx) return;
