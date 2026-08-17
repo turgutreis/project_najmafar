@@ -122,34 +122,46 @@ def generate_quantum_bits(api_key=None, use_qpu=False):
     bitstrings = []
 
     # 2. Check if we want to run on IBM Quantum Platform
-    if api_key and use_qpu:
+    if use_qpu:
         print("Verbinde mit IBM Quantum Platform (Echtes QPU/Cloud-Gerät)...", flush=True)
         try:
             from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
             
-            try:
-                service = QiskitRuntimeService(channel="ibm_quantum_platform", token=api_key)
-            except Exception:
-                service = QiskitRuntimeService(channel="ibm_quantum", token=api_key)
-            # Find the least busy backend (avoiding simulators to run on QPU)
-            backend = service.least_busy(simulator=False, operational=True)
-            print(f"QPU ausgewählt: {backend.name}. Reiche Quanten-Job ein (Shots={shots})...", flush=True)
-            
-            # Since March 2024, IBM QPUs require the circuit to be transpiled to their native gate set before execution
-            from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
-            pm = generate_preset_pass_manager(optimization_level=1, backend=backend)
-            transpiled_qc = pm.run(qc)
-            
-            sampler = SamplerV2(backend)
-            job = sampler.run([(transpiled_qc)])
-            print(f"Job eingereicht. Job-ID: {job.job_id()}. Warte auf Berechnung...", flush=True)
-            
-            result = job.result()
-            pub_result = result[0]
-            # V2 sampler bitstrings extraction
-            bitstrings_raw = pub_result.data.c.get_bitstrings()
-            bitstrings = list(bitstrings_raw)
-            print("Quanten-Messergebnisse erfolgreich von IBM geladen!", flush=True)
+            service = None
+            if api_key:
+                try:
+                    service = QiskitRuntimeService(channel="ibm_quantum", token=api_key)
+                except Exception:
+                    service = QiskitRuntimeService(channel="ibm_quantum_platform", token=api_key)
+            else:
+                # Try loading saved account on disk
+                try:
+                    service = QiskitRuntimeService()
+                except Exception as e:
+                    print(f"Kein API-Token angegeben und kein gespeicherter IBM-Account gefunden: {e}", flush=True)
+
+            if service:
+                # Find the least busy operational backend
+                backend = service.least_busy(simulator=False, operational=True)
+                print(f"QPU ausgewählt: {backend.name}. Reiche Quanten-Job ein (Shots={shots})...", flush=True)
+                
+                from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+                pm = generate_preset_pass_manager(optimization_level=1, backend=backend)
+                transpiled_qc = pm.run(qc)
+                
+                sampler = SamplerV2(backend)
+                job = sampler.run([(transpiled_qc)])
+                print(f"Job erfolgreich eingereicht! Job-ID: {job.job_id()}", flush=True)
+                print(f"Status im IBM Quantum Dashboard sichtbar (Status: {job.status()}). Warte auf Berechnung...", flush=True)
+                
+                result = job.result()
+                pub_result = result[0]
+                bitstrings_raw = pub_result.data.c.get_bitstrings()
+                bitstrings = list(bitstrings_raw)
+                print("Quanten-Messergebnisse erfolgreich von IBM QPU empfangen!", flush=True)
+            else:
+                print("Weiche auf den lokalen Qiskit-Simulator aus...", flush=True)
+                bitstrings = run_local_simulator(qc, shots)
             
         except Exception as e:
             print(f"FEHLER bei IBM QPU-Verbindung: {str(e)}", flush=True)
@@ -447,12 +459,12 @@ def build_galaxy(qrng, count=300):
 
 def main():
     parser = argparse.ArgumentParser(description="Project Najmafar Universe Generator")
-    parser.add_argument("--api-key", type=str, default="", help="IBM Quantum API Key")
-    parser.add_argument("--qpu", action="store_true", help="Use real IBM QPU instead of simulator")
+    parser.add_argument("--api-key", "--token", dest="api_key", type=str, default="", help="IBM Quantum API Key / Token")
+    parser.add_argument("--qpu", "--use-qpu", dest="qpu", action="store_true", help="Use real IBM QPU instead of simulator")
     args = parser.parse_args()
 
     # Fallback to env variable if arg is empty
-    api_key = args.api_key or os.environ.get("IBM_QUANTUM_API_KEY", "")
+    api_key = args.api_key or os.environ.get("IBM_QUANTUM_API_KEY", "") or os.environ.get("QISKIT_IBM_TOKEN", "")
     use_qpu = args.qpu
     
     # 1. Fetch quantum random stream
