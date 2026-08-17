@@ -49,25 +49,24 @@ export function createStarfield() {
     const colors = new Float32Array(starCount * 3);
 
     for (let i = 0; i < starCount; i++) {
-        // Spherical distribution
-        const radius = 100 + Math.random() * 300;
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos((Math.random() * 2) - 1);
+        // Distribute stars in a wide deep background disc far below the game plane (Y = 0)
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 100 + Math.random() * 380;
 
-        positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-        positions[i * 3 + 1] = (Math.random() - 0.5) * 100; // Flat disk shape
-        positions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
+        positions[i * 3] = Math.cos(angle) * radius;
+        positions[i * 3 + 1] = -120 - Math.random() * 80; // Deep background layer below Y=0
+        positions[i * 3 + 2] = Math.sin(angle) * radius;
 
-        // Subtle sci-fi star colors (Cyan, Magenta, Gold, White)
-        const randColor = Math.random();
-        if (randColor > 0.8) {
-            colors[i * 3] = 0.85; colors[i * 3 + 1] = 0.27; colors[i * 3 + 2] = 0.94; // Magenta
-        } else if (randColor > 0.5) {
-            colors[i * 3] = 0.22; colors[i * 3 + 1] = 0.74; colors[i * 3 + 2] = 0.97; // Cyan
-        } else if (randColor > 0.3) {
-            colors[i * 3] = 0.98; colors[i * 3 + 1] = 0.80; colors[i * 3 + 2] = 0.08; // Gold
+        // Custom organic colors (purple, cyan, gold, white)
+        const rand = Math.random();
+        if (rand < 0.25) {
+            colors[i * 3] = 0.65; colors[i * 3 + 1] = 0.25; colors[i * 3 + 2] = 0.95; // purple
+        } else if (rand < 0.55) {
+            colors[i * 3] = 0.25; colors[i * 3 + 1] = 0.82; colors[i * 3 + 2] = 0.98; // cyan
+        } else if (rand < 0.75) {
+            colors[i * 3] = 0.98; colors[i * 3 + 1] = 0.80; colors[i * 3 + 2] = 0.15; // gold
         } else {
-            colors[i * 3] = 0.9; colors[i * 3 + 1] = 0.95; colors[i * 3 + 2] = 1.0; // White-Blue
+            colors[i * 3] = 0.95; colors[i * 3 + 1] = 0.95; colors[i * 3 + 2] = 1.0; // white
         }
     }
 
@@ -75,10 +74,11 @@ export function createStarfield() {
     geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const material = new THREE.PointsMaterial({
-        size: 0.85,
+        size: 0.75,
         vertexColors: true,
         transparent: true,
-        opacity: 0.85
+        opacity: 0.85,
+        depthWrite: false
     });
 
     starfield = new THREE.Points(geometry, material);

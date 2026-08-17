@@ -26359,27 +26359,26 @@ function createStarfield() {
   const positions = new Float32Array(starCount * 3);
   const colors = new Float32Array(starCount * 3);
   for (let i = 0;i < starCount; i++) {
-    const radius = 100 + Math.random() * 300;
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(Math.random() * 2 - 1);
-    positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-    positions[i * 3 + 1] = (Math.random() - 0.5) * 100;
-    positions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
-    const randColor = Math.random();
-    if (randColor > 0.8) {
-      colors[i * 3] = 0.85;
-      colors[i * 3 + 1] = 0.27;
-      colors[i * 3 + 2] = 0.94;
-    } else if (randColor > 0.5) {
-      colors[i * 3] = 0.22;
-      colors[i * 3 + 1] = 0.74;
-      colors[i * 3 + 2] = 0.97;
-    } else if (randColor > 0.3) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 100 + Math.random() * 380;
+    positions[i * 3] = Math.cos(angle) * radius;
+    positions[i * 3 + 1] = -120 - Math.random() * 80;
+    positions[i * 3 + 2] = Math.sin(angle) * radius;
+    const rand = Math.random();
+    if (rand < 0.25) {
+      colors[i * 3] = 0.65;
+      colors[i * 3 + 1] = 0.25;
+      colors[i * 3 + 2] = 0.95;
+    } else if (rand < 0.55) {
+      colors[i * 3] = 0.25;
+      colors[i * 3 + 1] = 0.82;
+      colors[i * 3 + 2] = 0.98;
+    } else if (rand < 0.75) {
       colors[i * 3] = 0.98;
       colors[i * 3 + 1] = 0.8;
-      colors[i * 3 + 2] = 0.08;
+      colors[i * 3 + 2] = 0.15;
     } else {
-      colors[i * 3] = 0.9;
+      colors[i * 3] = 0.95;
       colors[i * 3 + 1] = 0.95;
       colors[i * 3 + 2] = 1;
     }
@@ -26387,10 +26386,11 @@ function createStarfield() {
   geometry.setAttribute("position", new BufferAttribute(positions, 3));
   geometry.setAttribute("color", new BufferAttribute(colors, 3));
   const material = new PointsMaterial({
-    size: 0.85,
+    size: 0.75,
     vertexColors: true,
     transparent: true,
-    opacity: 0.85
+    opacity: 0.85,
+    depthWrite: false
   });
   starfield = new Points(geometry, material);
   scene.add(starfield);
@@ -27151,168 +27151,394 @@ function updateSonarWave(dt) {
 }
 
 // src/procedural/textures.ts
-function createPlanetTextures(baseColorHex, seed) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d");
-  const baseColor = new Color(parseInt(baseColorHex));
-  ctx.fillStyle = `#${baseColor.getHexString()}`;
-  ctx.fillRect(0, 0, 512, 256);
-  const continentCount = 6 + seed % 6;
-  for (let c = 0;c < continentCount; c++) {
-    const cx = seed * (c + 1) * 73 % 512;
-    const cy = 40 + seed * (c + 1) * 37 % 176;
-    const rad = 25 + seed * (c + 1) * 19 % 55;
-    const continentGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-    const landColor = baseColor.clone().offsetHSL(0.08, -0.2, -0.15);
-    continentGrad.addColorStop(0, `#${landColor.getHexString()}`);
-    continentGrad.addColorStop(0.7, `#${landColor.offsetHSL(0, 0, -0.1).getHexString()}`);
-    continentGrad.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = continentGrad;
-    ctx.beginPath();
-    ctx.arc(cx, cy, rad, 0, Math.PI * 2);
-    ctx.fill();
-    if (cx - rad < 0) {
-      ctx.beginPath();
-      ctx.arc(cx + 512, cy, rad, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (cx + rad > 512) {
-      ctx.beginPath();
-      ctx.arc(cx - 512, cy, rad, 0, Math.PI * 2);
-      ctx.fill();
+function pseudoNoise(x, y, seed = 1) {
+  const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 43.123) * 43758.5453;
+  return n - Math.floor(n);
+}
+function smoothNoise(x, y, seed = 1) {
+  const i = Math.floor(x);
+  const j = Math.floor(y);
+  const fx = x - i;
+  const fy = y - j;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const n00 = pseudoNoise(i, j, seed);
+  const n10 = pseudoNoise(i + 1, j, seed);
+  const n01 = pseudoNoise(i, j + 1, seed);
+  const n11 = pseudoNoise(i + 1, j + 1, seed);
+  const nx0 = n00 + sx * (n10 - n00);
+  const nx1 = n01 + sx * (n11 - n01);
+  return nx0 + sy * (nx1 - nx0);
+}
+function fbm(x, y, octaves, seed = 1) {
+  let val = 0;
+  let amp = 0.5;
+  let freq = 1;
+  for (let o = 0;o < octaves; o++) {
+    val += smoothNoise(x * freq, y * freq, seed + o * 13.37) * amp;
+    freq *= 2;
+    amp *= 0.5;
+  }
+  return val;
+}
+function hexToRgb(hex) {
+  let num = typeof hex === "string" ? parseInt(hex.replace("0x", ""), 16) : hex;
+  return {
+    r: num >> 16 & 255,
+    g: num >> 8 & 255,
+    b: num & 255
+  };
+}
+function createHabitableTextures(colorHex, seed = 42) {
+  const w = 256, h = 128;
+  const colCanvas = document.createElement("canvas");
+  colCanvas.width = w;
+  colCanvas.height = h;
+  const colCtx = colCanvas.getContext("2d");
+  const colImg = colCtx.createImageData(w, h);
+  const colData = colImg.data;
+  const bumpCanvas = document.createElement("canvas");
+  bumpCanvas.width = w;
+  bumpCanvas.height = h;
+  const bumpCtx = bumpCanvas.getContext("2d");
+  const bumpImg = bumpCtx.createImageData(w, h);
+  const bumpData = bumpImg.data;
+  const rgb = hexToRgb(colorHex);
+  for (let y = 0;y < h; y++) {
+    const lat = Math.abs(y - h / 2) / (h / 2);
+    for (let x = 0;x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const nx = x / w * 5;
+      const ny = y / h * 3;
+      const n = fbm(nx, ny, 4, seed);
+      let r, g, b, bumpVal;
+      if (lat > 0.82 + n * 0.12) {
+        r = 230 + Math.floor(n * 25);
+        g = 245 + Math.floor(n * 10);
+        b = 255;
+        bumpVal = 40;
+      } else if (n < 0.47) {
+        const oceanDepth = n / 0.47;
+        if (oceanDepth < 0.8) {
+          r = 8;
+          g = 50 + Math.floor(oceanDepth * 40);
+          b = 140 + Math.floor(oceanDepth * 80);
+        } else {
+          r = 10;
+          g = 160 + Math.floor((oceanDepth - 0.8) * 300);
+          b = 210;
+        }
+        bumpVal = 0;
+      } else if (n < 0.51) {
+        r = 210;
+        g = 180;
+        b = 110;
+        bumpVal = 15;
+      } else if (n < 0.72) {
+        const vegT = (n - 0.51) / 0.21;
+        r = Math.floor(rgb.r * 0.3 + (1 - vegT) * 20);
+        g = Math.floor(rgb.g * 0.9 + vegT * 40);
+        b = Math.floor(rgb.b * 0.4 + vegT * 20);
+        bumpVal = 60 + Math.floor(vegT * 60);
+      } else {
+        const mountainT = (n - 0.72) / 0.28;
+        r = 140 + Math.floor(mountainT * 100);
+        g = 145 + Math.floor(mountainT * 95);
+        b = 160 + Math.floor(mountainT * 95);
+        bumpVal = 140 + Math.floor(mountainT * 115);
+      }
+      colData[idx] = Math.min(255, r);
+      colData[idx + 1] = Math.min(255, g);
+      colData[idx + 2] = Math.min(255, b);
+      colData[idx + 3] = 255;
+      bumpData[idx] = bumpVal;
+      bumpData[idx + 1] = bumpVal;
+      bumpData[idx + 2] = bumpVal;
+      bumpData[idx + 3] = 255;
     }
   }
-  const cloudCanvas = document.createElement("canvas");
-  cloudCanvas.width = 512;
-  cloudCanvas.height = 256;
-  const cloudCtx = cloudCanvas.getContext("2d");
-  for (let b = 0;b < 10; b++) {
-    const y = 30 + b * 20 + Math.sin(b * 1.5) * 8;
-    cloudCtx.fillStyle = "rgba(255, 255, 255, 0.25)";
-    cloudCtx.beginPath();
-    cloudCtx.ellipse(256, y, 260, 6 + b % 4, seed % 10 * 0.02, 0, Math.PI * 2);
-    cloudCtx.fill();
+  colCtx.putImageData(colImg, 0, 0);
+  bumpCtx.putImageData(bumpImg, 0, 0);
+  const map = new CanvasTexture(colCanvas);
+  const bumpMap = new CanvasTexture(bumpCanvas);
+  return { map, bumpMap };
+}
+function createGasGiantTextures(colorHex, seed = 77) {
+  const w = 256, h = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  const data = img.data;
+  const base = hexToRgb(colorHex);
+  const stormX = Math.abs(seed) % 100 / 100 * w * 0.6 + w * 0.2;
+  const stormY = h * 0.58;
+  for (let y = 0;y < h; y++) {
+    for (let x = 0;x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const nx = x / w * 6;
+      const ny = y / h * 8;
+      const turb = fbm(nx, ny * 0.5, 3, seed);
+      const band = Math.sin(y * 0.35 + turb * 4);
+      const sDist = Math.hypot((x - stormX) / 1.8, y - stormY);
+      let r, g, b;
+      if (sDist < 12) {
+        const swirl = Math.sin(sDist * 0.6 + Math.atan2(y - stormY, x - stormX) * 3);
+        r = Math.min(255, base.r * 1.6 + swirl * 40);
+        g = Math.min(255, base.g * 0.8 + swirl * 20);
+        b = Math.min(255, base.b * 1.5 + swirl * 30);
+      } else {
+        const bandWeight = (band + 1) * 0.5;
+        r = Math.floor(base.r * (0.4 + bandWeight * 0.7) + turb * 35);
+        g = Math.floor(base.g * (0.4 + bandWeight * 0.7) + turb * 35);
+        b = Math.floor(base.b * (0.4 + bandWeight * 0.7) + turb * 35);
+      }
+      data[idx] = Math.min(255, Math.max(0, r));
+      data[idx + 1] = Math.min(255, Math.max(0, g));
+      data[idx + 2] = Math.min(255, Math.max(0, b));
+      data[idx + 3] = 255;
+    }
   }
+  ctx.putImageData(img, 0, 0);
   const map = new CanvasTexture(canvas);
-  const cloudMap = new CanvasTexture(cloudCanvas);
-  return { map, cloudMap };
+  return { map, bumpMap: null };
 }
-function createGasGiantTextures(baseColorHex, seed) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d");
-  const baseColor = new Color(parseInt(baseColorHex));
-  const bandCount = 20;
-  const bandHeight = 256 / bandCount;
-  for (let i = 0;i < bandCount; i++) {
-    const bandColor = baseColor.clone().offsetHSL(Math.sin(i * 0.5 + seed) * 0.1, Math.cos(i * 0.8) * 0.2, Math.sin(i * 1.2) * 0.25);
-    ctx.fillStyle = `#${bandColor.getHexString()}`;
-    ctx.fillRect(0, i * bandHeight, 512, bandHeight + 1);
-    if (i % 3 === 0) {
-      ctx.fillStyle = "rgba(255, 255, 255, 0.08)";
-      ctx.fillRect(0, i * bandHeight, 512, bandHeight * 0.4);
+function createRockyTextures(colorHex, seed = 99) {
+  const w = 256, h = 128;
+  const colCanvas = document.createElement("canvas");
+  colCanvas.width = w;
+  colCanvas.height = h;
+  const colCtx = colCanvas.getContext("2d");
+  const colImg = colCtx.createImageData(w, h);
+  const colData = colImg.data;
+  const bumpCanvas = document.createElement("canvas");
+  bumpCanvas.width = w;
+  bumpCanvas.height = h;
+  const bumpCtx = bumpCanvas.getContext("2d");
+  const bumpImg = bumpCtx.createImageData(w, h);
+  const bumpData = bumpImg.data;
+  const base = hexToRgb(colorHex);
+  const craters = [];
+  for (let c = 0;c < 12; c++) {
+    craters.push({
+      x: Math.abs(seed) * (c + 1) * 37 % w,
+      y: Math.abs(seed) * (c + 1) * 61 % h,
+      radius: 4 + c % 5 * 3
+    });
+  }
+  for (let y = 0;y < h; y++) {
+    for (let x = 0;x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const n = fbm(x / w * 6, y / h * 4, 4, seed);
+      let bumpVal = Math.floor(n * 160);
+      let r = Math.floor(base.r * (0.6 + n * 0.5));
+      let g = Math.floor(base.g * (0.6 + n * 0.5));
+      let b = Math.floor(base.b * (0.6 + n * 0.5));
+      for (let c = 0;c < craters.length; c++) {
+        const cr = craters[c];
+        const d = Math.hypot(x - cr.x, y - cr.y);
+        if (d < cr.radius) {
+          const ratio = d / cr.radius;
+          if (ratio < 0.7) {
+            r = Math.floor(r * 0.6);
+            g = Math.floor(g * 0.6);
+            b = Math.floor(b * 0.6);
+            bumpVal = Math.max(0, bumpVal - 60);
+          } else {
+            r = Math.min(255, r + 40);
+            g = Math.min(255, g + 40);
+            b = Math.min(255, b + 40);
+            bumpVal = Math.min(255, bumpVal + 70);
+          }
+        }
+      }
+      colData[idx] = Math.min(255, r);
+      colData[idx + 1] = Math.min(255, g);
+      colData[idx + 2] = Math.min(255, b);
+      colData[idx + 3] = 255;
+      bumpData[idx] = bumpVal;
+      bumpData[idx + 1] = bumpVal;
+      bumpData[idx + 2] = bumpVal;
+      bumpData[idx + 3] = 255;
     }
   }
-  const stormX = seed * 83 % 400 + 50;
-  const stormY = 80 + seed * 47 % 100;
-  const stormGrad = ctx.createRadialGradient(stormX, stormY, 0, stormX, stormY, 28);
-  stormGrad.addColorStop(0, "#ffffff");
-  stormGrad.addColorStop(0.5, `#${baseColor.clone().offsetHSL(0.2, 0.4, 0.2).getHexString()}`);
-  stormGrad.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = stormGrad;
-  ctx.beginPath();
-  ctx.ellipse(stormX, stormY, 28, 14, 0.1, 0, Math.PI * 2);
-  ctx.fill();
+  colCtx.putImageData(colImg, 0, 0);
+  bumpCtx.putImageData(bumpImg, 0, 0);
+  return {
+    map: new CanvasTexture(colCanvas),
+    bumpMap: new CanvasTexture(bumpCanvas)
+  };
+}
+function createIceMoonTextures(colorHex, seed = 123) {
+  const w = 256, h = 128;
+  const colCanvas = document.createElement("canvas");
+  colCanvas.width = w;
+  colCanvas.height = h;
+  const colCtx = colCanvas.getContext("2d");
+  const colImg = colCtx.createImageData(w, h);
+  const colData = colImg.data;
+  const bumpCanvas = document.createElement("canvas");
+  bumpCanvas.width = w;
+  bumpCanvas.height = h;
+  const bumpCtx = bumpCanvas.getContext("2d");
+  const bumpImg = bumpCtx.createImageData(w, h);
+  const bumpData = bumpImg.data;
+  for (let y = 0;y < h; y++) {
+    for (let x = 0;x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const n = fbm(x / w * 8, y / h * 6, 3, seed);
+      const crack1 = Math.abs(Math.sin(x * 0.15 + n * 3 + y * 0.08));
+      const crack2 = Math.abs(Math.sin(y * 0.2 - x * 0.1 + n * 2.5));
+      const isCrack = crack1 < 0.1 || crack2 < 0.08;
+      let r, g, b, bumpVal;
+      if (isCrack) {
+        r = 180 + Math.floor(n * 30);
+        g = 100 + Math.floor(n * 20);
+        b = 80;
+        bumpVal = 180;
+      } else {
+        r = 210 + Math.floor(n * 40);
+        g = 235 + Math.floor(n * 20);
+        b = 255;
+        bumpVal = 60 + Math.floor(n * 50);
+      }
+      colData[idx] = Math.min(255, r);
+      colData[idx + 1] = Math.min(255, g);
+      colData[idx + 2] = Math.min(255, b);
+      colData[idx + 3] = 255;
+      bumpData[idx] = bumpVal;
+      bumpData[idx + 1] = bumpVal;
+      bumpData[idx + 2] = bumpVal;
+      bumpData[idx + 3] = 255;
+    }
+  }
+  colCtx.putImageData(colImg, 0, 0);
+  bumpCtx.putImageData(bumpImg, 0, 0);
+  return {
+    map: new CanvasTexture(colCanvas),
+    bumpMap: new CanvasTexture(bumpCanvas)
+  };
+}
+function createVolcanicMoonTextures(colorHex, seed = 321) {
+  const w = 256, h = 128;
+  const colCanvas = document.createElement("canvas");
+  colCanvas.width = w;
+  colCanvas.height = h;
+  const colCtx = colCanvas.getContext("2d");
+  const colImg = colCtx.createImageData(w, h);
+  const colData = colImg.data;
+  const bumpCanvas = document.createElement("canvas");
+  bumpCanvas.width = w;
+  bumpCanvas.height = h;
+  const bumpCtx = bumpCanvas.getContext("2d");
+  const bumpImg = bumpCtx.createImageData(w, h);
+  const bumpData = bumpImg.data;
+  const emCanvas = document.createElement("canvas");
+  emCanvas.width = w;
+  emCanvas.height = h;
+  const emCtx = emCanvas.getContext("2d");
+  const emImg = emCtx.createImageData(w, h);
+  const emData = emImg.data;
+  for (let y = 0;y < h; y++) {
+    for (let x = 0;x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const n = fbm(x / w * 6, y / h * 4, 4, seed);
+      const magma = Math.abs(Math.sin(x * 0.12 + y * 0.15 + n * 4));
+      const isMagma = magma < 0.12;
+      let r, g, b, emR, emG, emB, bumpVal;
+      if (isMagma) {
+        r = 255;
+        g = 110;
+        b = 10;
+        emR = 255;
+        emG = 90;
+        emB = 0;
+        bumpVal = 20;
+      } else if (n > 0.6) {
+        r = 230;
+        g = 190;
+        b = 25;
+        emR = 0;
+        emG = 0;
+        emB = 0;
+        bumpVal = 130;
+      } else {
+        r = 60 + Math.floor(n * 40);
+        g = 40 + Math.floor(n * 30);
+        b = 30 + Math.floor(n * 20);
+        emR = 0;
+        emG = 0;
+        emB = 0;
+        bumpVal = 80;
+      }
+      colData[idx] = r;
+      colData[idx + 1] = g;
+      colData[idx + 2] = b;
+      colData[idx + 3] = 255;
+      emData[idx] = emR;
+      emData[idx + 1] = emG;
+      emData[idx + 2] = emB;
+      emData[idx + 3] = 255;
+      bumpData[idx] = bumpVal;
+      bumpData[idx + 1] = bumpVal;
+      bumpData[idx + 2] = bumpVal;
+      bumpData[idx + 3] = 255;
+    }
+  }
+  colCtx.putImageData(colImg, 0, 0);
+  bumpCtx.putImageData(bumpImg, 0, 0);
+  emCtx.putImageData(emImg, 0, 0);
+  return {
+    map: new CanvasTexture(colCanvas),
+    bumpMap: new CanvasTexture(bumpCanvas),
+    emissiveMap: new CanvasTexture(emCanvas)
+  };
+}
+function createStarTexture(colorHex, seed = 555) {
+  const w = 256, h = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  const data = img.data;
+  const base = hexToRgb(colorHex);
+  for (let y = 0;y < h; y++) {
+    for (let x = 0;x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const n = fbm(x / w * 10, y / h * 6, 3, seed);
+      const flare = (n - 0.5) * 60;
+      data[idx] = Math.min(255, Math.max(0, base.r + flare + 40));
+      data[idx + 1] = Math.min(255, Math.max(0, base.g + flare + 20));
+      data[idx + 2] = Math.min(255, Math.max(0, base.b + flare));
+      data[idx + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
   return { map: new CanvasTexture(canvas) };
 }
-function createIceMoonTextures(baseColorHex, seed) {
+function createCloudTexture(seed = 888) {
+  const w = 256, h = 128;
   const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 128;
+  canvas.width = w;
+  canvas.height = h;
   const ctx = canvas.getContext("2d");
-  const baseColor = new Color(parseInt(baseColorHex));
-  ctx.fillStyle = `#${baseColor.getHexString()}`;
-  ctx.fillRect(0, 0, 256, 128);
-  ctx.strokeStyle = "rgba(224, 242, 254, 0.6)";
-  ctx.lineWidth = 1.2;
-  for (let c = 0;c < 8; c++) {
-    ctx.beginPath();
-    const startX = seed * (c + 1) * 31 % 256;
-    const startY = seed * (c + 1) * 17 % 128;
-    ctx.moveTo(startX, startY);
-    ctx.lineTo(startX + 40 + Math.sin(c) * 20, startY + 30 + Math.cos(c) * 20);
-    ctx.stroke();
+  const img = ctx.createImageData(w, h);
+  const data = img.data;
+  for (let y = 0;y < h; y++) {
+    for (let x = 0;x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const n = fbm(x / w * 8, y / h * 4, 3, seed);
+      const alpha = Math.max(0, (n - 0.52) * 2.2);
+      data[idx] = 255;
+      data[idx + 1] = 255;
+      data[idx + 2] = 255;
+      data[idx + 3] = Math.min(255, Math.floor(alpha * 255));
+    }
   }
-  return { map: new CanvasTexture(canvas) };
-}
-function createVolcanicMoonTextures(baseColorHex, seed) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 128;
-  const ctx = canvas.getContext("2d");
-  const baseColor = new Color(parseInt(baseColorHex));
-  ctx.fillStyle = `#${baseColor.getHexString()}`;
-  ctx.fillRect(0, 0, 256, 128);
-  for (let v = 0;v < 6; v++) {
-    const vx = seed * (v + 1) * 43 % 256;
-    const vy = seed * (v + 1) * 29 % 128;
-    const grad = ctx.createRadialGradient(vx, vy, 0, vx, vy, 12);
-    grad.addColorStop(0, "#fef08a");
-    grad.addColorStop(0.4, "#ef4444");
-    grad.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(vx, vy, 12, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  return { map: new CanvasTexture(canvas) };
-}
-function createCraterMoonTextures(baseColorHex, seed) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 128;
-  const ctx = canvas.getContext("2d");
-  const baseColor = new Color(parseInt(baseColorHex));
-  ctx.fillStyle = `#${baseColor.getHexString()}`;
-  ctx.fillRect(0, 0, 256, 128);
-  for (let cr = 0;cr < 14; cr++) {
-    const cx = seed * (cr + 1) * 37 % 256;
-    const cy = seed * (cr + 1) * 23 % 128;
-    const crad = 3 + cr % 6;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(cx, cy, crad, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = "rgba(15, 23, 42, 0.4)";
-    ctx.fill();
-  }
-  return { map: new CanvasTexture(canvas) };
-}
-function createStarTexture(colorHex, seed) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d");
-  const baseColor = new Color(parseInt(colorHex));
-  ctx.fillStyle = `#${baseColor.getHexString()}`;
-  ctx.fillRect(0, 0, 512, 256);
-  for (let f = 0;f < 18; f++) {
-    const fx = seed * (f + 1) * 41 % 512;
-    const fy = seed * (f + 1) * 29 % 256;
-    const rad = 20 + seed * (f + 1) % 40;
-    const flareGrad = ctx.createRadialGradient(fx, fy, 0, fx, fy, rad);
-    flareGrad.addColorStop(0, "#ffffff");
-    flareGrad.addColorStop(0.3, `#${baseColor.clone().offsetHSL(0.05, 0.2, 0.2).getHexString()}`);
-    flareGrad.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = flareGrad;
-    ctx.beginPath();
-    ctx.arc(fx, fy, rad, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  return { map: new CanvasTexture(canvas) };
+  ctx.putImageData(img, 0, 0);
+  return new CanvasTexture(canvas);
 }
 
 // src/systems/scanner.ts
@@ -27598,52 +27824,49 @@ async function checkUniverseData() {
       }
     }
     if (!data) {
-      try {
-        const res = await fetch("./universe_data.json");
-        if (res.ok) {
-          data = await res.json();
-        } else {
-          const resAlt = await fetch("universe_data.json");
-          if (resAlt.ok) {
-            data = await resAlt.json();
-          }
-        }
-      } catch (fetchErr) {
-        console.warn("Najmafar: Fetch universe load failed", fetchErr);
+      const resp = await fetch("universe_data.json");
+      if (resp.ok) {
+        data = await resp.json();
       }
     }
     if (data && data.systems && data.systems.length > 0) {
       STATE.universe = data;
       const sysCount = data.systems.length;
-      const univName = data.name || "Najmafar Quanten-Galaxie";
-      console.log("Najmafar: Quantum Universe Data loaded successfully!", univName, sysCount);
-      const statusDiv = document.getElementById("generation-status");
-      if (statusDiv) {
-        statusDiv.innerText = `\uD83C\uDF0C Quanten-Universum aktiv: ${sysCount} Systeme geladen.`;
-        statusDiv.style.color = "#10b981";
-      }
       const startBtn = document.getElementById("start-game-btn");
       if (startBtn) {
-        startBtn.disabled = false;
+        startBtn.removeAttribute("disabled");
+        startBtn.style.opacity = "1";
         startBtn.innerText = "Najmafar betreten";
+      }
+      const status = document.getElementById("generation-status");
+      if (status) {
+        status.innerText = `Galaxie aktiv (${sysCount} Sternensysteme).`;
+        status.style.color = "#10b981";
       }
       clearActiveSystem();
       spawnPlanetsAndAsteroids();
     } else {
-      console.warn("Najmafar: No systems found in universe_data.json");
-      const startBtn = document.getElementById("start-game-btn");
-      if (startBtn) {
-        startBtn.disabled = true;
-        startBtn.innerText = "Zuerst Galaxie generieren";
-      }
+      console.warn("Najmafar: universe_data.json contains no systems");
     }
   } catch (e) {
-    console.warn("Najmafar: Failed to load universe_data.json, fallback generation active.", e);
+    console.error("Najmafar: Error loading universe data:", e);
   }
 }
 function clearActiveSystem() {
+  activePlanets.forEach((p) => {
+    if (p.mesh)
+      scene.remove(p.mesh);
+    if (p.ringMesh)
+      scene.remove(p.ringMesh);
+  });
+  STATE.asteroids.forEach((a) => {
+    if (a.mesh)
+      scene.remove(a.mesh);
+    if (a.ringMesh)
+      scene.remove(a.ringMesh);
+  });
   STATE.gravitySources.forEach((source) => {
-    if (source.mesh) {
+    if (source.mesh && source.mesh !== STATE.playerGroup) {
       scene.remove(source.mesh);
     }
     if (source.ringMesh) {
@@ -27656,37 +27879,6 @@ function clearActiveSystem() {
 }
 function spawnPlanetsAndAsteroids() {
   if (!STATE.universe || !STATE.universe.systems) {
-    const count = 4;
-    const colors = [3718648, 11032055, 1096065, 16096779];
-    for (let i = 0;i < count; i++) {
-      const dist = 50 + i * 35;
-      const angle = i * Math.PI / 2 + 0.5;
-      const x = Math.cos(angle) * dist;
-      const z = Math.sin(angle) * dist;
-      const size = 3 + i * 0.8;
-      const color = colors[i % colors.length];
-      const geo = new SphereGeometry(size, 32, 32);
-      const mat = new MeshStandardMaterial({
-        color,
-        roughness: 0.7,
-        metalness: 0.1
-      });
-      const mesh = new Mesh(geo, mat);
-      mesh.position.set(x, 0, z);
-      scene.add(mesh);
-      const range = size * 4.5;
-      const sourceObj = {
-        mesh,
-        type: "planet",
-        name: `Prozeduraler Planet ${i + 1}`,
-        mass: size * size * 4,
-        radius: size,
-        gravityRange: range,
-        position: new Vector3(x, 0, z)
-      };
-      STATE.gravitySources.push(sourceObj);
-      sourceObj.ringMesh = createGravityRing(x, z, range, color, 0.08);
-    }
     return;
   }
   const activeSystem = STATE.universe.systems[STATE.currentSystemId];
@@ -27732,29 +27924,34 @@ function spawnPlanetsAndAsteroids() {
     const isGas = p.type === "Gas Giant";
     const isHab = p.type === "Habitable";
     let texData;
-    if (isGas) {
+    let cloudTexture = null;
+    if (isHab) {
+      texData = createHabitableTextures(p.color, seed);
+      cloudTexture = createCloudTexture(seed + 999);
+    } else if (isGas) {
       texData = createGasGiantTextures(p.color, seed);
     } else {
-      texData = createPlanetTextures(p.color, seed);
+      texData = createRockyTextures(p.color, seed);
     }
     const geo = new SphereGeometry(p.size, 32, 32);
     const mat = new MeshStandardMaterial({
       map: texData.map,
-      roughness: isGas ? 0.3 : 0.8,
-      metalness: isGas ? 0.1 : 0.2,
-      bumpScale: 0.05
+      bumpMap: texData.bumpMap || null,
+      bumpScale: isGas ? 0 : 0.08,
+      roughness: isGas ? 0.35 : 0.75,
+      metalness: isGas ? 0.1 : 0.15
     });
     const mesh = new Mesh(geo, mat);
     const planetGroup = new Group;
     planetGroup.position.set(px, 0, pz);
     planetGroup.add(mesh);
     let cloudMesh = null;
-    if (texData.cloudMap && !isGas) {
+    if (cloudTexture && isHab) {
       const cloudGeo = new SphereGeometry(p.size * 1.025, 32, 32);
       const cloudMat = new MeshStandardMaterial({
-        map: texData.cloudMap,
+        map: cloudTexture,
         transparent: true,
-        opacity: 0.45,
+        opacity: 0.5,
         blending: AdditiveBlending
       });
       cloudMesh = new Mesh(cloudGeo, cloudMat);
@@ -27835,12 +28032,17 @@ function spawnPlanetsAndAsteroids() {
       } else if (m.type === "Vulkanmond") {
         mTex = createVolcanicMoonTextures(m.color, mSeed);
       } else {
-        mTex = createCraterMoonTextures(m.color, mSeed);
+        mTex = createRockyTextures(m.color, mSeed);
       }
-      const mGeo = new SphereGeometry(m.size, 16, 16);
+      const mGeo = new SphereGeometry(m.size, 24, 24);
       const mMat = new MeshStandardMaterial({
         map: mTex.map,
-        roughness: 0.9,
+        bumpMap: mTex.bumpMap || null,
+        bumpScale: 0.05,
+        emissiveMap: mTex.emissiveMap || null,
+        emissive: m.type === "Vulkanmond" ? new Color(16729344) : new Color(0),
+        emissiveIntensity: m.type === "Vulkanmond" ? 0.6 : 0,
+        roughness: 0.85,
         metalness: 0.1
       });
       const mMesh = new Mesh(mGeo, mMat);
@@ -27889,21 +28091,24 @@ function spawnPlanetsAndAsteroids() {
       activePlanets.push(moonEntry);
     });
   });
-  const asteroidCount = 18;
-  for (let i = 0;i < asteroidCount; i++) {
+  spawnAsteroidBelt();
+}
+function spawnAsteroidBelt() {
+  const beltCount = 35;
+  for (let i = 0;i < beltCount; i++) {
+    const isBio = Math.random() > 0.45;
     const angle = Math.random() * Math.PI * 2;
-    const dist = 30 + Math.random() * 120;
+    const dist = 35 + Math.random() * 110;
     const x = Math.cos(angle) * dist;
     const z = Math.sin(angle) * dist;
-    const size = 0.8 + Math.random() * 1.2;
-    const isOrganicResource = i % 2 === 0;
-    const color = isOrganicResource ? 65416 : 3718648;
+    const size = 0.8 + Math.random() * 1.4;
+    const color = isBio ? 1096065 : 3718648;
     const geo = new DodecahedronGeometry(size, 1);
     const mat = new MeshStandardMaterial({
       color,
-      roughness: 0.9,
-      metalness: 0.8,
-      emissive: isOrganicResource ? 13073 : 8755
+      roughness: 0.8,
+      metalness: 0.2,
+      wireframe: false
     });
     const mesh = new Mesh(geo, mat);
     mesh.position.set(x, 0, z);
@@ -27912,15 +28117,14 @@ function spawnPlanetsAndAsteroids() {
     const sourceObj = {
       mesh,
       type: "asteroid",
-      name: isOrganicResource ? "Organische Biosphäre" : "Silizium-Komet",
+      name: isBio ? `Organischer Asteroid` : `Silizium-Komet`,
+      resourceType: isBio ? "bio" : "silicon",
+      isResource: true,
+      isAbsorbed: false,
       mass: size * 4,
       radius: size,
       gravityRange: range,
-      position: new Vector3(x, 0, z),
-      isResource: true,
-      resourceType: isOrganicResource ? "bio" : "energy",
-      isAbsorbed: false,
-      ringMesh: null
+      position: new Vector3(x, 0, z)
     };
     STATE.gravitySources.push(sourceObj);
     STATE.asteroids.push(sourceObj);

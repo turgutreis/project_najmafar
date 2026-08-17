@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
 import { scene } from '../engine/scene';
 import { createGravityRing } from '../procedural/meshes';
-import { createPlanetTextures, createGasGiantTextures, createIceMoonTextures, createVolcanicMoonTextures, createCraterMoonTextures, createStarTexture } from '../procedural/textures';
+import { createHabitableTextures, createGasGiantTextures, createRockyTextures, createIceMoonTextures, createVolcanicMoonTextures, createStarTexture, createCloudTexture } from '../procedural/textures';
 import { generatePlanetAttributes, generateFallbackMoons } from './scanner';
 import { addLogEntry } from '../ui/hud';
 
@@ -24,57 +24,51 @@ export async function checkUniverseData() {
 
         // 2. Browser / Fallback fetch
         if (!data) {
-            try {
-                const res = await fetch('./universe_data.json');
-                if (res.ok) {
-                    data = await res.json();
-                } else {
-                    const resAlt = await fetch('universe_data.json');
-                    if (resAlt.ok) {
-                        data = await resAlt.json();
-                    }
-                }
-            } catch (fetchErr) {
-                console.warn("Najmafar: Fetch universe load failed", fetchErr);
+            const resp = await fetch('universe_data.json');
+            if (resp.ok) {
+                data = await resp.json();
             }
         }
 
         if (data && data.systems && data.systems.length > 0) {
             STATE.universe = data;
             const sysCount = data.systems.length;
-            const univName = data.name || "Najmafar Quanten-Galaxie";
-            console.log("Najmafar: Quantum Universe Data loaded successfully!", univName, sysCount);
 
-            const statusDiv = document.getElementById('generation-status');
-            if (statusDiv) {
-                statusDiv.innerText = `🌌 Quanten-Universum aktiv: ${sysCount} Systeme geladen.`;
-                statusDiv.style.color = "#10b981";
-            }
-
-            const startBtn = document.getElementById('start-game-btn') as HTMLButtonElement;
+            const startBtn = document.getElementById('start-game-btn');
             if (startBtn) {
-                startBtn.disabled = false;
+                startBtn.removeAttribute('disabled');
+                startBtn.style.opacity = '1';
                 startBtn.innerText = "Najmafar betreten";
             }
 
+            const status = document.getElementById('generation-status');
+            if (status) {
+                status.innerText = `Galaxie aktiv (${sysCount} Sternensysteme).`;
+                status.style.color = '#10b981';
+            }
+
+            // Spawn initial system
             clearActiveSystem();
             spawnPlanetsAndAsteroids();
         } else {
-            console.warn("Najmafar: No systems found in universe_data.json");
-            const startBtn = document.getElementById('start-game-btn') as HTMLButtonElement;
-            if (startBtn) {
-                startBtn.disabled = true;
-                startBtn.innerText = "Zuerst Galaxie generieren";
-            }
+            console.warn("Najmafar: universe_data.json contains no systems");
         }
     } catch (e) {
-        console.warn("Najmafar: Failed to load universe_data.json, fallback generation active.", e);
+        console.error("Najmafar: Error loading universe data:", e);
     }
 }
 
 export function clearActiveSystem() {
+    activePlanets.forEach(p => {
+        if (p.mesh) scene.remove(p.mesh);
+        if (p.ringMesh) scene.remove(p.ringMesh);
+    });
+    STATE.asteroids.forEach(a => {
+        if (a.mesh) scene.remove(a.mesh);
+        if (a.ringMesh) scene.remove(a.ringMesh);
+    });
     STATE.gravitySources.forEach(source => {
-        if (source.mesh) {
+        if (source.mesh && source.mesh !== STATE.playerGroup) {
             scene.remove(source.mesh);
         }
         if (source.ringMesh) {
@@ -88,42 +82,6 @@ export function clearActiveSystem() {
 
 export function spawnPlanetsAndAsteroids() {
     if (!STATE.universe || !STATE.universe.systems) {
-        // Fallback procedural system
-        const count = 4;
-        const colors = [0x38bdf8, 0xa855f7, 0x10b981, 0xf59e0b];
-
-        for (let i = 0; i < count; i++) {
-            const dist = 50 + i * 35;
-            const angle = (i * Math.PI) / 2 + 0.5;
-            const x = Math.cos(angle) * dist;
-            const z = Math.sin(angle) * dist;
-            const size = 3.0 + i * 0.8;
-            const color = colors[i % colors.length];
-
-            const geo = new THREE.SphereGeometry(size, 32, 32);
-            const mat = new THREE.MeshStandardMaterial({
-                color: color,
-                roughness: 0.7,
-                metalness: 0.1
-            });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(x, 0, z);
-            scene.add(mesh);
-
-            const range = size * 4.5;
-            const sourceObj: any = {
-                mesh: mesh,
-                type: 'planet',
-                name: `Prozeduraler Planet ${i + 1}`,
-                mass: size * size * 4,
-                radius: size,
-                gravityRange: range,
-                position: new THREE.Vector3(x, 0, z)
-            };
-
-            STATE.gravitySources.push(sourceObj);
-            sourceObj.ringMesh = createGravityRing(x, z, range, color, 0.08);
-        }
         return;
     }
 
@@ -179,18 +137,23 @@ export function spawnPlanetsAndAsteroids() {
         const isHab = p.type === 'Habitable';
 
         let texData: any;
-        if (isGas) {
+        let cloudTexture: THREE.CanvasTexture | null = null;
+        if (isHab) {
+            texData = createHabitableTextures(p.color, seed);
+            cloudTexture = createCloudTexture(seed + 999);
+        } else if (isGas) {
             texData = createGasGiantTextures(p.color, seed);
         } else {
-            texData = createPlanetTextures(p.color, seed);
+            texData = createRockyTextures(p.color, seed);
         }
 
         const geo = new THREE.SphereGeometry(p.size, 32, 32);
         const mat = new THREE.MeshStandardMaterial({
             map: texData.map,
-            roughness: isGas ? 0.3 : 0.8,
-            metalness: isGas ? 0.1 : 0.2,
-            bumpScale: 0.05
+            bumpMap: texData.bumpMap || null,
+            bumpScale: isGas ? 0 : 0.08,
+            roughness: isGas ? 0.35 : 0.75,
+            metalness: isGas ? 0.1 : 0.15
         });
 
         const mesh = new THREE.Mesh(geo, mat);
@@ -199,12 +162,12 @@ export function spawnPlanetsAndAsteroids() {
         planetGroup.add(mesh);
 
         let cloudMesh: THREE.Mesh | null = null;
-        if (texData.cloudMap && !isGas) {
+        if (cloudTexture && isHab) {
             const cloudGeo = new THREE.SphereGeometry(p.size * 1.025, 32, 32);
             const cloudMat = new THREE.MeshStandardMaterial({
-                map: texData.cloudMap,
+                map: cloudTexture,
                 transparent: true,
-                opacity: 0.45,
+                opacity: 0.5,
                 blending: THREE.AdditiveBlending
             });
             cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
@@ -284,25 +247,30 @@ export function spawnPlanetsAndAsteroids() {
 
         // Spawn Moons
         const moonsList = p.moons || generateFallbackMoons(p);
-        moonsList.forEach((m, m_idx) => {
+        moonsList.forEach((m: any, m_idx: number) => {
             const moonAngle = (m_idx * 2.2) + (idx * 0.7) + 0.5;
             const mx = px + m.distance * Math.cos(moonAngle);
             const mz = pz + m.distance * Math.sin(moonAngle);
 
-            const mSeed = m.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) + m_idx * 133;
+            const mSeed = m.name.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) + m_idx * 133;
             let mTex: any;
             if (m.type === 'Eismond') {
                 mTex = createIceMoonTextures(m.color, mSeed);
             } else if (m.type === 'Vulkanmond') {
                 mTex = createVolcanicMoonTextures(m.color, mSeed);
             } else {
-                mTex = createCraterMoonTextures(m.color, mSeed);
+                mTex = createRockyTextures(m.color, mSeed);
             }
 
-            const mGeo = new THREE.SphereGeometry(m.size, 16, 16);
+            const mGeo = new THREE.SphereGeometry(m.size, 24, 24);
             const mMat = new THREE.MeshStandardMaterial({
                 map: mTex.map,
-                roughness: 0.9,
+                bumpMap: mTex.bumpMap || null,
+                bumpScale: 0.05,
+                emissiveMap: mTex.emissiveMap || null,
+                emissive: m.type === 'Vulkanmond' ? new THREE.Color(0xff4500) : new THREE.Color(0x000000),
+                emissiveIntensity: m.type === 'Vulkanmond' ? 0.6 : 0,
+                roughness: 0.85,
                 metalness: 0.1
             });
             const mMesh = new THREE.Mesh(mGeo, mMat);
@@ -355,24 +323,27 @@ export function spawnPlanetsAndAsteroids() {
         });
     });
 
-    // 3. Spawn Asteroids
-    const asteroidCount = 18;
-    for (let i = 0; i < asteroidCount; i++) {
+    // 3. Asteroid Resource Belts
+    spawnAsteroidBelt();
+}
+
+function spawnAsteroidBelt() {
+    const beltCount = 35;
+    for (let i = 0; i < beltCount; i++) {
+        const isBio = Math.random() > 0.45;
         const angle = Math.random() * Math.PI * 2;
-        const dist = 30 + Math.random() * 120;
+        const dist = 35 + Math.random() * 110;
         const x = Math.cos(angle) * dist;
         const z = Math.sin(angle) * dist;
-        const size = 0.8 + Math.random() * 1.2;
+        const size = 0.8 + Math.random() * 1.4;
 
-        const isOrganicResource = (i % 2 === 0);
-        const color = isOrganicResource ? 0x00ff88 : 0x38bdf8;
-
+        const color = isBio ? 0x10b981 : 0x38bdf8;
         const geo = new THREE.DodecahedronGeometry(size, 1);
         const mat = new THREE.MeshStandardMaterial({
             color: color,
-            roughness: 0.9,
-            metalness: 0.8,
-            emissive: isOrganicResource ? 0x003311 : 0x002233
+            roughness: 0.8,
+            metalness: 0.2,
+            wireframe: false
         });
 
         const mesh = new THREE.Mesh(geo, mat);
@@ -383,19 +354,19 @@ export function spawnPlanetsAndAsteroids() {
         const sourceObj: any = {
             mesh: mesh,
             type: 'asteroid',
-            name: isOrganicResource ? "Organische Biosphäre" : "Silizium-Komet",
+            name: isBio ? `Organischer Asteroid` : `Silizium-Komet`,
+            resourceType: isBio ? 'bio' : 'silicon',
+            isResource: true,
+            isAbsorbed: false,
             mass: size * 4,
             radius: size,
             gravityRange: range,
-            position: new THREE.Vector3(x, 0, z),
-            isResource: true,
-            resourceType: isOrganicResource ? 'bio' : 'energy',
-            isAbsorbed: false,
-            ringMesh: null
+            position: new THREE.Vector3(x, 0, z)
         };
 
         STATE.gravitySources.push(sourceObj);
         STATE.asteroids.push(sourceObj);
+
         sourceObj.ringMesh = createGravityRing(x, z, range, color, 0.05);
     }
 }
