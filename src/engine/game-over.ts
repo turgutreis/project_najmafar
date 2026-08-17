@@ -198,13 +198,13 @@ export function respawnPlayer() {
     STATE.mentalEnergy = STATE.maxMentalEnergy;
     STATE.isGameOver = false;
 
-    // Reset position to safe orbital trajectory
-    STATE.playerPosition.set(0, 0, 65);
-    STATE.playerVelocity.set(5, 0, 0);
+    // Reset position to safe orbital trajectory (Goldilocks Zone R=75)
+    STATE.playerPosition.set(0, 0, 75);
+    STATE.playerVelocity.set(5.2, 0, 0);
     STATE.playerAcceleration.set(0, 0, 0);
 
     if (STATE.playerGroup) {
-        STATE.playerGroup.position.set(0, 0, 65);
+        STATE.playerGroup.position.set(0, 0, 75);
         STATE.playerGroup.visible = true;
     }
 
@@ -240,11 +240,11 @@ export function restartGame() {
     clearActiveSystem();
     spawnPlanetsAndAsteroids();
 
-    STATE.playerPosition.set(0, 0, 65);
-    STATE.playerVelocity.set(5, 0, 0);
+    STATE.playerPosition.set(0, 0, 75);
+    STATE.playerVelocity.set(5.2, 0, 0);
     STATE.playerAcceleration.set(0, 0, 0);
     if (STATE.playerGroup) {
-        STATE.playerGroup.position.set(0, 0, 65);
+        STATE.playerGroup.position.set(0, 0, 75);
         STATE.playerGroup.visible = true;
     }
 

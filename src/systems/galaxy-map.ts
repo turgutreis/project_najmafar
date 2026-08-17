@@ -586,11 +586,11 @@ export function warpToSystem(systemId: number) {
         clearActiveSystem();
         spawnPlanetsAndAsteroids();
 
-        // Reset player in safe orbit
-        STATE.playerPosition.set(0, 0, 65);
-        STATE.playerVelocity.set(5, 0, 0);
+        // Reset player in safe Goldilocks orbit (R=75)
+        STATE.playerPosition.set(0, 0, 75);
+        STATE.playerVelocity.set(5.2, 0, 0);
         if (STATE.playerGroup) {
-            STATE.playerGroup.position.set(0, 0, 65);
+            STATE.playerGroup.position.set(0, 0, 75);
         }
 
         addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} (${dist.toFixed(0)} LJ, -${warpCost}% Energie) stabilisiert.`);

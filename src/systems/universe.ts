@@ -133,25 +133,26 @@ export function spawnPlanetsAndAsteroids() {
 
         starData.colorCss = starData.color.replace("0x", "#");
 
-        const starRange = starData.size * 3.5;
+        const starRange = 24.0;
         const starSource: any = {
             mesh: starMesh,
             type: 'star',
             name: `${activeSystem.name} (Zentralstern)`,
-            mass: starData.mass * 0.4,
+            mass: starData.mass * 0.35,
             radius: starData.size,
             gravityRange: starRange,
             position: new THREE.Vector3(0, 0, 0)
         };
         STATE.gravitySources.push(starSource);
-        starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.08);
+        starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.06);
     }
 
-    // 2. Planets & Moons
+    // 2. Planets & Moons (Astronomical 5-Zone Distance Scaling: Innermost >= 38)
     activeSystem.planets.forEach((p, idx) => {
+        const scaledDist = 38.0 + (p.distance * 1.55) + (idx * 12.0);
         const angle = (idx * 1.8) + (STATE.currentSystemId * 0.5);
-        const px = p.distance * Math.cos(angle);
-        const pz = p.distance * Math.sin(angle);
+        const px = scaledDist * Math.cos(angle);
+        const pz = scaledDist * Math.sin(angle);
 
         const seed = p.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) + idx * 77;
         const isGas = p.type === 'Gas Giant';
@@ -228,7 +229,7 @@ export function spawnPlanetsAndAsteroids() {
 
         const ring = createGravityRing(px, pz, pRange, parseInt(p.color), 0.08);
 
-        const orbitSpeed = 0.045 / Math.sqrt(p.distance);
+        const orbitSpeed = 0.055 / Math.sqrt(scaledDist);
         const pColorCss = p.color.replace("0x", "#");
         const generated = generatePlanetAttributes(p);
 
@@ -248,7 +249,7 @@ export function spawnPlanetsAndAsteroids() {
             ringMesh: ring,
             angle: angle,
             speed: orbitSpeed,
-            distance: p.distance,
+            distance: scaledDist,
             name: p.name,
             type: p.type,
             size: p.size,
@@ -400,10 +401,12 @@ export function spawnPlanetsAndAsteroids() {
 
 function generateFallbackAsteroids() {
     const list = [];
-    const count = 35;
+    const count = 40;
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const dist = 35 + Math.random() * 110;
+        // Split between inner temperate belt (48 - 75) and outer Kuiper belt (115 - 230)
+        const isOuter = i % 2 === 0;
+        const dist = isOuter ? (115 + Math.random() * 115) : (48 + Math.random() * 27);
         list.push({
             x: Math.cos(angle) * dist,
             z: Math.sin(angle) * dist,

@@ -47,8 +47,8 @@ export const STATE: GameState = {
     },
 
     // Physics
-    playerPosition: new THREE.Vector3(0, 0, 65),
-    playerVelocity: new THREE.Vector3(5, 0, 0),
+    playerPosition: new THREE.Vector3(0, 0, 75),
+    playerVelocity: new THREE.Vector3(5.2, 0, 0),
     playerAcceleration: new THREE.Vector3(0, 0, 0),
     thrustStrength: 25.0,
     drag: 0.4,

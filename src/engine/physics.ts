@@ -164,40 +164,24 @@ export function updatePhysics(dt: number) {
         }
     }
 
-    // Stellar Radiation / Star Hazard
+    // Stellar Radiation / Star Hazard (Safe outside R > 16)
     const starSource = STATE.gravitySources.find(s => s.type === 'star');
     if (starSource) {
         const sdistSq = STATE.playerPosition.x * STATE.playerPosition.x + STATE.playerPosition.z * STATE.playerPosition.z;
-        const radiationRadius = starSource.radius * 2.4;
+        const radiationRadius = 16.0;
         if (sdistSq < radiationRadius * radiationRadius) {
             const distance = Math.sqrt(sdistSq);
             const radRatio = 1 - (distance / radiationRadius);
-            const burnDamage = (3.5 + radRatio * 7.0) * dt;
+            const burnDamage = (0.8 + radRatio * radRatio * 8.0) * dt;
             STATE.health = Math.max(0, STATE.health - burnDamage);
-            STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + (3.0 + radRatio * 5.0) * dt));
-            if (Math.random() < 0.012) {
-                addLogEntry("SYSTEM", `⚠️ THERMISCHE WARNUNG: Sonnennähe zu ${starSource.name}! Strahlungsschaden erlitten.`);
+            STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + (1.5 + radRatio * 4.0) * dt));
+            if (Math.random() < 0.01) {
+                addLogEntry("SYSTEM", `⚠️ THERMISCHE WARNUNG: Sonnennähe zu ${starSource.name} (R=${distance.toFixed(1)} < 16)! Strahlungsschaden erlitten.`);
             }
         }
     }
 
-    // 6. Integrate Equations of Motion (Euler with exponential drag)
-    STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
-    STATE.playerVelocity.multiplyScalar(Math.exp(-STATE.currentDrag * dt));
-    STATE.playerPosition.addScaledVector(STATE.playerVelocity, dt);
-
-    // Boundary wrapping
-    const maxBound = 500;
-    if (STATE.playerPosition.x > maxBound) { STATE.playerPosition.x = -maxBound; }
-    if (STATE.playerPosition.x < -maxBound) { STATE.playerPosition.x = maxBound; }
-    if (STATE.playerPosition.z > maxBound) { STATE.playerPosition.z = -maxBound; }
-    if (STATE.playerPosition.z < -maxBound) { STATE.playerPosition.z = maxBound; }
-
-    if (STATE.playerGroup) {
-        STATE.playerGroup.position.copy(STATE.playerPosition);
-    }
-
-    // Camera smoothly follows player
+    // Camera follow (Smooth lag)
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
     camera.position.y = 80;
@@ -237,6 +221,7 @@ export function updatePhysics(dt: number) {
     const uniqueRoles = new Set(STATE.crew.map(c => c.role)).size;
     const isHarmony = uniqueRoles >= 3 && STATE.crew.length >= 3;
 
+    // 11. Update HUD Stats Bars
     updateHUDStats(isHarmony);
 }
 
@@ -276,19 +261,24 @@ export function updateCollisions(dt: number) {
             } else if (source.type === 'planet' || source.type === 'star') {
                 _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
 
+                const isStar = source.type === 'star';
+                const safeClearance = isStar ? 24.0 : colDistance + 0.6;
+
                 // Snap cleanly outside collider radius
-                STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, colDistance + 0.6);
+                STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, safeClearance);
                 if (STATE.playerGroup) STATE.playerGroup.position.copy(STATE.playerPosition);
 
-                // Elastic Repulsion Reflex
+                // Elastic Repulsion Reflex (Solar flare ejection if hitting star)
                 const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-                const bounceForce = Math.max(22, Math.abs(currentOutwardSpeed) * 0.8 + 16);
+                const bounceForce = isStar ? 28.0 : Math.max(22, Math.abs(currentOutwardSpeed) * 0.8 + 16);
                 STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
 
                 if (STATE.collisionCooldown === 0) {
                     STATE.collisionCooldown = 1.2;
 
-                    const damage = STATE.mutations.armor.purchased ? 15 : 30;
+                    const damage = isStar
+                        ? (STATE.mutations.armor.purchased ? 18 : 35)
+                        : (STATE.mutations.armor.purchased ? 15 : 30);
                     STATE.health = Math.max(0, STATE.health - damage);
 
                     playCrashSound();
@@ -297,7 +287,9 @@ export function updateCollisions(dt: number) {
                     const stressAmount = (STATE.mutations.o2.purchased ? 10 : 22) * stressMult;
                     STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + stressAmount));
 
-                    if (STATE.mutations.armor.purchased) {
+                    if (isStar) {
+                        addLogEntry("SYSTEM", `🔥 SOLAR-ERUPTION: Magnetische Sonneneruption schleudert Schiff in sicheren Orbit (${safeClearance.toFixed(0)} LJ)!`);
+                    } else if (STATE.mutations.armor.purchased) {
                         addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall (-15 HP).`);
                     } else {
                         addLogEntry("SYSTEM", `WARNUNG: Harter Aufprall auf ${source.name}! Zellhülle schwer beschädigt (-30 HP).`);

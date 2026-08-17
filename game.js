@@ -26486,8 +26486,8 @@ var STATE = {
     folddrive: { purchased: false, bioCost: 380, siliconCost: 420 },
     translator: { purchased: false, bioCost: 120, siliconCost: 80 }
   },
-  playerPosition: new Vector3(0, 0, 65),
-  playerVelocity: new Vector3(5, 0, 0),
+  playerPosition: new Vector3(0, 0, 75),
+  playerVelocity: new Vector3(5.2, 0, 0),
   playerAcceleration: new Vector3(0, 0, 0),
   thrustStrength: 25,
   drag: 0.4,
@@ -28631,11 +28631,11 @@ function respawnPlayer() {
   STATE.bioEnergy = STATE.maxBioEnergy;
   STATE.mentalEnergy = STATE.maxMentalEnergy;
   STATE.isGameOver = false;
-  STATE.playerPosition.set(0, 0, 65);
-  STATE.playerVelocity.set(5, 0, 0);
+  STATE.playerPosition.set(0, 0, 75);
+  STATE.playerVelocity.set(5.2, 0, 0);
   STATE.playerAcceleration.set(0, 0, 0);
   if (STATE.playerGroup) {
-    STATE.playerGroup.position.set(0, 0, 65);
+    STATE.playerGroup.position.set(0, 0, 75);
     STATE.playerGroup.visible = true;
   }
   const modal = document.getElementById("game-over-modal");
@@ -28664,11 +28664,11 @@ function restartGame() {
     modal.style.display = "none";
   clearActiveSystem();
   spawnPlanetsAndAsteroids();
-  STATE.playerPosition.set(0, 0, 65);
-  STATE.playerVelocity.set(5, 0, 0);
+  STATE.playerPosition.set(0, 0, 75);
+  STATE.playerVelocity.set(5.2, 0, 0);
   STATE.playerAcceleration.set(0, 0, 0);
   if (STATE.playerGroup) {
-    STATE.playerGroup.position.set(0, 0, 65);
+    STATE.playerGroup.position.set(0, 0, 75);
     STATE.playerGroup.visible = true;
   }
   renderCrewUI();
@@ -29102,23 +29102,24 @@ function spawnPlanetsAndAsteroids() {
     starLight.position.set(0, 0, 0);
     scene.add(starLight);
     starData.colorCss = starData.color.replace("0x", "#");
-    const starRange = starData.size * 3.5;
+    const starRange = 24;
     const starSource = {
       mesh: starMesh,
       type: "star",
       name: `${activeSystem.name} (Zentralstern)`,
-      mass: starData.mass * 0.4,
+      mass: starData.mass * 0.35,
       radius: starData.size,
       gravityRange: starRange,
       position: new Vector3(0, 0, 0)
     };
     STATE.gravitySources.push(starSource);
-    starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.08);
+    starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.06);
   }
   activeSystem.planets.forEach((p, idx) => {
+    const scaledDist = 38 + p.distance * 1.55 + idx * 12;
     const angle = idx * 1.8 + STATE.currentSystemId * 0.5;
-    const px = p.distance * Math.cos(angle);
-    const pz = p.distance * Math.sin(angle);
+    const px = scaledDist * Math.cos(angle);
+    const pz = scaledDist * Math.sin(angle);
     const seed = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) + idx * 77;
     const isGas = p.type === "Gas Giant";
     const isHab = p.type === "Habitable";
@@ -29184,7 +29185,7 @@ function spawnPlanetsAndAsteroids() {
     };
     STATE.gravitySources.push(sourceObj);
     const ring = createGravityRing(px, pz, pRange, parseInt(p.color), 0.08);
-    const orbitSpeed = 0.045 / Math.sqrt(p.distance);
+    const orbitSpeed = 0.055 / Math.sqrt(scaledDist);
     const pColorCss = p.color.replace("0x", "#");
     const generated = generatePlanetAttributes(p);
     let finalSpecies = p.species || generated.species;
@@ -29202,7 +29203,7 @@ function spawnPlanetsAndAsteroids() {
       ringMesh: ring,
       angle,
       speed: orbitSpeed,
-      distance: p.distance,
+      distance: scaledDist,
       name: p.name,
       type: p.type,
       size: p.size,
@@ -29336,10 +29337,11 @@ function spawnPlanetsAndAsteroids() {
 }
 function generateFallbackAsteroids() {
   const list = [];
-  const count = 35;
+  const count = 40;
   for (let i = 0;i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
-    const dist = 35 + Math.random() * 110;
+    const isOuter = i % 2 === 0;
+    const dist = isOuter ? 115 + Math.random() * 115 : 48 + Math.random() * 27;
     list.push({
       x: Math.cos(angle) * dist,
       z: Math.sin(angle) * dist,
@@ -29852,10 +29854,10 @@ function warpToSystem(systemId) {
     const activeSystem = STATE.universe.systems[systemId];
     clearActiveSystem();
     spawnPlanetsAndAsteroids();
-    STATE.playerPosition.set(0, 0, 65);
-    STATE.playerVelocity.set(5, 0, 0);
+    STATE.playerPosition.set(0, 0, 75);
+    STATE.playerVelocity.set(5.2, 0, 0);
     if (STATE.playerGroup) {
-      STATE.playerGroup.position.set(0, 0, 65);
+      STATE.playerGroup.position.set(0, 0, 75);
     }
     addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} (${dist.toFixed(0)} LJ, -${warpCost}% Energie) stabilisiert.`);
     if (warpOverlay) {
@@ -30567,36 +30569,17 @@ function updatePhysics(dt) {
   const starSource = STATE.gravitySources.find((s) => s.type === "star");
   if (starSource) {
     const sdistSq = STATE.playerPosition.x * STATE.playerPosition.x + STATE.playerPosition.z * STATE.playerPosition.z;
-    const radiationRadius = starSource.radius * 2.4;
+    const radiationRadius = 16;
     if (sdistSq < radiationRadius * radiationRadius) {
       const distance = Math.sqrt(sdistSq);
       const radRatio = 1 - distance / radiationRadius;
-      const burnDamage = (3.5 + radRatio * 7) * dt;
+      const burnDamage = (0.8 + radRatio * radRatio * 8) * dt;
       STATE.health = Math.max(0, STATE.health - burnDamage);
-      STATE.crew.forEach((c) => c.stress = Math.min(100, c.stress + (3 + radRatio * 5) * dt));
-      if (Math.random() < 0.012) {
-        addLogEntry("SYSTEM", `⚠️ THERMISCHE WARNUNG: Sonnennähe zu ${starSource.name}! Strahlungsschaden erlitten.`);
+      STATE.crew.forEach((c) => c.stress = Math.min(100, c.stress + (1.5 + radRatio * 4) * dt));
+      if (Math.random() < 0.01) {
+        addLogEntry("SYSTEM", `⚠️ THERMISCHE WARNUNG: Sonnennähe zu ${starSource.name} (R=${distance.toFixed(1)} < 16)! Strahlungsschaden erlitten.`);
       }
     }
-  }
-  STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
-  STATE.playerVelocity.multiplyScalar(Math.exp(-STATE.currentDrag * dt));
-  STATE.playerPosition.addScaledVector(STATE.playerVelocity, dt);
-  const maxBound = 500;
-  if (STATE.playerPosition.x > maxBound) {
-    STATE.playerPosition.x = -maxBound;
-  }
-  if (STATE.playerPosition.x < -maxBound) {
-    STATE.playerPosition.x = maxBound;
-  }
-  if (STATE.playerPosition.z > maxBound) {
-    STATE.playerPosition.z = -maxBound;
-  }
-  if (STATE.playerPosition.z < -maxBound) {
-    STATE.playerPosition.z = maxBound;
-  }
-  if (STATE.playerGroup) {
-    STATE.playerGroup.position.copy(STATE.playerPosition);
   }
   camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
   camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
@@ -30657,21 +30640,25 @@ function updateCollisions(dt) {
         respawnAsteroid(source);
       } else if (source.type === "planet" || source.type === "star") {
         _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
-        STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, colDistance + 0.6);
+        const isStar = source.type === "star";
+        const safeClearance = isStar ? 24 : colDistance + 0.6;
+        STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, safeClearance);
         if (STATE.playerGroup)
           STATE.playerGroup.position.copy(STATE.playerPosition);
         const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-        const bounceForce = Math.max(22, Math.abs(currentOutwardSpeed) * 0.8 + 16);
+        const bounceForce = isStar ? 28 : Math.max(22, Math.abs(currentOutwardSpeed) * 0.8 + 16);
         STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
         if (STATE.collisionCooldown === 0) {
           STATE.collisionCooldown = 1.2;
-          const damage = STATE.mutations.armor.purchased ? 15 : 30;
+          const damage = isStar ? STATE.mutations.armor.purchased ? 18 : 35 : STATE.mutations.armor.purchased ? 15 : 30;
           STATE.health = Math.max(0, STATE.health - damage);
           playCrashSound();
           const stressMult = STATE.crewBuffs ? STATE.crewBuffs.stressDampening : 1;
           const stressAmount = (STATE.mutations.o2.purchased ? 10 : 22) * stressMult;
           STATE.crew.forEach((c) => c.stress = Math.min(100, c.stress + stressAmount));
-          if (STATE.mutations.armor.purchased) {
+          if (isStar) {
+            addLogEntry("SYSTEM", `\uD83D\uDD25 SOLAR-ERUPTION: Magnetische Sonneneruption schleudert Schiff in sicheren Orbit (${safeClearance.toFixed(0)} LJ)!`);
+          } else if (STATE.mutations.armor.purchased) {
             addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall (-15 HP).`);
           } else {
             addLogEntry("SYSTEM", `WARNUNG: Harter Aufprall auf ${source.name}! Zellhülle schwer beschädigt (-30 HP).`);
