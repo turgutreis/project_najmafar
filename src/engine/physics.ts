@@ -28,7 +28,7 @@ export function updatePhysics(dt: number) {
             }
 
             if (p.bodyMesh) {
-                p.bodyMesh.rotation.y += (p.isGasGiant ? 0.06 : 0.035) * dt;
+                p.bodyMesh.rotation.y += (p.type === 'Gas Giant' ? 0.06 : 0.035) * dt;
             }
             if (p.cloudMesh) {
                 p.cloudMesh.rotation.y += 0.05 * dt;

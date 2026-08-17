@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { STATE } from '../core/state';
+import { STATE, activePlanets } from '../core/state';
 import { scene } from '../engine/scene';
 import { PlanetEntry, StarSystem } from '../types/game';
 import { createGravityRing } from '../procedural/meshes';
@@ -10,7 +10,6 @@ import { addLogEntry } from '../ui/hud';
 import { createSunCoronaMesh } from '../procedural/sun-shader';
 import { createAtmosphereMesh } from '../procedural/atmosphere-shader';
 
-export const activePlanets: PlanetEntry[] = [];
 export const activeCoronaMeshes: THREE.Mesh[] = [];
 export const activeCoronaUpdaters: ((dt: number) => void)[] = [];
 

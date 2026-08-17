@@ -30034,7 +30034,6 @@ function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.4) {
 }
 
 // src/systems/universe.ts
-var activePlanets2 = [];
 var activeCoronaMeshes = [];
 var activeCoronaUpdaters = [];
 function updateUniverseShaders(dt) {
@@ -30083,7 +30082,7 @@ async function checkUniverseData() {
   }
 }
 function clearActiveSystem() {
-  activePlanets2.forEach((p) => {
+  activePlanets.forEach((p) => {
     if (p.mesh)
       scene.remove(p.mesh);
     if (p.ringMesh)
@@ -30108,7 +30107,7 @@ function clearActiveSystem() {
   activeCoronaUpdaters.length = 0;
   STATE.gravitySources = [];
   STATE.asteroids = [];
-  activePlanets2.length = 0;
+  activePlanets.length = 0;
   STATE.lockedTarget = null;
   STATE.nearestPlanet = null;
   STATE.scanningPlanet = null;
@@ -30279,7 +30278,7 @@ function spawnPlanetsAndAsteroids() {
         species: finalSpecies
       }
     };
-    activePlanets2.push(planetEntry);
+    activePlanets.push(planetEntry);
     const moonsList = p.moons || generateFallbackMoons(p);
     moonsList.forEach((m, m_idx) => {
       const moonAngle = m_idx * 2.2 + idx * 0.7 + 0.5;
@@ -30348,7 +30347,7 @@ function spawnPlanetsAndAsteroids() {
           species: null
         }
       };
-      activePlanets2.push(moonEntry);
+      activePlanets.push(moonEntry);
     });
   });
   const asteroidsList = activeSystem.asteroids && activeSystem.asteroids.length > 0 ? activeSystem.asteroids : generateFallbackAsteroids();
@@ -31274,15 +31273,23 @@ function setupTargetRaycasting() {
     raycaster.setFromCamera(mouseVec, camera);
     const targetMeshes = [];
     activePlanets.forEach((p) => {
-      if (p.bodyMesh)
-        targetMeshes.push(p.bodyMesh);
-      if (p.mesh && p.mesh !== p.bodyMesh)
+      if (p.mesh)
         targetMeshes.push(p.mesh);
     });
     const intersects = raycaster.intersectObjects(targetMeshes, true);
     if (intersects.length > 0) {
       const hitObject = intersects[0].object;
-      const target = activePlanets.find((p) => p.bodyMesh === hitObject || p.mesh === hitObject || p.mesh && p.mesh.children && p.mesh.children.includes(hitObject));
+      const target = activePlanets.find((p) => {
+        if (p.mesh === hitObject || p.bodyMesh === hitObject)
+          return true;
+        let cur = hitObject;
+        while (cur) {
+          if (cur === p.mesh)
+            return true;
+          cur = cur.parent;
+        }
+        return false;
+      });
       if (target) {
         setLockedTarget(target);
         return;
@@ -31508,7 +31515,7 @@ function updatePhysics(dt) {
         p.ringMesh.position.set(px, 0, pz);
       }
       if (p.bodyMesh) {
-        p.bodyMesh.rotation.y += (p.isGasGiant ? 0.06 : 0.035) * dt;
+        p.bodyMesh.rotation.y += (p.type === "Gas Giant" ? 0.06 : 0.035) * dt;
       }
       if (p.cloudMesh) {
         p.cloudMesh.rotation.y += 0.05 * dt;

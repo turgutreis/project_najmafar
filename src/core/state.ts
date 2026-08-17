@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GameState } from '../types/game';
+import { GameState, PlanetEntry } from '../types/game';
 
 export const STATE: GameState = {
     // Player Stats
@@ -98,4 +98,4 @@ export const STATE: GameState = {
     bioDischargeCooldown: 0
 };
 
-export const activePlanets: any[] = [];
+export const activePlanets: PlanetEntry[] = [];

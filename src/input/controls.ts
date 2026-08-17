@@ -131,14 +131,21 @@ export function setupTargetRaycasting() {
 
         const targetMeshes: THREE.Object3D[] = [];
         activePlanets.forEach(p => {
-            if (p.bodyMesh) targetMeshes.push(p.bodyMesh);
-            if (p.mesh && p.mesh !== p.bodyMesh) targetMeshes.push(p.mesh);
+            if (p.mesh) targetMeshes.push(p.mesh);
         });
 
         const intersects = raycaster.intersectObjects(targetMeshes, true);
         if (intersects.length > 0) {
             const hitObject = intersects[0].object;
-            const target = activePlanets.find(p => p.bodyMesh === hitObject || p.mesh === hitObject || (p.mesh && p.mesh.children && p.mesh.children.includes(hitObject)));
+            const target = activePlanets.find(p => {
+                if (p.mesh === hitObject || p.bodyMesh === hitObject) return true;
+                let cur: THREE.Object3D | null = hitObject;
+                while (cur) {
+                    if (cur === p.mesh) return true;
+                    cur = cur.parent;
+                }
+                return false;
+            });
             if (target) {
                 setLockedTarget(target);
                 return;
