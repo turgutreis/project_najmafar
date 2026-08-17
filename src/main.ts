@@ -15,7 +15,7 @@ import { updateMinimap, updateSonarWave, initHUD, addLogEntry } from './ui/hud';
 import { initDeckUI, updateMutationUI } from './ui/deck';
 import { toggleGalaxyMap, warpToSystem, isMapOpen } from './systems/galaxy-map';
 import { toggleMusic, isMusicPlaying, isMusicUserMuted } from './engine/audio';
-import { initGameOverUI } from './engine/game-over';
+import { initGameOverUI, updateExplosionEffects } from './engine/game-over';
 
 let lastTime = 0;
 
@@ -53,6 +53,7 @@ function animate(time: number) {
         updateFleet(dt);
         updateCrewSimulation(dt);
         updateSonarWave(dt);
+        updateExplosionEffects(dt);
 
         // Trajectory prediction
         updateTrajectory();

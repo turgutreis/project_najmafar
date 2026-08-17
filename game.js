@@ -9037,6 +9037,48 @@ class SphereGeometry extends BufferGeometry {
     return new SphereGeometry(data.radius, data.widthSegments, data.heightSegments, data.phiStart, data.phiLength, data.thetaStart, data.thetaLength);
   }
 }
+
+class TetrahedronGeometry extends PolyhedronGeometry {
+  constructor(radius = 1, detail = 0) {
+    const vertices = [
+      1,
+      1,
+      1,
+      -1,
+      -1,
+      1,
+      -1,
+      1,
+      -1,
+      1,
+      -1,
+      -1
+    ];
+    const indices = [
+      2,
+      1,
+      0,
+      0,
+      3,
+      2,
+      1,
+      3,
+      0,
+      2,
+      3,
+      1
+    ];
+    super(vertices, indices, radius, detail);
+    this.type = "TetrahedronGeometry";
+    this.parameters = {
+      radius,
+      detail
+    };
+  }
+  static fromJSON(data) {
+    return new TetrahedronGeometry(data.radius, data.detail);
+  }
+}
 function cloneUniforms(src) {
   const dst = {};
   for (const u in src) {
@@ -26963,6 +27005,43 @@ function playSonarChime() {
   osc.start(time);
   osc.stop(time + 0.95);
 }
+function playExplosionSound() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const time = ctx.currentTime;
+  const bufferSize = Math.floor(ctx.sampleRate * 1.5);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0;i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  const noiseFilter = ctx.createBiquadFilter();
+  noiseFilter.type = "lowpass";
+  noiseFilter.frequency.setValueAtTime(900, time);
+  noiseFilter.frequency.exponentialRampToValueAtTime(30, time + 1.4);
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(0.6, time);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 1.4);
+  noise.connect(noiseFilter);
+  noiseFilter.connect(noiseGain);
+  noiseGain.connect(ctx.destination);
+  const subOsc = ctx.createOscillator();
+  const subGain = ctx.createGain();
+  subOsc.type = "sawtooth";
+  subOsc.frequency.setValueAtTime(140, time);
+  subOsc.frequency.exponentialRampToValueAtTime(25, time + 1.3);
+  subGain.gain.setValueAtTime(0.7, time);
+  subGain.gain.exponentialRampToValueAtTime(0.001, time + 1.5);
+  subOsc.connect(subGain);
+  subGain.connect(ctx.destination);
+  noise.start(time);
+  subOsc.start(time);
+  noise.stop(time + 1.5);
+  subOsc.stop(time + 1.5);
+}
 function setThrusterSound(active) {
   const ctx = getAudioContext();
   if (!ctx)
@@ -28413,6 +28492,10 @@ function updateMutationUI() {
 }
 
 // src/engine/game-over.ts
+var activeDebris = [];
+var explosionShockwave = null;
+var shockwaveLife = 0;
+var cameraShakeDuration = 0;
 function initGameOverUI() {
   const respawnBtn = document.getElementById("respawn-btn");
   if (respawnBtn) {
@@ -28432,29 +28515,118 @@ function triggerGameOver(reason = "Kritischer Hüllenschaden und Kollaps des bio
     return;
   STATE.isGameOver = true;
   STATE.health = 0;
-  playCrashSound();
-  addLogEntry("SYSTEM", `⚠️ KRITISCHER BIOLOGISCHER KOLLAPS: ${reason}`);
-  const modal = document.getElementById("game-over-modal");
-  const reasonEl = document.getElementById("game-over-reason");
-  const systemsEl = document.getElementById("go-stat-systems");
-  const scannedEl = document.getElementById("go-stat-scanned");
-  const crewEl = document.getElementById("go-stat-crew");
-  const resEl = document.getElementById("go-stat-resources");
-  if (reasonEl)
-    reasonEl.innerText = reason;
-  if (systemsEl)
-    systemsEl.innerText = `${STATE.systemsVisited} Sternensysteme`;
-  if (scannedEl)
-    scannedEl.innerText = `${Object.keys(STATE.scannedPlanets).length} Welten`;
-  if (crewEl)
-    crewEl.innerText = `${STATE.crew.length} Individuen`;
-  if (resEl)
-    resEl.innerText = `${Math.floor(STATE.bioRes)} Bio / ${Math.floor(STATE.siliconRes)} Silizium`;
-  if (modal) {
-    modal.style.display = "flex";
+  playExplosionSound();
+  cameraShakeDuration = 0.8;
+  spawnExplosionFX(STATE.playerPosition);
+  if (STATE.playerGroup) {
+    STATE.playerGroup.visible = false;
+  }
+  addLogEntry("SYSTEM", `\uD83D\uDCA5 KATASTROPHALER ZELLKORNBRENN-SCHADEN: ${reason}`);
+  setTimeout(() => {
+    const modal = document.getElementById("game-over-modal");
+    const reasonEl = document.getElementById("game-over-reason");
+    const systemsEl = document.getElementById("go-stat-systems");
+    const scannedEl = document.getElementById("go-stat-scanned");
+    const crewEl = document.getElementById("go-stat-crew");
+    const resEl = document.getElementById("go-stat-resources");
+    if (reasonEl)
+      reasonEl.innerText = reason;
+    if (systemsEl)
+      systemsEl.innerText = `${STATE.systemsVisited} Sternensysteme`;
+    if (scannedEl)
+      scannedEl.innerText = `${Object.keys(STATE.scannedPlanets).length} Welten`;
+    if (crewEl)
+      crewEl.innerText = `${STATE.crew.length} Individuen`;
+    if (resEl)
+      resEl.innerText = `${Math.floor(STATE.bioRes)} Bio / ${Math.floor(STATE.siliconRes)} Silizium`;
+    if (modal) {
+      modal.style.display = "flex";
+    }
+  }, 750);
+}
+function spawnExplosionFX(pos) {
+  const shockGeo = new RingGeometry(0.5, 2.5, 32);
+  shockGeo.rotateX(Math.PI / 2);
+  const shockMat = new MeshBasicMaterial({
+    color: 16347926,
+    transparent: true,
+    opacity: 0.9,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  explosionShockwave = new Mesh(shockGeo, shockMat);
+  explosionShockwave.position.copy(pos);
+  scene.add(explosionShockwave);
+  shockwaveLife = 1;
+  const particleCount = 65;
+  const colors = [16347926, 15680580, 16436245, 65416, 3718648];
+  for (let i = 0;i < particleCount; i++) {
+    const size = 0.2 + Math.random() * 0.5;
+    const geo = Math.random() > 0.5 ? new DodecahedronGeometry(size, 0) : new TetrahedronGeometry(size, 0);
+    const col = colors[Math.floor(Math.random() * colors.length)];
+    const mat = new MeshBasicMaterial({
+      color: col,
+      transparent: true,
+      opacity: 1,
+      blending: AdditiveBlending
+    });
+    const mesh = new Mesh(geo, mat);
+    mesh.position.copy(pos);
+    scene.add(mesh);
+    const angle = Math.random() * Math.PI * 2;
+    const elevation = (Math.random() - 0.5) * 0.4;
+    const speed = 12 + Math.random() * 32;
+    const velocity = new Vector3(Math.cos(angle) * speed, elevation * speed, Math.sin(angle) * speed);
+    const rotSpeed = new Vector3((Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12);
+    activeDebris.push({
+      mesh,
+      velocity,
+      rotSpeed,
+      life: 1.2 + Math.random() * 0.6,
+      maxLife: 1.8
+    });
+  }
+}
+function updateExplosionEffects(dt) {
+  if (cameraShakeDuration > 0) {
+    cameraShakeDuration -= dt;
+    const shakeStrength = Math.min(1.5, cameraShakeDuration * 2.5);
+    camera.position.x += (Math.random() - 0.5) * shakeStrength;
+    camera.position.z += (Math.random() - 0.5) * shakeStrength;
+  }
+  if (explosionShockwave && shockwaveLife > 0) {
+    shockwaveLife -= dt;
+    const progress = 1 - shockwaveLife / 1;
+    const scale = 1 + progress * 35;
+    explosionShockwave.scale.set(scale, 1, scale);
+    explosionShockwave.material.opacity = (1 - progress) * 0.9;
+    if (shockwaveLife <= 0) {
+      scene.remove(explosionShockwave);
+      explosionShockwave.geometry.dispose();
+      explosionShockwave.material.dispose();
+      explosionShockwave = null;
+    }
+  }
+  for (let i = activeDebris.length - 1;i >= 0; i--) {
+    const p = activeDebris[i];
+    p.life -= dt;
+    p.mesh.position.addScaledVector(p.velocity, dt);
+    p.velocity.multiplyScalar(Math.exp(-1.5 * dt));
+    p.mesh.rotation.x += p.rotSpeed.x * dt;
+    p.mesh.rotation.y += p.rotSpeed.y * dt;
+    p.mesh.rotation.z += p.rotSpeed.z * dt;
+    const alpha = Math.max(0, p.life / p.maxLife);
+    p.mesh.material.opacity = alpha;
+    if (p.life <= 0) {
+      scene.remove(p.mesh);
+      p.mesh.geometry.dispose();
+      p.mesh.material.dispose();
+      activeDebris.splice(i, 1);
+    }
   }
 }
 function respawnPlayer() {
+  clearExplosionFX();
   STATE.health = STATE.maxHealth;
   STATE.bioEnergy = STATE.maxBioEnergy;
   STATE.mentalEnergy = STATE.maxMentalEnergy;
@@ -28464,6 +28636,7 @@ function respawnPlayer() {
   STATE.playerAcceleration.set(0, 0, 0);
   if (STATE.playerGroup) {
     STATE.playerGroup.position.set(0, 0, 65);
+    STATE.playerGroup.visible = true;
   }
   const modal = document.getElementById("game-over-modal");
   if (modal)
@@ -28472,6 +28645,7 @@ function respawnPlayer() {
   addLogEntry("SYSTEM", "\uD83E\uDDEC Phönix-Zellregeneration abgeschlossen. Zellkern & Traum-Matrix auf 100% wiederhergestellt.");
 }
 function restartGame() {
+  clearExplosionFX();
   STATE.health = STATE.maxHealth;
   STATE.bioEnergy = STATE.maxBioEnergy;
   STATE.mentalEnergy = STATE.maxMentalEnergy;
@@ -28495,10 +28669,22 @@ function restartGame() {
   STATE.playerAcceleration.set(0, 0, 0);
   if (STATE.playerGroup) {
     STATE.playerGroup.position.set(0, 0, 65);
+    STATE.playerGroup.visible = true;
   }
   renderCrewUI();
   updateMutationUI();
   addLogEntry("SYSTEM", "\uD83C\uDF0C Neues Universum initialisiert. Sternensystem 0 erreicht.");
+}
+function clearExplosionFX() {
+  if (explosionShockwave) {
+    scene.remove(explosionShockwave);
+    explosionShockwave = null;
+  }
+  activeDebris.forEach((p) => {
+    scene.remove(p.mesh);
+  });
+  activeDebris.length = 0;
+  cameraShakeDuration = 0;
 }
 
 // src/systems/fleet.ts
@@ -30569,6 +30755,7 @@ function animate(time) {
     updateFleet(dt);
     updateCrewSimulation(dt);
     updateSonarWave(dt);
+    updateExplosionEffects(dt);
     updateTrajectory();
     updateMinimap();
     if (STATE.playerGroup) {
