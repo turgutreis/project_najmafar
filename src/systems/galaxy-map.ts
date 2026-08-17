@@ -36,8 +36,15 @@ export function toggleGalaxyMap() {
 }
 
 export function renderGalaxyMap() {
-    const canvas = document.getElementById('galaxy-canvas') as HTMLCanvasElement;
+    const canvas = document.getElementById('galaxy-map-canvas') as HTMLCanvasElement;
     if (!canvas || !STATE.universe) return;
+
+    // Sync pixel resolution with CSS layout size
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+        canvas.width = rect.width * (window.devicePixelRatio || 1);
+        canvas.height = rect.height * (window.devicePixelRatio || 1);
+    }
 
     const ctx = canvas.getContext('2d')!;
     const width = canvas.width;

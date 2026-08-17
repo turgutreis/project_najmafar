@@ -26332,7 +26332,7 @@ var camera;
 var renderer;
 var starfield;
 function initScene(container) {
-  const target = container || document.getElementById("webgl-container") || document.getElementById("game-container") || document.body;
+  const target = container || document.getElementById("canvas-container") || document.body;
   scene = new Scene;
   scene.fog = new FogExp2(198418, 0.003);
   camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -27956,9 +27956,14 @@ function toggleGalaxyMap() {
   }
 }
 function renderGalaxyMap() {
-  const canvas = document.getElementById("galaxy-canvas");
+  const canvas = document.getElementById("galaxy-map-canvas");
   if (!canvas || !STATE.universe)
     return;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) {
+    canvas.width = rect.width * (window.devicePixelRatio || 1);
+    canvas.height = rect.height * (window.devicePixelRatio || 1);
+  }
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
   const height = canvas.height;
@@ -27977,9 +27982,9 @@ function renderGalaxyMap() {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
     const newZoom = Math.min(5, Math.max(0.6, mapZoom * zoomFactor));
-    const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
+    const rect2 = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect2.left;
+    const my = e.clientY - rect2.top;
     mapPanX = mx - (mx - mapPanX) * (newZoom / mapZoom);
     mapPanY = my - (my - mapPanY) * (newZoom / mapZoom);
     mapZoom = newZoom;
@@ -28000,9 +28005,9 @@ function renderGalaxyMap() {
     mapPanY = 0;
   };
   canvas.onmousemove = (e) => {
-    const rect = canvas.getBoundingClientRect();
-    mouseX = e.clientX - rect.left;
-    mouseY = e.clientY - rect.top;
+    const rect2 = canvas.getBoundingClientRect();
+    mouseX = e.clientX - rect2.left;
+    mouseY = e.clientY - rect2.top;
     if (isDraggingMap) {
       mapPanX = e.clientX - dragStartX;
       mapPanY = e.clientY - dragStartY;
@@ -29582,7 +29587,7 @@ function animate(time) {
 }
 function init() {
   console.log("Najmafar: Initializing 3D engine and game systems...");
-  const container = document.getElementById("webgl-container") || document.getElementById("game-container") || document.body;
+  const container = document.getElementById("canvas-container") || document.body;
   initScene(container);
   createPlayerMesh();
   initTrajectory();

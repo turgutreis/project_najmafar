@@ -6,7 +6,7 @@ export let renderer: THREE.WebGLRenderer;
 export let starfield: THREE.Points;
 
 export function initScene(container?: HTMLElement) {
-    const target = container || document.getElementById('webgl-container') || document.getElementById('game-container') || document.body;
+    const target = container || document.getElementById('canvas-container') || document.body;
 
     // Scene
     scene = new THREE.Scene();

@@ -92,7 +92,7 @@ function animate(time: number) {
 
 function init() {
     console.log("Najmafar: Initializing 3D engine and game systems...");
-    const container = document.getElementById('webgl-container') || document.getElementById('game-container') || document.body;
+    const container = document.getElementById('canvas-container') || document.body;
 
     // 1. Three.js Scene Setup
     initScene(container);
