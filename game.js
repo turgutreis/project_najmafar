@@ -30581,6 +30581,25 @@ function updatePhysics(dt) {
       }
     }
   }
+  STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
+  STATE.playerVelocity.multiplyScalar(Math.exp(-STATE.currentDrag * dt));
+  STATE.playerPosition.addScaledVector(STATE.playerVelocity, dt);
+  const maxBound = 500;
+  if (STATE.playerPosition.x > maxBound) {
+    STATE.playerPosition.x = -maxBound;
+  }
+  if (STATE.playerPosition.x < -maxBound) {
+    STATE.playerPosition.x = maxBound;
+  }
+  if (STATE.playerPosition.z > maxBound) {
+    STATE.playerPosition.z = -maxBound;
+  }
+  if (STATE.playerPosition.z < -maxBound) {
+    STATE.playerPosition.z = maxBound;
+  }
+  if (STATE.playerGroup) {
+    STATE.playerGroup.position.copy(STATE.playerPosition);
+  }
   camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
   camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
   camera.position.y = 80;

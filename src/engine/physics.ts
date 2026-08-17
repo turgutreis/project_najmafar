@@ -181,6 +181,22 @@ export function updatePhysics(dt: number) {
         }
     }
 
+    // 6. Integrate Equations of Motion (Euler with exponential drag)
+    STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
+    STATE.playerVelocity.multiplyScalar(Math.exp(-STATE.currentDrag * dt));
+    STATE.playerPosition.addScaledVector(STATE.playerVelocity, dt);
+
+    // Boundary wrapping
+    const maxBound = 500;
+    if (STATE.playerPosition.x > maxBound) { STATE.playerPosition.x = -maxBound; }
+    if (STATE.playerPosition.x < -maxBound) { STATE.playerPosition.x = maxBound; }
+    if (STATE.playerPosition.z > maxBound) { STATE.playerPosition.z = -maxBound; }
+    if (STATE.playerPosition.z < -maxBound) { STATE.playerPosition.z = maxBound; }
+
+    if (STATE.playerGroup) {
+        STATE.playerGroup.position.copy(STATE.playerPosition);
+    }
+
     // Camera follow (Smooth lag)
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
