@@ -26688,8 +26688,6 @@ function removeHarvestBeam() {
 var audioCtx = null;
 var musicUserMuted = false;
 var musicPlaying = false;
-var musicGain = null;
-var musicInterval = null;
 var thrusterOsc = null;
 var thrusterGain = null;
 var thrusterFilter = null;
@@ -26840,72 +26838,35 @@ function setThrusterSound(active) {
     thrusterFilter = null;
   }
 }
-function toggleMusic(forcePlay = false) {
-  const ctx = getAudioContext();
-  if (!ctx)
+var bgMusic = typeof Audio !== "undefined" ? new Audio("assets/The Ur-Quan Masters - Space.mp3") : null;
+if (bgMusic) {
+  bgMusic.loop = true;
+  bgMusic.volume = 0.35;
+}
+function toggleMusic(explicitState = null) {
+  const shouldPlay = explicitState !== null ? explicitState : !musicPlaying;
+  if (!bgMusic)
     return;
-  if (forcePlay) {
-    if (!musicPlaying)
-      startStarControlMusic();
-    return;
-  }
-  if (musicPlaying) {
-    musicUserMuted = true;
-    stopStarControlMusic();
-  } else {
+  if (shouldPlay) {
     musicUserMuted = false;
-    startStarControlMusic();
+    bgMusic.play().then(() => {
+      musicPlaying = true;
+      updateMusicButtonsUI();
+    }).catch((err) => {
+      console.log("Audio play blocked by browser. Click page to start.", err);
+    });
+  } else {
+    musicUserMuted = true;
+    bgMusic.pause();
+    musicPlaying = false;
+    updateMusicButtonsUI();
   }
-  updateMusicButtonsUI();
 }
 function isMusicPlaying() {
   return musicPlaying;
 }
 function isMusicUserMuted() {
   return musicUserMuted;
-}
-function startStarControlMusic() {
-  const ctx = getAudioContext();
-  if (!ctx || musicPlaying)
-    return;
-  musicPlaying = true;
-  musicGain = ctx.createGain();
-  musicGain.gain.setValueAtTime(0.08, ctx.currentTime);
-  musicGain.connect(ctx.destination);
-  const bassNotes = [110, 110, 130.81, 146.83, 110, 98, 110, 164.81];
-  let noteIdx = 0;
-  musicInterval = setInterval(() => {
-    if (!musicPlaying || !ctx)
-      return;
-    const now = ctx.currentTime;
-    const freq = bassNotes[noteIdx % bassNotes.length];
-    noteIdx++;
-    const osc = ctx.createOscillator();
-    const noteGain = ctx.createGain();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(freq, now);
-    noteGain.gain.setValueAtTime(0, now);
-    noteGain.gain.linearRampToValueAtTime(0.06, now + 0.05);
-    noteGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-    osc.connect(noteGain);
-    if (musicGain)
-      noteGain.connect(musicGain);
-    osc.start(now);
-    osc.stop(now + 0.4);
-  }, 280);
-  updateMusicButtonsUI();
-}
-function stopStarControlMusic() {
-  musicPlaying = false;
-  if (musicInterval) {
-    clearInterval(musicInterval);
-    musicInterval = null;
-  }
-  if (musicGain) {
-    musicGain.disconnect();
-    musicGain = null;
-  }
-  updateMusicButtonsUI();
 }
 function updateMusicButtonsUI() {
   const musicBtn = document.getElementById("music-toggle-btn");
