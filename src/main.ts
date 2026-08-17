@@ -134,10 +134,10 @@ function setupMenuListeners() {
             if (STATE.universe) {
                 clearActiveSystem();
                 spawnPlanetsAndAsteroids();
-                STATE.playerPosition.set(0, 0, 50);
-                STATE.playerVelocity.set(0, 0, 0);
+                STATE.playerPosition.set(0, 0, 65);
+                STATE.playerVelocity.set(5, 0, 0);
                 if (STATE.playerGroup) {
-                    STATE.playerGroup.position.set(0, 0, 50);
+                    STATE.playerGroup.position.set(0, 0, 65);
                 }
             }
 

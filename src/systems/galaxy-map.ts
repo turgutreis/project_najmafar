@@ -585,11 +585,11 @@ export function warpToSystem(systemId: number) {
         clearActiveSystem();
         spawnPlanetsAndAsteroids();
 
-        // Reset player
-        STATE.playerPosition.set(0, 0, 50);
-        STATE.playerVelocity.set(0, 0, 0);
+        // Reset player in safe orbit
+        STATE.playerPosition.set(0, 0, 65);
+        STATE.playerVelocity.set(5, 0, 0);
         if (STATE.playerGroup) {
-            STATE.playerGroup.position.set(0, 0, 50);
+            STATE.playerGroup.position.set(0, 0, 65);
         }
 
         addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} (${dist.toFixed(0)} LJ, -${warpCost}% Energie) stabilisiert.`);

@@ -26290,8 +26290,8 @@ var STATE = {
     folddrive: { purchased: false, bioCost: 90, siliconCost: 70 },
     translator: { purchased: false, bioCost: 80, siliconCost: 80 }
   },
-  playerPosition: new Vector3(0, 0, 50),
-  playerVelocity: new Vector3(0, 0, 0),
+  playerPosition: new Vector3(0, 0, 65),
+  playerVelocity: new Vector3(5, 0, 0),
   playerAcceleration: new Vector3(0, 0, 0),
   thrustStrength: 25,
   drag: 0.4,
@@ -27711,18 +27711,18 @@ function spawnPlanetsAndAsteroids() {
     starLight.position.set(0, 0, 0);
     scene.add(starLight);
     starData.colorCss = starData.color.replace("0x", "#");
-    const starRange = starData.size * 6;
+    const starRange = starData.size * 3.5;
     const starSource = {
       mesh: starMesh,
       type: "star",
       name: `${activeSystem.name} (Zentralstern)`,
-      mass: starData.mass * 8,
+      mass: starData.mass * 0.4,
       radius: starData.size,
       gravityRange: starRange,
       position: new Vector3(0, 0, 0)
     };
     STATE.gravitySources.push(starSource);
-    starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.05);
+    starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.08);
   }
   activeSystem.planets.forEach((p, idx) => {
     const angle = idx * 1.8 + STATE.currentSystemId * 0.5;
@@ -28430,10 +28430,10 @@ function warpToSystem(systemId) {
     const activeSystem = STATE.universe.systems[systemId];
     clearActiveSystem();
     spawnPlanetsAndAsteroids();
-    STATE.playerPosition.set(0, 0, 50);
-    STATE.playerVelocity.set(0, 0, 0);
+    STATE.playerPosition.set(0, 0, 65);
+    STATE.playerVelocity.set(5, 0, 0);
     if (STATE.playerGroup) {
-      STATE.playerGroup.position.set(0, 0, 50);
+      STATE.playerGroup.position.set(0, 0, 65);
     }
     addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} (${dist.toFixed(0)} LJ, -${warpCost}% Energie) stabilisiert.`);
     if (warpOverlay) {
@@ -29593,13 +29593,13 @@ function updateCollisions(dt) {
         }
         updateMutationUI();
         respawnAsteroid(source);
-      } else if (source.type === "planet") {
+      } else if (source.type === "planet" || source.type === "star") {
         _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
         STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, colDistance + 0.6);
         if (STATE.playerGroup)
           STATE.playerGroup.position.copy(STATE.playerPosition);
         const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-        const bounceForce = Math.max(16, Math.abs(currentOutwardSpeed) * 0.8 + 12);
+        const bounceForce = Math.max(20, Math.abs(currentOutwardSpeed) * 0.8 + 14);
         STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
         if (STATE.collisionCooldown === 0) {
           STATE.collisionCooldown = 1.2;
@@ -29727,10 +29727,10 @@ function setupMenuListeners() {
       if (STATE.universe) {
         clearActiveSystem();
         spawnPlanetsAndAsteroids();
-        STATE.playerPosition.set(0, 0, 50);
-        STATE.playerVelocity.set(0, 0, 0);
+        STATE.playerPosition.set(0, 0, 65);
+        STATE.playerVelocity.set(5, 0, 0);
         if (STATE.playerGroup) {
-          STATE.playerGroup.position.set(0, 0, 50);
+          STATE.playerGroup.position.set(0, 0, 65);
         }
       }
       if (!isMusicPlaying() && !isMusicUserMuted()) {

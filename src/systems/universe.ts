@@ -154,18 +154,18 @@ export function spawnPlanetsAndAsteroids() {
 
         starData.colorCss = starData.color.replace("0x", "#");
 
-        const starRange = starData.size * 6;
+        const starRange = starData.size * 3.5;
         const starSource: any = {
             mesh: starMesh,
             type: 'star',
             name: `${activeSystem.name} (Zentralstern)`,
-            mass: starData.mass * 8,
+            mass: starData.mass * 0.4,
             radius: starData.size,
             gravityRange: starRange,
             position: new THREE.Vector3(0, 0, 0)
         };
         STATE.gravitySources.push(starSource);
-        starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.05);
+        starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.08);
     }
 
     // 2. Planets & Moons

@@ -268,7 +268,7 @@ export function updateCollisions(dt: number) {
                 }
                 updateMutationUI();
                 respawnAsteroid(source);
-            } else if (source.type === 'planet') {
+            } else if (source.type === 'planet' || source.type === 'star') {
                 _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
 
                 // Snap cleanly outside collider radius
@@ -277,7 +277,7 @@ export function updateCollisions(dt: number) {
 
                 // Elastic Repulsion Reflex
                 const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-                const bounceForce = Math.max(16, Math.abs(currentOutwardSpeed) * 0.8 + 12);
+                const bounceForce = Math.max(20, Math.abs(currentOutwardSpeed) * 0.8 + 14);
                 STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
 
                 if (STATE.collisionCooldown === 0) {
