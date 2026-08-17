@@ -3,7 +3,7 @@ import { STATE, activePlanets } from '../core/state';
 import { scene } from '../engine/scene';
 import { createGravityRing } from '../procedural/meshes';
 import { createHabitableTextures, createGasGiantTextures, createRockyTextures, createIceMoonTextures, createVolcanicMoonTextures, createStarTexture, createCloudTexture } from '../procedural/textures';
-import { generatePlanetAttributes, generateFallbackMoons } from './scanner';
+import { generatePlanetAttributes, generateFallbackMoons, updateScannerUI } from './scanner';
 import { addLogEntry } from '../ui/hud';
 
 export async function checkUniverseData() {
@@ -78,6 +78,24 @@ export function clearActiveSystem() {
     STATE.gravitySources = [];
     STATE.asteroids = [];
     activePlanets.length = 0;
+
+    // Reset Target Locks, Scanners and 3D Reticle
+    STATE.lockedTarget = null;
+    STATE.nearestPlanet = null;
+    STATE.scanningPlanet = null;
+    STATE.extractingPlanet = null;
+    STATE.abductActive = false;
+    STATE.abductTarget = null;
+    STATE.scanProgress = 0;
+    STATE.harvestProgress = 0;
+    STATE.abductProgress = 0;
+
+    const badge = document.getElementById('target-lock-badge');
+    const label = document.getElementById('target-label-text');
+    if (badge) badge.style.display = 'none';
+    if (label) label.innerText = 'Nächster Planet:';
+
+    updateScannerUI(null, Infinity);
 }
 
 export function spawnPlanetsAndAsteroids() {

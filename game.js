@@ -27876,6 +27876,22 @@ function clearActiveSystem() {
   STATE.gravitySources = [];
   STATE.asteroids = [];
   activePlanets.length = 0;
+  STATE.lockedTarget = null;
+  STATE.nearestPlanet = null;
+  STATE.scanningPlanet = null;
+  STATE.extractingPlanet = null;
+  STATE.abductActive = false;
+  STATE.abductTarget = null;
+  STATE.scanProgress = 0;
+  STATE.harvestProgress = 0;
+  STATE.abductProgress = 0;
+  const badge = document.getElementById("target-lock-badge");
+  const label = document.getElementById("target-label-text");
+  if (badge)
+    badge.style.display = "none";
+  if (label)
+    label.innerText = "Nächster Planet:";
+  updateScannerUI(null, Infinity);
 }
 function spawnPlanetsAndAsteroids() {
   if (!STATE.universe || !STATE.universe.systems) {
