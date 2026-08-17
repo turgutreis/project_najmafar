@@ -1,17 +1,16 @@
 import * as THREE from 'three';
 
-export type StarType = 'Yellow Sun' | 'Blue Giant' | 'Red Dwarf' | 'White Dwarf' | 'Black Hole';
+export type PlanetType = 'Habitable' | 'Gas Giant' | 'Rocky' | 'Desert' | 'Oceanic' | 'Volcanic' | 'Ice';
+export type MoonType = 'Eismond' | 'Vulkanmond' | 'Kratermond' | 'Gesteinsmond';
+export type TechLevel = 'Primitive' | 'Industrial' | 'Spacefaring' | 'Hyper-Advanced';
 
 export interface StarData {
-    type: StarType;
-    mass: number;
+    type: string;
     color: string;
-    colorCss?: string;
     size: number;
+    mass: number;
+    colorCss?: string;
 }
-
-export type PlanetType = 'Rocky' | 'Gas Giant' | 'Habitable';
-export type MoonType = 'Eismond' | 'Vulkanmond' | 'Kratermond';
 
 export interface CrewMember {
     id: number;
@@ -34,6 +33,9 @@ export interface SpeciesData {
     name: string;
     population: number;
     candidates: CrewMember[];
+    techLevel?: TechLevel;
+    defenseRating?: number;
+    fleetDisposition?: 'Pacifist' | 'Defensive' | 'Militaristic';
 }
 
 export interface PlanetAttributes {
@@ -88,14 +90,14 @@ export interface UniverseData {
 
 export interface GravitySource {
     mesh: THREE.Object3D;
-    type: 'planet' | 'asteroid' | 'star';
+    type: 'planet' | 'asteroid' | 'star' | 'ship_wreck';
     name: string;
     mass: number;
     radius: number;
     gravityRange: number;
     position: THREE.Vector3;
     isResource?: boolean;
-    resourceType?: 'bio' | 'energy';
+    resourceType?: 'bio' | 'energy' | 'silicon';
     isAbsorbed?: boolean;
     ringMesh?: THREE.Mesh | null;
 }
@@ -119,6 +121,35 @@ export interface PlanetEntry {
     parentPlanet?: PlanetEntry | null;
     scanned: boolean;
     attributes: PlanetAttributes;
+}
+
+export interface FleetShip {
+    id: number;
+    mesh: THREE.Group;
+    bodyMesh: THREE.Mesh;
+    trailMesh?: THREE.Line | null;
+    type: 'interceptor' | 'corvette';
+    name: string;
+    position: THREE.Vector3;
+    velocity: THREE.Vector3;
+    homePlanet: PlanetEntry;
+    orbitRadius: number;
+    orbitAngle: number;
+    orbitSpeed: number;
+    health: number;
+    maxHealth: number;
+    state: 'patrol' | 'intercept' | 'disabled';
+    attackCooldown: number;
+    alertTimer: number;
+}
+
+export interface FleetProjectile {
+    mesh: THREE.Mesh;
+    position: THREE.Vector3;
+    velocity: THREE.Vector3;
+    life: number;
+    damage: number;
+    type: 'laser' | 'emp';
 }
 
 export interface MutationItem {
@@ -188,6 +219,7 @@ export interface GameState {
         a: boolean;
         d: boolean;
         Space: boolean;
+        x: boolean;
     };
 
     // Quantum Universe
@@ -216,4 +248,9 @@ export interface GameState {
     gravitySources: GravitySource[];
     asteroids: GravitySource[];
     playerGroup: THREE.Group | null;
+
+    // Spacefaring Fleet System (Phase B)
+    fleetShips: FleetShip[];
+    fleetProjectiles: FleetProjectile[];
+    bioDischargeCooldown: number;
 }

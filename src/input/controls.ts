@@ -6,6 +6,7 @@ import { toggleGalaxyMap, isMapOpen } from '../systems/galaxy-map';
 import { triggerScanStart } from '../systems/scanner';
 import { triggerHarvestStart } from '../systems/harvesting';
 import { triggerAbductStart } from '../systems/abduction';
+import { triggerBioDischarge, salvageNearestWreck } from '../systems/fleet';
 import { triggerPsionicSonar, addLogEntry } from '../ui/hud';
 import { buyMutation } from '../ui/deck';
 
@@ -31,7 +32,7 @@ export function setupControls() {
             cycleTarget(1);
         }
         if (key === 'x') {
-            clearLockedTarget();
+            triggerBioDischarge();
         }
         if (key === 'f') {
             if (STATE.nearestPlanet) {
@@ -44,7 +45,10 @@ export function setupControls() {
             }
         }
         if (key === 'e') {
-            triggerHarvestStart();
+            const salvaged = salvageNearestWreck();
+            if (!salvaged) {
+                triggerHarvestStart();
+            }
         }
         if (key === 'w' || e.key === 'ArrowUp') STATE.keys.w = true;
         if (key === 's' || e.key === 'ArrowDown') STATE.keys.s = true;

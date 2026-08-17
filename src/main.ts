@@ -9,6 +9,7 @@ import { updatePhysics } from './engine/physics';
 import { updateScanning, triggerScanStart } from './systems/scanner';
 import { updateHarvesting, triggerHarvestStart } from './systems/harvesting';
 import { updateAbduction, triggerAbductStart } from './systems/abduction';
+import { updateFleet } from './systems/fleet';
 import { updateCrewSimulation, renderCrewUI } from './systems/crew';
 import { updateMinimap, updateSonarWave, initHUD, addLogEntry } from './ui/hud';
 import { initDeckUI, updateMutationUI } from './ui/deck';
@@ -48,6 +49,7 @@ function animate(time: number) {
         updateScanning(dt);
         updateHarvesting(dt);
         updateAbduction(dt);
+        updateFleet(dt);
         updateCrewSimulation(dt);
         updateSonarWave(dt);
 

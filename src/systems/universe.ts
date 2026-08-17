@@ -4,6 +4,7 @@ import { scene } from '../engine/scene';
 import { createGravityRing } from '../procedural/meshes';
 import { createHabitableTextures, createGasGiantTextures, createRockyTextures, createIceMoonTextures, createVolcanicMoonTextures, createStarTexture, createCloudTexture } from '../procedural/textures';
 import { generatePlanetAttributes, generateFallbackMoons, updateScannerUI } from './scanner';
+import { initPlanetDefenseFleets, clearFleet } from './fleet';
 import { addLogEntry } from '../ui/hud';
 
 export async function checkUniverseData() {
@@ -89,6 +90,8 @@ export function clearActiveSystem() {
     STATE.scanProgress = 0;
     STATE.harvestProgress = 0;
     STATE.abductProgress = 0;
+
+    clearFleet();
 
     const badge = document.getElementById('target-lock-badge');
     const label = document.getElementById('target-label-text');
@@ -390,6 +393,9 @@ export function spawnPlanetsAndAsteroids() {
         STATE.asteroids.push(sourceObj);
         sourceObj.ringMesh = createGravityRing(ast.x, ast.z, range, color, 0.05);
     });
+
+    // 4. Initialize Spacefaring Planetary Defense Fleets (Phase B)
+    initPlanetDefenseFleets();
 }
 
 function generateFallbackAsteroids() {

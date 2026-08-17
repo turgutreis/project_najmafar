@@ -5,9 +5,9 @@ export const STATE: GameState = {
     // Player Stats
     health: 100,
     maxHealth: 100,
-    bioEnergy: 80,
+    bioEnergy: 100,
     maxBioEnergy: 100,
-    mentalEnergy: 90,
+    mentalEnergy: 100,
     maxMentalEnergy: 100,
     telepathyActive: false,
     gameStarted: false,
@@ -16,14 +16,14 @@ export const STATE: GameState = {
     bioRes: 0,
     siliconRes: 0,
 
-    // Sensor & Travel Limits (Fog of War & Jump Ranges)
+    // Sensor & Travel Limits
     psionicRange: 75,
     warpRange: 90,
 
     // Crew Management & Synergies
     maxCrewCapacity: 2,
     crewSatietyTimer: 0,
-    crewDialogueTimer: 18,
+    crewDialogueTimer: 15,
     crewBuffs: {
         thrust: 1.0,
         bioGain: 1.0,
@@ -35,13 +35,13 @@ export const STATE: GameState = {
 
     // Mutations
     mutations: {
-        armor: { purchased: false, bioCost: 50, siliconCost: 30 },
-        o2: { purchased: false, bioCost: 60, siliconCost: 40 },
-        synapses: { purchased: false, bioCost: 40, siliconCost: 80 },
-        cocoon: { purchased: false, bioCost: 50, siliconCost: 40 },
-        hivemind: { purchased: false, bioCost: 80, siliconCost: 70 },
-        folddrive: { purchased: false, bioCost: 90, siliconCost: 70 },
-        translator: { purchased: false, bioCost: 80, siliconCost: 80 }
+        armor: { purchased: false, bioCost: 150, siliconCost: 80 },
+        o2: { purchased: false, bioCost: 100, siliconCost: 40 },
+        synapses: { purchased: false, bioCost: 200, siliconCost: 120 },
+        cocoon: { purchased: false, bioCost: 250, siliconCost: 100 },
+        hivemind: { purchased: false, bioCost: 400, siliconCost: 250 },
+        folddrive: { purchased: false, bioCost: 300, siliconCost: 350 },
+        translator: { purchased: false, bioCost: 80, siliconCost: 50 }
     },
 
     // Physics
@@ -59,7 +59,8 @@ export const STATE: GameState = {
         s: false,
         a: false,
         d: false,
-        Space: false
+        Space: false,
+        x: false
     },
 
     // Quantum Universe
@@ -87,7 +88,12 @@ export const STATE: GameState = {
     // Active Simulation
     gravitySources: [],
     asteroids: [],
-    playerGroup: null
+    playerGroup: null,
+
+    // Spacefaring Fleet System (Phase B)
+    fleetShips: [],
+    fleetProjectiles: [],
+    bioDischargeCooldown: 0
 };
 
 export const activePlanets: any[] = [];

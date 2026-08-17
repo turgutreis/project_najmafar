@@ -8341,6 +8341,158 @@ class BoxGeometry extends BufferGeometry {
     return new BoxGeometry(data.width, data.height, data.depth, data.widthSegments, data.heightSegments, data.depthSegments);
   }
 }
+class CylinderGeometry extends BufferGeometry {
+  constructor(radiusTop = 1, radiusBottom = 1, height = 1, radialSegments = 32, heightSegments = 1, openEnded = false, thetaStart = 0, thetaLength = Math.PI * 2) {
+    super();
+    this.type = "CylinderGeometry";
+    this.parameters = {
+      radiusTop,
+      radiusBottom,
+      height,
+      radialSegments,
+      heightSegments,
+      openEnded,
+      thetaStart,
+      thetaLength
+    };
+    const scope = this;
+    radialSegments = Math.floor(radialSegments);
+    heightSegments = Math.floor(heightSegments);
+    const indices = [];
+    const vertices = [];
+    const normals = [];
+    const uvs = [];
+    let index = 0;
+    const indexArray = [];
+    const halfHeight = height / 2;
+    let groupStart = 0;
+    generateTorso();
+    if (openEnded === false) {
+      if (radiusTop > 0)
+        generateCap(true);
+      if (radiusBottom > 0)
+        generateCap(false);
+    }
+    this.setIndex(indices);
+    this.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+    this.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+    this.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+    function generateTorso() {
+      const normal = new Vector3;
+      const vertex = new Vector3;
+      let groupCount = 0;
+      const slope = (radiusBottom - radiusTop) / height;
+      for (let y = 0;y <= heightSegments; y++) {
+        const indexRow = [];
+        const v = y / heightSegments;
+        const radius = v * (radiusBottom - radiusTop) + radiusTop;
+        for (let x = 0;x <= radialSegments; x++) {
+          const u = x / radialSegments;
+          const theta = u * thetaLength + thetaStart;
+          const sinTheta = Math.sin(theta);
+          const cosTheta = Math.cos(theta);
+          vertex.x = radius * sinTheta;
+          vertex.y = -v * height + halfHeight;
+          vertex.z = radius * cosTheta;
+          vertices.push(vertex.x, vertex.y, vertex.z);
+          normal.set(sinTheta, slope, cosTheta).normalize();
+          normals.push(normal.x, normal.y, normal.z);
+          uvs.push(u, 1 - v);
+          indexRow.push(index++);
+        }
+        indexArray.push(indexRow);
+      }
+      for (let x = 0;x < radialSegments; x++) {
+        for (let y = 0;y < heightSegments; y++) {
+          const a = indexArray[y][x];
+          const b = indexArray[y + 1][x];
+          const c = indexArray[y + 1][x + 1];
+          const d = indexArray[y][x + 1];
+          if (radiusTop > 0 || y !== 0) {
+            indices.push(a, b, d);
+            groupCount += 3;
+          }
+          if (radiusBottom > 0 || y !== heightSegments - 1) {
+            indices.push(b, c, d);
+            groupCount += 3;
+          }
+        }
+      }
+      scope.addGroup(groupStart, groupCount, 0);
+      groupStart += groupCount;
+    }
+    function generateCap(top) {
+      const centerIndexStart = index;
+      const uv = new Vector2;
+      const vertex = new Vector3;
+      let groupCount = 0;
+      const radius = top === true ? radiusTop : radiusBottom;
+      const sign = top === true ? 1 : -1;
+      for (let x = 1;x <= radialSegments; x++) {
+        vertices.push(0, halfHeight * sign, 0);
+        normals.push(0, sign, 0);
+        uvs.push(0.5, 0.5);
+        index++;
+      }
+      const centerIndexEnd = index;
+      for (let x = 0;x <= radialSegments; x++) {
+        const u = x / radialSegments;
+        const theta = u * thetaLength + thetaStart;
+        const cosTheta = Math.cos(theta);
+        const sinTheta = Math.sin(theta);
+        vertex.x = radius * sinTheta;
+        vertex.y = halfHeight * sign;
+        vertex.z = radius * cosTheta;
+        vertices.push(vertex.x, vertex.y, vertex.z);
+        normals.push(0, sign, 0);
+        uv.x = cosTheta * 0.5 + 0.5;
+        uv.y = sinTheta * 0.5 * sign + 0.5;
+        uvs.push(uv.x, uv.y);
+        index++;
+      }
+      for (let x = 0;x < radialSegments; x++) {
+        const c = centerIndexStart + x;
+        const i = centerIndexEnd + x;
+        if (top === true) {
+          indices.push(i, i + 1, c);
+        } else {
+          indices.push(i + 1, i, c);
+        }
+        groupCount += 3;
+      }
+      scope.addGroup(groupStart, groupCount, top === true ? 1 : 2);
+      groupStart += groupCount;
+    }
+  }
+  copy(source) {
+    super.copy(source);
+    this.parameters = Object.assign({}, source.parameters);
+    return this;
+  }
+  static fromJSON(data) {
+    return new CylinderGeometry(data.radiusTop, data.radiusBottom, data.height, data.radialSegments, data.heightSegments, data.openEnded, data.thetaStart, data.thetaLength);
+  }
+}
+
+class ConeGeometry extends CylinderGeometry {
+  constructor(radius = 1, height = 1, radialSegments = 32, heightSegments = 1, openEnded = false, thetaStart = 0, thetaLength = Math.PI * 2) {
+    super(0, radius, height, radialSegments, heightSegments, openEnded, thetaStart, thetaLength);
+    this.type = "ConeGeometry";
+    this.parameters = {
+      radius,
+      height,
+      radialSegments,
+      heightSegments,
+      openEnded,
+      thetaStart,
+      thetaLength
+    };
+  }
+  static fromJSON(data) {
+    return new ConeGeometry(data.radius, data.height, data.radialSegments, data.heightSegments, data.openEnded, data.thetaStart, data.thetaLength);
+  }
+}
+
 class PolyhedronGeometry extends BufferGeometry {
   constructor(vertices = [], indices = [], radius = 1, detail = 0) {
     super();
@@ -26260,9 +26412,9 @@ class WebGLRenderer {
 var STATE = {
   health: 100,
   maxHealth: 100,
-  bioEnergy: 80,
+  bioEnergy: 100,
   maxBioEnergy: 100,
-  mentalEnergy: 90,
+  mentalEnergy: 100,
   maxMentalEnergy: 100,
   telepathyActive: false,
   gameStarted: false,
@@ -26272,7 +26424,7 @@ var STATE = {
   warpRange: 90,
   maxCrewCapacity: 2,
   crewSatietyTimer: 0,
-  crewDialogueTimer: 18,
+  crewDialogueTimer: 15,
   crewBuffs: {
     thrust: 1,
     bioGain: 1,
@@ -26282,13 +26434,13 @@ var STATE = {
     psionicBonus: 0
   },
   mutations: {
-    armor: { purchased: false, bioCost: 50, siliconCost: 30 },
-    o2: { purchased: false, bioCost: 60, siliconCost: 40 },
-    synapses: { purchased: false, bioCost: 40, siliconCost: 80 },
-    cocoon: { purchased: false, bioCost: 50, siliconCost: 40 },
-    hivemind: { purchased: false, bioCost: 80, siliconCost: 70 },
-    folddrive: { purchased: false, bioCost: 90, siliconCost: 70 },
-    translator: { purchased: false, bioCost: 80, siliconCost: 80 }
+    armor: { purchased: false, bioCost: 150, siliconCost: 80 },
+    o2: { purchased: false, bioCost: 100, siliconCost: 40 },
+    synapses: { purchased: false, bioCost: 200, siliconCost: 120 },
+    cocoon: { purchased: false, bioCost: 250, siliconCost: 100 },
+    hivemind: { purchased: false, bioCost: 400, siliconCost: 250 },
+    folddrive: { purchased: false, bioCost: 300, siliconCost: 350 },
+    translator: { purchased: false, bioCost: 80, siliconCost: 50 }
   },
   playerPosition: new Vector3(0, 0, 65),
   playerVelocity: new Vector3(5, 0, 0),
@@ -26304,7 +26456,8 @@ var STATE = {
     s: false,
     a: false,
     d: false,
-    Space: false
+    Space: false,
+    x: false
   },
   universe: null,
   currentSystemId: 0,
@@ -26322,7 +26475,10 @@ var STATE = {
   loneliness: 80,
   gravitySources: [],
   asteroids: [],
-  playerGroup: null
+  playerGroup: null,
+  fleetShips: [],
+  fleetProjectiles: [],
+  bioDischargeCooldown: 0
 };
 var activePlanets = [];
 
@@ -27044,6 +27200,44 @@ function updateMinimap() {
       }
     }
   });
+  STATE.fleetShips.forEach((ship) => {
+    const dx = ship.position.x - STATE.playerPosition.x;
+    const dz = ship.position.z - STATE.playerPosition.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < range) {
+      const sx = cx + dx * invRangeRadius;
+      const sy = cy + dz * invRangeRadius;
+      if (ship.state === "disabled") {
+        minimapCtx.fillStyle = "#64748b";
+        minimapCtx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
+      } else if (ship.state === "intercept") {
+        minimapCtx.fillStyle = "#f43f5e";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+        minimapCtx.fill();
+        minimapCtx.strokeStyle = "rgba(244, 63, 94, 0.8)";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 5 + Math.sin(Date.now() * 0.015) * 1.5, 0, Math.PI * 2);
+        minimapCtx.stroke();
+      } else {
+        minimapCtx.fillStyle = "#f59e0b";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 2, 0, Math.PI * 2);
+        minimapCtx.fill();
+      }
+    }
+  });
+  STATE.fleetProjectiles.forEach((proj) => {
+    const dx = proj.position.x - STATE.playerPosition.x;
+    const dz = proj.position.z - STATE.playerPosition.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < range) {
+      const sx = cx + dx * invRangeRadius;
+      const sy = cy + dz * invRangeRadius;
+      minimapCtx.fillStyle = proj.type === "emp" ? "#a855f7" : "#38bdf8";
+      minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
+    }
+  });
   minimapCtx.fillStyle = "#10b981";
   minimapCtx.beginPath();
   minimapCtx.arc(cx, cy, 3, 0, Math.PI * 2);
@@ -27531,11 +27725,18 @@ function generatePlanetAttributes(p) {
     if (hash % 2 === 0) {
       pool.push({ ...c2, id: Date.now() + Math.random() + 1, stress: 25, illusionStability: 100, status: "Friedlich", thought: "Führt Atmosphärenmessungen durch..." });
     }
+    const techLevels = ["Primitive", "Industrial", "Spacefaring", "Hyper-Advanced"];
+    const tech = techLevels[hash % techLevels.length];
+    const defenseRating = tech === "Primitive" ? 0 : tech === "Industrial" ? 20 : tech === "Spacefaring" ? 65 : 95;
+    const disposition = hash % 3 === 0 ? "Militaristic" : hash % 3 === 1 ? "Defensive" : "Pacifist";
     species = {
       hasSentient: true,
       name: pool[0].species.includes("Mensch") ? "Terranische Exploratoren" : `${pool[0].species}-Präsenz`,
       population: pool.length,
-      candidates: pool
+      candidates: pool,
+      techLevel: tech,
+      defenseRating,
+      fleetDisposition: disposition
     };
   } else if (p.type === "Gas Giant") {
     atmos = hash % 2 === 0 ? "Flüssiges Helium & Wasserstoff" : "Superdichtes Ammoniak & Methan";
@@ -27743,13 +27944,44 @@ function updateScannerUI(planet, dist) {
       resEl.innerText = planet.attributes.res;
     const speciesRow = document.getElementById("scan-planet-species-row");
     const speciesEl = document.getElementById("scan-planet-species");
-    const hasSentient = planet.attributes.species && planet.attributes.species.population > 0;
+    const techRow = document.getElementById("scan-planet-tech-row");
+    const techEl = document.getElementById("scan-planet-tech");
+    const fleetRow = document.getElementById("scan-planet-fleet-row");
+    const fleetEl = document.getElementById("scan-planet-fleet");
+    const spec = planet.attributes.species;
+    const hasSentient = spec && spec.population > 0;
     if (speciesRow && speciesEl) {
       if (hasSentient) {
         speciesRow.style.display = "flex";
-        speciesEl.innerText = `${planet.attributes.species.name} (Pop: ${planet.attributes.species.population})`;
+        speciesEl.innerText = `${spec.name} (Pop: ${spec.population})`;
       } else {
         speciesRow.style.display = "none";
+      }
+    }
+    if (techRow && techEl) {
+      if (hasSentient && spec.techLevel) {
+        techRow.style.display = "flex";
+        let icon = "\uD83C\uDFDB️";
+        if (spec.techLevel === "Industrial")
+          icon = "\uD83C\uDFED";
+        if (spec.techLevel === "Spacefaring")
+          icon = "\uD83D\uDE80";
+        if (spec.techLevel === "Hyper-Advanced")
+          icon = "\uD83C\uDF0C";
+        techEl.innerText = `${icon} ${spec.techLevel} (${spec.fleetDisposition || "Defensiv"})`;
+      } else {
+        techRow.style.display = "none";
+      }
+    }
+    if (fleetRow && fleetEl) {
+      if (hasSentient && (spec.techLevel === "Spacefaring" || spec.techLevel === "Hyper-Advanced")) {
+        fleetRow.style.display = "flex";
+        const activeShips = STATE.fleetShips.filter((s) => s.homePlanet.name === planet.name);
+        const alertText = activeShips.some((s) => s.state === "intercept") ? "\uD83D\uDEA8 ALARM: Abfangkurs!" : "\uD83D\uDEE1️ Patrouille aktiv";
+        fleetEl.innerText = `${activeShips.length} Einheiten | ${alertText}`;
+        fleetEl.style.color = activeShips.some((s) => s.state === "intercept") ? "#f43f5e" : "#38bdf8";
+      } else {
+        fleetRow.style.display = "none";
       }
     }
     if (harvestBtn) {
@@ -27768,6 +28000,306 @@ function updateScannerUI(planet, dist) {
     if (abductBtn)
       abductBtn.style.display = "none";
   }
+}
+
+// src/systems/fleet.ts
+var shockwaveMesh = null;
+var shockwaveTimer = 0;
+function initPlanetDefenseFleets() {
+  clearFleet();
+  let shipIdCounter = 1;
+  activePlanets.forEach((p) => {
+    if (!p.attributes || !p.attributes.species)
+      return;
+    const spec = p.attributes.species;
+    if (spec.techLevel === "Spacefaring" || spec.techLevel === "Hyper-Advanced") {
+      const shipCount = spec.techLevel === "Hyper-Advanced" ? 4 : 2;
+      const planetPos = p.mesh.position;
+      for (let i = 0;i < shipCount; i++) {
+        const orbitRadius = p.size * 2.2 + 3 + i * 2.5;
+        const orbitAngle = i / shipCount * Math.PI * 2;
+        const isCorvette = i === 0 && spec.techLevel === "Hyper-Advanced";
+        const shipGroup = new Group;
+        const hullGeo = isCorvette ? new ConeGeometry(0.9, 2.2, 5) : new ConeGeometry(0.5, 1.4, 4);
+        hullGeo.rotateX(Math.PI / 2);
+        const hullMat = new MeshStandardMaterial({
+          color: spec.techLevel === "Hyper-Advanced" ? 6514417 : 14739455,
+          metalness: 0.9,
+          roughness: 0.2,
+          flatShading: true
+        });
+        const hullMesh = new Mesh(hullGeo, hullMat);
+        shipGroup.add(hullMesh);
+        const engineGeo = new SphereGeometry(isCorvette ? 0.35 : 0.2, 8, 8);
+        const engineMat = new MeshBasicMaterial({
+          color: spec.techLevel === "Hyper-Advanced" ? 8490232 : 3718648
+        });
+        const engineMesh = new Mesh(engineGeo, engineMat);
+        engineMesh.position.set(0, 0, isCorvette ? -1 : -0.7);
+        shipGroup.add(engineMesh);
+        const wingGeo = new BoxGeometry(isCorvette ? 2.4 : 1.5, 0.08, 0.6);
+        const wingMat = new MeshStandardMaterial({
+          color: 3359061,
+          metalness: 0.8,
+          roughness: 0.4
+        });
+        const wingMesh = new Mesh(wingGeo, wingMat);
+        wingMesh.position.set(0, 0, -0.2);
+        shipGroup.add(wingMesh);
+        const sx = planetPos.x + Math.cos(orbitAngle) * orbitRadius;
+        const sz = planetPos.z + Math.sin(orbitAngle) * orbitRadius;
+        shipGroup.position.set(sx, 0, sz);
+        scene.add(shipGroup);
+        const fleetShip = {
+          id: shipIdCounter++,
+          mesh: shipGroup,
+          bodyMesh: hullMesh,
+          type: isCorvette ? "corvette" : "interceptor",
+          name: `${spec.name} ${isCorvette ? "Korvette" : "Abfangjäger"} #${i + 1}`,
+          position: shipGroup.position,
+          velocity: new Vector3(0, 0, 0),
+          homePlanet: p,
+          orbitRadius,
+          orbitAngle,
+          orbitSpeed: 0.35 / Math.sqrt(orbitRadius) * (i % 2 === 0 ? 1 : -1),
+          health: isCorvette ? 60 : 25,
+          maxHealth: isCorvette ? 60 : 25,
+          state: "patrol",
+          attackCooldown: Math.random() * 2,
+          alertTimer: 0
+        };
+        STATE.fleetShips.push(fleetShip);
+      }
+    }
+  });
+  if (STATE.fleetShips.length > 0) {
+    addLogEntry("SYSTEM", `Sensoren geortet: ${STATE.fleetShips.length} planetare Abfangjäger & Patrouillenschiffe im Sektor aktiv.`);
+  }
+}
+function updateFleet(dt) {
+  if (STATE.bioDischargeCooldown > 0) {
+    STATE.bioDischargeCooldown = Math.max(0, STATE.bioDischargeCooldown - dt);
+  }
+  if (shockwaveMesh && shockwaveTimer > 0) {
+    shockwaveTimer -= dt;
+    const progress = 1 - shockwaveTimer / 0.5;
+    const scale = 2 + progress * 24;
+    shockwaveMesh.scale.set(scale, 1, scale);
+    shockwaveMesh.material.opacity = (1 - progress) * 0.7;
+    if (shockwaveTimer <= 0) {
+      scene.remove(shockwaveMesh);
+      shockwaveMesh.geometry.dispose();
+      shockwaveMesh.material.dispose();
+      shockwaveMesh = null;
+    }
+  }
+  const playerPos = STATE.playerPosition;
+  STATE.fleetShips.forEach((ship) => {
+    if (ship.state === "disabled") {
+      ship.position.addScaledVector(ship.velocity, dt);
+      ship.velocity.multiplyScalar(Math.exp(-0.8 * dt));
+      ship.mesh.rotation.y += 0.8 * dt;
+      ship.mesh.rotation.z += 0.5 * dt;
+      const dPlayer = ship.position.distanceTo(playerPos);
+      if (dPlayer < 6) {
+        if (Math.random() < 0.02) {
+          addLogEntry("SYSTEM", `Deaktiviertes Wrack von ${ship.name} in Reichweite. Drücke [E] zum Absorbieren!`);
+        }
+      }
+      return;
+    }
+    const planetPos = ship.homePlanet.mesh.position;
+    const distToPlayer = ship.position.distanceTo(playerPos);
+    const distPlanetToPlayer = planetPos.distanceTo(playerPos);
+    const isPlayerThreatening = distPlanetToPlayer < 35 || STATE.scanningPlanet && STATE.scanningPlanet.name === ship.homePlanet.name || STATE.abductActive && STATE.abductTarget && STATE.abductTarget.name === ship.homePlanet.name;
+    if (isPlayerThreatening && ship.state === "patrol") {
+      ship.state = "intercept";
+      ship.alertTimer = 15;
+      addLogEntry("CREW", `Capt. Miller: 'Militärische Abfangjäger von ${ship.homePlanet.name} lösen sich aus dem Orbit! Sie formieren Abfangkurs!'`);
+    }
+    if (ship.state === "intercept") {
+      ship.alertTimer -= dt;
+      if (ship.alertTimer <= 0 && distToPlayer > 40) {
+        ship.state = "patrol";
+        addLogEntry("SYSTEM", `${ship.name} bricht Verfolgung ab und kehrt in planetaren Patrouillen-Orbit zurück.`);
+      }
+      const toPlayer = new Vector3().subVectors(playerPos, ship.position);
+      const dist = toPlayer.length();
+      toPlayer.normalize();
+      const desiredDist = 12;
+      const distDiff = dist - desiredDist;
+      const tangent = new Vector3(-toPlayer.z, 0, toPlayer.x);
+      const accel = new Vector3;
+      accel.addScaledVector(toPlayer, Math.min(20, distDiff * 2.5));
+      accel.addScaledVector(tangent, 15);
+      ship.velocity.addScaledVector(accel, dt);
+      ship.velocity.clampLength(0, ship.type === "corvette" ? 18 : 26);
+      ship.velocity.multiplyScalar(Math.exp(-0.4 * dt));
+      ship.position.addScaledVector(ship.velocity, dt);
+      if (ship.velocity.lengthSq() > 0.1) {
+        const angle = Math.atan2(ship.velocity.x, ship.velocity.z);
+        ship.mesh.rotation.y = angle;
+      }
+      ship.attackCooldown -= dt;
+      if (ship.attackCooldown <= 0 && dist < 25) {
+        ship.attackCooldown = ship.type === "corvette" ? 1.8 : 2.5;
+        fireFleetProjectile(ship, playerPos);
+      }
+    } else {
+      ship.orbitAngle += ship.orbitSpeed * dt;
+      const targetX = planetPos.x + Math.cos(ship.orbitAngle) * ship.orbitRadius;
+      const targetZ = planetPos.z + Math.sin(ship.orbitAngle) * ship.orbitRadius;
+      ship.position.x = MathUtils.lerp(ship.position.x, targetX, 0.1);
+      ship.position.z = MathUtils.lerp(ship.position.z, targetZ, 0.1);
+      ship.position.y = 0;
+      const forwardAngle = ship.orbitAngle + (ship.orbitSpeed > 0 ? Math.PI / 2 : -Math.PI / 2);
+      ship.mesh.rotation.y = forwardAngle;
+    }
+  });
+  for (let pIdx = STATE.fleetProjectiles.length - 1;pIdx >= 0; pIdx--) {
+    const proj = STATE.fleetProjectiles[pIdx];
+    proj.life -= dt;
+    proj.position.addScaledVector(proj.velocity, dt);
+    const dToPlayer = proj.position.distanceTo(playerPos);
+    if (dToPlayer < 2.5) {
+      playCrashSound();
+      const damage = STATE.mutations.armor.purchased ? proj.damage * 0.5 : proj.damage;
+      STATE.health = Math.max(0, STATE.health - damage);
+      STATE.crew.forEach((c) => {
+        c.stress = Math.min(100, c.stress + 8.5);
+        c.illusionStability = Math.max(0, c.illusionStability - 12);
+      });
+      addLogEntry("CREW", `ALARM: EMP-Geschoss durchschlägt Hülle! Die Illusion flackert (+Stress). Stabilisiere mit [LEERTASTE]!`);
+      scene.remove(proj.mesh);
+      proj.mesh.geometry.dispose();
+      proj.mesh.material.dispose();
+      STATE.fleetProjectiles.splice(pIdx, 1);
+      continue;
+    }
+    if (proj.life <= 0) {
+      scene.remove(proj.mesh);
+      proj.mesh.geometry.dispose();
+      proj.mesh.material.dispose();
+      STATE.fleetProjectiles.splice(pIdx, 1);
+    }
+  }
+}
+function fireFleetProjectile(ship, targetPos) {
+  const isCorvette = ship.type === "corvette";
+  const projGeo = new CylinderGeometry(0.12, 0.12, 1.2, 6);
+  projGeo.rotateX(Math.PI / 2);
+  const projMat = new MeshBasicMaterial({
+    color: isCorvette ? 8490232 : 3718648
+  });
+  const projMesh = new Mesh(projGeo, projMat);
+  projMesh.position.copy(ship.position);
+  scene.add(projMesh);
+  const dir = new Vector3().subVectors(targetPos, ship.position).normalize();
+  dir.x += (Math.random() - 0.5) * 0.1;
+  dir.z += (Math.random() - 0.5) * 0.1;
+  dir.normalize();
+  const speed = 36;
+  const velocity = dir.clone().multiplyScalar(speed);
+  projMesh.rotation.y = Math.atan2(dir.x, dir.z);
+  const projectile = {
+    mesh: projMesh,
+    position: projMesh.position,
+    velocity,
+    life: 2.2,
+    damage: isCorvette ? 8 : 4,
+    type: isCorvette ? "emp" : "laser"
+  };
+  STATE.fleetProjectiles.push(projectile);
+}
+function triggerBioDischarge() {
+  if (!STATE.gameStarted)
+    return;
+  if (STATE.bioDischargeCooldown > 0) {
+    addLogEntry("SYSTEM", `Bio-Elektrische Entladung noch in Kalibrierung (${STATE.bioDischargeCooldown.toFixed(1)}s Cooldown).`);
+    return;
+  }
+  if (STATE.bioEnergy < 15 || STATE.mentalEnergy < 10) {
+    addLogEntry("SYSTEM", `Zu wenig Bio-Energie oder Mentalkraft für Bio-Elektrische Entladung!`);
+    return;
+  }
+  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 15);
+  STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 10);
+  STATE.bioDischargeCooldown = 4.5;
+  if (shockwaveMesh) {
+    scene.remove(shockwaveMesh);
+    shockwaveMesh.geometry.dispose();
+    shockwaveMesh.material.dispose();
+  }
+  const shockGeo = new RingGeometry(0.8, 1.8, 48);
+  shockGeo.rotateX(Math.PI / 2);
+  const shockMat = new MeshBasicMaterial({
+    color: 65416,
+    transparent: true,
+    opacity: 0.85,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  shockwaveMesh = new Mesh(shockGeo, shockMat);
+  shockwaveMesh.position.copy(STATE.playerPosition);
+  scene.add(shockwaveMesh);
+  shockwaveTimer = 0.5;
+  playCrashSound();
+  addLogEntry("SYSTEM", `⚡ BIO-ELEKTRISCHE EMP-ENTLADUNG GEZÜNDET! Elektromagnetische Schockwelle expandiert.`);
+  const radius = 20;
+  let disabledCount = 0;
+  STATE.fleetShips.forEach((ship) => {
+    if (ship.state !== "disabled") {
+      const dist = ship.position.distanceTo(STATE.playerPosition);
+      if (dist <= radius) {
+        ship.state = "disabled";
+        ship.velocity.copy(new Vector3().subVectors(ship.position, STATE.playerPosition).normalize().multiplyScalar(12));
+        ship.bodyMesh.material.color.setHex(4674921);
+        ship.bodyMesh.material.emissive.setHex(0);
+        disabledCount++;
+      }
+    }
+  });
+  if (disabledCount > 0) {
+    addLogEntry("CREW", `Capt. Miller: 'Feindliche Abfangjäger durch EMP lahmgelegt! Ihre Systeme sind kollabiert!'`);
+    addLogEntry("SYSTEM", `${disabledCount} Abfangjäger deaktiviert. Wrackteile können assimiliert werden [E].`);
+    playSiliconCollectSound();
+  }
+}
+function salvageNearestWreck() {
+  const playerPos = STATE.playerPosition;
+  const disabledShips = STATE.fleetShips.filter((s) => s.state === "disabled");
+  for (let i = 0;i < disabledShips.length; i++) {
+    const ship = disabledShips[i];
+    if (ship.position.distanceTo(playerPos) <= 7) {
+      scene.remove(ship.mesh);
+      STATE.siliconRes += 35;
+      STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 30);
+      addLogEntry("SYSTEM", `Schiffswrack von ${ship.name} assimiliert: +35 Silizium & +30 Bio-Energie gewonnen!`);
+      playSiliconCollectSound();
+      const idx = STATE.fleetShips.findIndex((s) => s.id === ship.id);
+      if (idx !== -1) {
+        STATE.fleetShips.splice(idx, 1);
+      }
+      return true;
+    }
+  }
+  return false;
+}
+function clearFleet() {
+  STATE.fleetShips.forEach((ship) => {
+    if (ship.mesh)
+      scene.remove(ship.mesh);
+  });
+  STATE.fleetProjectiles.forEach((proj) => {
+    if (proj.mesh)
+      scene.remove(proj.mesh);
+  });
+  if (shockwaveMesh) {
+    scene.remove(shockwaveMesh);
+    shockwaveMesh = null;
+  }
+  STATE.fleetShips = [];
+  STATE.fleetProjectiles = [];
 }
 
 // src/systems/universe.ts
@@ -27846,6 +28378,7 @@ function clearActiveSystem() {
   STATE.scanProgress = 0;
   STATE.harvestProgress = 0;
   STATE.abductProgress = 0;
+  clearFleet();
   const badge = document.getElementById("target-lock-badge");
   const label = document.getElementById("target-label-text");
   if (badge)
@@ -28110,6 +28643,7 @@ function spawnPlanetsAndAsteroids() {
     STATE.asteroids.push(sourceObj);
     sourceObj.ringMesh = createGravityRing(ast.x, ast.z, range, color, 0.05);
   });
+  initPlanetDefenseFleets();
 }
 function generateFallbackAsteroids() {
   const list = [];
@@ -29305,7 +29839,7 @@ function setupControls() {
       cycleTarget(1);
     }
     if (key === "x") {
-      clearLockedTarget();
+      triggerBioDischarge();
     }
     if (key === "f") {
       if (STATE.nearestPlanet) {
@@ -29318,7 +29852,10 @@ function setupControls() {
       }
     }
     if (key === "e") {
-      triggerHarvestStart();
+      const salvaged = salvageNearestWreck();
+      if (!salvaged) {
+        triggerHarvestStart();
+      }
     }
     if (key === "w" || e.key === "ArrowUp")
       STATE.keys.w = true;
@@ -29929,6 +30466,7 @@ function animate(time) {
     updateScanning(dt);
     updateHarvesting(dt);
     updateAbduction(dt);
+    updateFleet(dt);
     updateCrewSimulation(dt);
     updateSonarWave(dt);
     updateTrajectory();
