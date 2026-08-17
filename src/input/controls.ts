@@ -9,6 +9,7 @@ import { triggerAbductStart } from '../systems/abduction';
 import { triggerBioDischarge, salvageNearestWreck } from '../systems/fleet';
 import { triggerPsionicSonar, addLogEntry } from '../ui/hud';
 import { buyMutation } from '../ui/deck';
+import { openDiplomacyComms, closeDiplomacyComms } from '../systems/diplomacy';
 
 const raycaster = new THREE.Raycaster();
 const mouseVec = new THREE.Vector2();
@@ -33,6 +34,15 @@ export function setupControls() {
         }
         if (key === 'x') {
             triggerBioDischarge();
+        }
+        if (key === 'c') {
+            const target = STATE.lockedTarget || STATE.nearestPlanet;
+            if (target && target.attributes.species) {
+                openDiplomacyComms(target);
+            }
+        }
+        if (key === 'escape') {
+            closeDiplomacyComms();
         }
         if (key === 'f') {
             if (STATE.nearestPlanet) {

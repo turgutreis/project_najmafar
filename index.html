@@ -139,6 +139,57 @@
         </div>
     </div>
 
+    <!-- Diplomacy & First Contact Comms Modal Overlay -->
+    <div id="diplomacy-overlay" class="modal-overlay" style="display: none; z-index: 1060;">
+        <div class="diplomacy-content glass-panel">
+            <header class="diplomacy-header">
+                <div class="diplomacy-header-left">
+                    <span id="diplomacy-faction-emblem" class="diplomacy-emblem">🔮</span>
+                    <div>
+                        <h2 id="diplomacy-planet-name">Erstkontakt & Sub-Raum-Funk</h2>
+                        <span id="diplomacy-faction-name" class="diplomacy-faction-name">Galaktische Fraktion</span>
+                    </div>
+                </div>
+                <div class="diplomacy-header-right">
+                    <span id="diplomacy-rep-badge" class="diplomacy-rep-badge">⚖️ Neutral (0)</span>
+                    <button id="close-diplomacy-btn" class="close-diplo-btn" onclick="document.getElementById('diplomacy-overlay').style.display='none'">✕</button>
+                </div>
+            </header>
+
+            <div class="diplomacy-body">
+                <div class="diplomacy-left-col">
+                    <div class="diplomacy-portrait-box">
+                        <div class="hologram-scanline"></div>
+                        <div id="diplomacy-avatar-icon" class="diplomacy-avatar">👽</div>
+                        <span class="transmission-status">📡 LIVE-FREQUENZ SYNCHRONISIERT</span>
+                    </div>
+                    <div class="diplomacy-history-box">
+                        <h4>📜 Quanten-Historie & Epochen</h4>
+                        <div id="diplomacy-history-chronicle" class="history-chronicle-list">
+                            <!-- Dynamic Eras -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="diplomacy-right-col">
+                    <div class="diplomacy-dialogue-box">
+                        <h4>Sub-Raum Botschaft (Dschinn-Dekodierung)</h4>
+                        <div id="diplomacy-dialogue-text" class="diplomacy-dialogue-text">
+                            <!-- Dynamic Dialogue -->
+                        </div>
+                    </div>
+
+                    <div class="diplomacy-actions-section">
+                        <h4>Interaktive Direktiven & Abkommen</h4>
+                        <div id="diplomacy-actions-container" class="diplomacy-actions-container">
+                            <!-- Dynamic Buttons -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Game Over Modal Overlay -->
     <div id="game-over-modal" class="modal-overlay" style="display: none; z-index: 1200; background: rgba(3, 7, 18, 0.88); backdrop-filter: blur(8px);">
         <div class="game-over-content glass-panel" style="max-width: 500px; width: 90%; text-align: center; border: 1px solid rgba(244, 63, 94, 0.4); box-shadow: 0 0 50px rgba(244, 63, 94, 0.3); padding: 24px; border-radius: 12px; margin: auto;">
@@ -321,6 +372,9 @@
                         <span id="scan-planet-status" class="planet-badge badge-ready">Bereit zur Assimilation</span>
                     </div>
 
+                    <!-- Diplomacy & Comms Trigger Button -->
+                    <button id="start-comms-btn" class="comms-btn" style="display: none;">📡 Erstkontakt & Diplomatie [C]</button>
+
                     <!-- Harvest Trigger Button & Progress -->
                     <button id="start-harvest-btn" class="harvest-btn">🌿 Ressourcen assimilieren [E]</button>
                     
@@ -355,6 +409,7 @@
             <div id="right-deck-tabs" class="deck-tabs">
                 <button class="tab-btn active" data-tab="crew">🔮 Traum-Matrix (<span id="crew-count-badge">0</span>)</button>
                 <button class="tab-btn" data-tab="evolution">🧬 Evolution</button>
+                <button class="tab-btn" data-tab="factions">🏛️ Fraktionen</button>
             </div>
             
             <!-- Crew Tab Container -->
@@ -477,6 +532,17 @@
                             </div>
                             <button class="mut-btn" data-mutation="translator">Mutieren</button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Factions Tab Container -->
+                <div id="tab-content-factions" class="tab-content">
+                    <div class="faction-tab-header">
+                        <h4 style="margin: 0 0 4px 0; color: #f8fafc; font-size: 0.95rem;">🏛️ Galaktische Mächte</h4>
+                        <p style="margin: 0 0 12px 0; color: #94a3b8; font-size: 0.72rem;">Einflusszonen & Reputation der 5 Großfraktionen</p>
+                    </div>
+                    <div id="faction-reputation-list" class="faction-reputation-list">
+                        <!-- Dynamic Faction Cards -->
                     </div>
                 </div>
             </div>

@@ -3,6 +3,41 @@ import * as THREE from 'three';
 export type PlanetType = 'Habitable' | 'Gas Giant' | 'Rocky' | 'Desert' | 'Oceanic' | 'Volcanic' | 'Ice';
 export type MoonType = 'Eismond' | 'Vulkanmond' | 'Kratermond' | 'Gesteinsmond';
 export type TechLevel = 'Primitive' | 'Industrial' | 'Spacefaring' | 'Hyper-Advanced';
+export type FactionId = 'vega_collective' | 'olyndar_psion' | 'xenomilitary_ash' | 'free_traders' | 'aethelgard_guardians';
+
+export interface FactionData {
+    id: FactionId;
+    name: string;
+    shortName: string;
+    emblem: string;
+    color: string;
+    colorCss: string;
+    doctrine: string;
+    description: string;
+    specialTrait: string;
+    baseDisposition: 'Pacifist' | 'Defensive' | 'Militaristic';
+}
+
+export interface QuantumWalkEra {
+    eraName: string;
+    event: string;
+    paradoxDetail: string;
+    culturalShift: string;
+}
+
+export interface QuantumCivState {
+    qubitStateVector: number[];
+    entanglementIndex: number;
+    societalArchetype: string;
+    paradoxFactor: number;
+    historyEras: QuantumWalkEra[];
+    factionId: FactionId;
+    worshipsPlayer: boolean;
+    quantumTechLevel: TechLevel;
+    psionicAffinityScore: number;
+    militaryDoctrine: 'Pacifist' | 'Defensive' | 'Militaristic' | 'Fanatic Zealot';
+    quantumCollapseLog: string;
+}
 
 export interface StarData {
     type: string;
@@ -36,6 +71,8 @@ export interface SpeciesData {
     techLevel?: TechLevel;
     defenseRating?: number;
     fleetDisposition?: 'Pacifist' | 'Defensive' | 'Militaristic';
+    factionId?: FactionId;
+    quantumCiv?: QuantumCivState | null;
 }
 
 export interface PlanetAttributes {
@@ -255,4 +292,8 @@ export interface GameState {
     fleetShips: FleetShip[];
     fleetProjectiles: FleetProjectile[];
     bioDischargeCooldown: number;
+
+    // Faction Reputation & Diplomacy (Phase C/D)
+    reputation: Record<FactionId, number>;
+    activeDiplomacyPlanet: PlanetEntry | null;
 }

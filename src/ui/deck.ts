@@ -2,6 +2,7 @@ import { STATE } from '../core/state';
 import { playSiliconCollectSound } from '../engine/audio';
 import { addLogEntry } from './hud';
 import { calculateCrewBuffs, renderCrewUI } from '../systems/crew';
+import { renderFactionReputationUI } from '../systems/factions';
 
 export function initDeckUI() {
     const leftCollapseBtn = document.getElementById('left-collapse-btn');
@@ -43,16 +44,20 @@ export function initDeckUI() {
 
             const crewContent = document.getElementById('tab-content-crew');
             const evoContent = document.getElementById('tab-content-evolution');
+            const facContent = document.getElementById('tab-content-factions');
 
-            if (targetTab === 'crew') {
-                if (crewContent) crewContent.classList.add('active');
-                if (evoContent) evoContent.classList.remove('active');
-            } else if (targetTab === 'evolution') {
-                if (crewContent) crewContent.classList.remove('active');
-                if (evoContent) evoContent.classList.add('active');
+            if (crewContent) crewContent.classList.toggle('active', targetTab === 'crew');
+            if (evoContent) evoContent.classList.toggle('active', targetTab === 'evolution');
+            if (facContent) {
+                facContent.classList.toggle('active', targetTab === 'factions');
+                if (targetTab === 'factions') {
+                    renderFactionReputationUI();
+                }
             }
         });
     });
+
+    renderFactionReputationUI();
 
     const mutButtons = document.querySelectorAll('.mut-btn');
     mutButtons.forEach(btn => {

@@ -95,7 +95,17 @@ export const STATE: GameState = {
     // Spacefaring Fleet System (Phase B)
     fleetShips: [],
     fleetProjectiles: [],
-    bioDischargeCooldown: 0
+    bioDischargeCooldown: 0,
+
+    // Faction Reputation & Diplomacy
+    reputation: {
+        vega_collective: 0,
+        olyndar_psion: 15,
+        xenomilitary_ash: -10,
+        free_traders: 0,
+        aethelgard_guardians: 5
+    },
+    activeDiplomacyPlanet: null
 };
 
 export const activePlanets: PlanetEntry[] = [];

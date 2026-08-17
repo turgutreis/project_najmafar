@@ -1,6 +1,10 @@
 import { STATE } from '../core/state';
 import { addLogEntry } from '../ui/hud';
 import { getAudioContext } from '../engine/audio';
+import { collapseQuantumCivilization } from '../procedural/quantum-civ';
+import { getFaction } from '../systems/factions';
+import { openDiplomacyComms } from '../systems/diplomacy';
+import { SpeciesData, PlanetAttributes } from '../types/game';
 
 let scanOsc: OscillatorNode | null = null;
 let scanGain: GainNode | null = null;
@@ -16,12 +20,8 @@ export function generatePlanetAttributes(p: any) {
         res = "Reich an Biomasse, Kohlenstoff & O2";
 
         const candidatePool = [
-            { name: "Capt. Alan Miller", species: "Mensch / Terraner", role: "pilot", roleName: "🧑‍✈️ Chef-Navigator", buffDesc: "+15% Schub & -15% Manöverkosten", baseStressRate: 0.30 },
-            { name: "Dr. Elena Song", species: "Mensch / Terranerin", role: "biologist", roleName: "🔬 Xenobiologin", buffDesc: "+30% Bio-Ertrag & +25% Scan-Speed", baseStressRate: 0.25 },
-            { name: "Ing. Viktor Petrov", species: "Mensch / Terraner", role: "engineer", roleName: "🔧 Chef-Ingenieur", buffDesc: "+0.6 HP/s Naniten-Reparatur", baseStressRate: 0.40 },
-            { name: "Dr. Julian Vance", species: "Mensch / Terraner", role: "psychologist", roleName: "🧘 Neuro-Therapeut", buffDesc: "-40% Crew-Stressaufbau", baseStressRate: 0.15 },
-            { name: "Lt. Kira Novak", species: "Mensch / Terranerin", role: "cryptologist", roleName: "📡 Quanten-Kryptologin", buffDesc: "+30 LJ Psio-Sensorhorizont", baseStressRate: 0.20 },
-            { name: "Prof. T'Kora", species: "Vulkanoid", role: "biologist", roleName: "🔬 Bio-Analytikerin", buffDesc: "+30% Bio-Ertrag & +25% Scan-Speed", baseStressRate: 0.10 },
+            { name: "Navigator Elian", species: "Menschlicher Kolonist", role: "pilot", roleName: "🛸 Astral-Pilot", buffDesc: "+30% Schubkraft & Manövrierbarkeit", baseStressRate: 0.18 },
+            { name: "Dr. Vaelen", species: "Xeno-Botaniker", role: "biologist", roleName: "🌱 Bio-Architekt", buffDesc: "+40% Biomasse-Ertrag beim Ernten", baseStressRate: 0.15 },
             { name: "Cyber-Adept Rex", species: "Cyborg-Pionier", role: "engineer", roleName: "🔧 Naniten-Meister", buffDesc: "+0.6 HP/s Naniten-Reparatur", baseStressRate: 0.20 },
             { name: "Gesandte Maya", species: "Empathin", role: "psychologist", roleName: "🧘 Gedanken-Diplomatin", buffDesc: "-40% Crew-Stressaufbau", baseStressRate: 0.12 }
         ];
@@ -35,19 +35,19 @@ export function generatePlanetAttributes(p: any) {
             pool.push({ ...c2, id: Date.now() + Math.random() + 1, stress: 25, illusionStability: 100, status: "Friedlich", thought: "Führt Atmosphärenmessungen durch..." });
         }
 
-        const techLevels: ('Primitive' | 'Industrial' | 'Spacefaring' | 'Hyper-Advanced')[] = ['Primitive', 'Industrial', 'Spacefaring', 'Hyper-Advanced'];
-        const tech = techLevels[hash % techLevels.length];
-        const defenseRating = tech === 'Primitive' ? 0 : (tech === 'Industrial' ? 20 : (tech === 'Spacefaring' ? 65 : 95));
-        const disposition: 'Pacifist' | 'Defensive' | 'Militaristic' = (hash % 3 === 0) ? 'Militaristic' : ((hash % 3 === 1) ? 'Defensive' : 'Pacifist');
+        const qCiv = collapseQuantumCivilization(STATE.currentSystemId, hash % 8, hash);
+        const faction = getFaction(qCiv.factionId);
 
         species = {
             hasSentient: true,
-            name: pool[0].species.includes("Mensch") ? "Terranische Exploratoren" : `${pool[0].species}-Präsenz`,
-            population: pool.length,
+            name: `${qCiv.societalArchetype} (${faction.shortName})`,
+            population: pool.length * 1000 + (hash % 500),
             candidates: pool,
-            techLevel: tech,
-            defenseRating: defenseRating,
-            fleetDisposition: disposition
+            techLevel: qCiv.quantumTechLevel,
+            defenseRating: qCiv.quantumTechLevel === 'Primitive' ? 0 : (qCiv.quantumTechLevel === 'Industrial' ? 20 : (qCiv.quantumTechLevel === 'Spacefaring' ? 65 : 95)),
+            fleetDisposition: qCiv.militaryDoctrine === 'Militaristic' ? 'Militaristic' : (qCiv.militaryDoctrine === 'Pacifist' ? 'Pacifist' : 'Defensive'),
+            factionId: qCiv.factionId,
+            quantumCiv: qCiv
         };
     } else if (p.type === 'Gas Giant') {
         atmos = hash % 2 === 0 ? "Flüssiges Helium & Wasserstoff" : "Superdichtes Ammoniak & Methan";
@@ -311,6 +311,12 @@ export function updateScannerUI(planet: any, dist: number) {
             }
         }
 
+        const commsBtn = document.getElementById('start-comms-btn');
+        if (commsBtn) {
+            commsBtn.style.display = (inRange && hasSentient) ? 'block' : 'none';
+            commsBtn.onclick = () => openDiplomacyComms(planet);
+        }
+
         if (harvestBtn) {
             harvestBtn.style.display = (inRange && !STATE.extractingPlanet && !STATE.abductActive) ? 'block' : 'none';
         }
@@ -323,5 +329,7 @@ export function updateScannerUI(planet: any, dist: number) {
         if (placeholderBox) placeholderBox.style.display = 'block';
         if (harvestBtn) harvestBtn.style.display = 'none';
         if (abductBtn) abductBtn.style.display = 'none';
+        const commsBtn = document.getElementById('start-comms-btn');
+        if (commsBtn) commsBtn.style.display = 'none';
     }
 }

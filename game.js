@@ -26584,7 +26584,15 @@ var STATE = {
   playerGroup: null,
   fleetShips: [],
   fleetProjectiles: [],
-  bioDischargeCooldown: 0
+  bioDischargeCooldown: 0,
+  reputation: {
+    vega_collective: 0,
+    olyndar_psion: 15,
+    xenomilitary_ash: -10,
+    free_traders: 0,
+    aethelgard_guardians: 5
+  },
+  activeDiplomacyPlanet: null
 };
 var activePlanets = [];
 
@@ -28701,6 +28709,508 @@ function createCloudTexture(seed = 888) {
   return new CanvasTexture(canvas);
 }
 
+// src/procedural/quantum-civ.ts
+function cMul(a, b) {
+  return {
+    r: a.r * b.r - a.i * b.i,
+    i: a.r * b.i + a.i * b.r
+  };
+}
+function cNormSq(a) {
+  return a.r * a.r + a.i * a.i;
+}
+function lcg(seed) {
+  let s = Math.abs(seed) % 2147483647;
+  if (s === 0)
+    s = 1;
+  return () => {
+    s = s * 16807 % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+class QpuSimulator {
+  state;
+  numQubits = 8;
+  numStates = 256;
+  constructor(random) {
+    this.state = new Array(this.numStates).fill(null).map(() => ({ r: 0, i: 0 }));
+    this.state[0] = { r: 1, i: 0 };
+    for (let q = 0;q < this.numQubits; q++) {
+      this.applyHadamard(q);
+    }
+    this.applyCNOT(0, 1);
+    this.applyCNOT(2, 3);
+    this.applyCNOT(4, 5);
+    this.applyCNOT(6, 7);
+    for (let q = 0;q < this.numQubits; q++) {
+      const angle = random() * Math.PI * 2;
+      this.applyPhaseShift(q, angle);
+    }
+  }
+  applyHadamard(targetQubit) {
+    const bit = 1 << targetQubit;
+    const invSqrt2 = 1 / Math.SQRT2;
+    const newState = new Array(this.numStates);
+    for (let i = 0;i < this.numStates; i++) {
+      if ((i & bit) === 0) {
+        const i0 = i;
+        const i1 = i | bit;
+        const a = this.state[i0];
+        const b = this.state[i1];
+        newState[i0] = {
+          r: (a.r + b.r) * invSqrt2,
+          i: (a.i + b.i) * invSqrt2
+        };
+        newState[i1] = {
+          r: (a.r - b.r) * invSqrt2,
+          i: (a.i - b.i) * invSqrt2
+        };
+      }
+    }
+    this.state = newState;
+  }
+  applyCNOT(controlQubit, targetQubit) {
+    const controlBit = 1 << controlQubit;
+    const targetBit = 1 << targetQubit;
+    const newState = [...this.state];
+    for (let i = 0;i < this.numStates; i++) {
+      if ((i & controlBit) !== 0 && (i & targetBit) === 0) {
+        const i0 = i;
+        const i1 = i | targetBit;
+        const temp = newState[i0];
+        newState[i0] = newState[i1];
+        newState[i1] = temp;
+      }
+    }
+    this.state = newState;
+  }
+  applyPhaseShift(qubit, theta) {
+    const bit = 1 << qubit;
+    const phase = { r: Math.cos(theta), i: Math.sin(theta) };
+    for (let i = 0;i < this.numStates; i++) {
+      if ((i & bit) !== 0) {
+        this.state[i] = cMul(this.state[i], phase);
+      }
+    }
+  }
+  measureWavefunction(random) {
+    const probabilities = this.state.map(cNormSq);
+    const r = random();
+    let cumulative = 0;
+    let selectedState = 0;
+    for (let i = 0;i < probabilities.length; i++) {
+      cumulative += probabilities[i];
+      if (r <= cumulative) {
+        selectedState = i;
+        break;
+      }
+    }
+    const bits = [];
+    for (let q = 0;q < this.numQubits; q++) {
+      bits.push(selectedState >> q & 1);
+    }
+    return { stateIndex: selectedState, bits };
+  }
+}
+function generateQuantumWalkHistory(systemSeed, bits) {
+  const random = lcg(systemSeed + 999);
+  const eraPool = [
+    {
+      name: "Epoche des Ersten Flüsterns",
+      events: [
+        "Erste biologische Synthese primitiver Nervenbündel im Ammoniak-Ozean.",
+        "Entdeckung eines pulsierenden Monolithen aus gefrorenem Quanten-Licht.",
+        "Spontane telepathische Resonanz der Ur-Sippen während einer planetaren Sonnenfinsternis."
+      ],
+      paradoxes: [
+        "Ihre ältesten Schriften existieren in zwei diametral entgegengesetzten Bedeutungen gleichzeitig.",
+        "Stammesriten basieren auf Gesängen, die vor der Entstehung ihrer Sprache aufgezeichnet wurden."
+      ],
+      shifts: "Kollektive Meditation etablierte sich als primäres Kommunikationsmittel."
+    },
+    {
+      name: "Das Zeitalter der Dekohärenz",
+      events: [
+        "Bürgerkrieg zwischen Mechanisten und den Priestern der organischen Leere.",
+        "Spaltung des Heimatplaneten durch planetare Gravitations-Kerne.",
+        "Plötzlicher Stillstand aller siliziumbasierten Verbrennungsmotoren durch einen psionischen Puls."
+      ],
+      paradoxes: [
+        "Historiker fanden Denkmäler für Siege in Schlachten, die laut Sternenkarten nie stattfanden.",
+        "Die gesamte Kriegsflotte löste sich bei der Friedensunterzeichnung in bio-elektrischen Nebel auf."
+      ],
+      shifts: "Die Gesellschaft verbot isolierte Individualität und bildete telepathische Synapsen-Räte."
+    },
+    {
+      name: "Die Ära des Faltungs-Tors",
+      events: [
+        "Durchbruch in der Raumzeit-Krümmung ohne mechanischen Fusionsantrieb.",
+        "Erster physischer Kontakt mit einer Nomaden-Karawane des Konsortiums.",
+        "Errichtung eines 400 Kilometer weiten Orbital-Habitats aus lebendem Chitin."
+      ],
+      paradoxes: [
+        "Ihre Forscherschiffe kehrten 200 Jahre vor ihrem Starttermin unversehrt zurück.",
+        "Ihre Navigatoren sehen die Zukunft der Galaxie als eine flüssige, organische Wand."
+      ],
+      shifts: "Verankerung der Lehre vom 'Kosmischen Wanderer' im planetaren Gesetz."
+    }
+  ];
+  const eras = [];
+  eraPool.forEach((pool) => {
+    const evIdx = Math.floor(random() * pool.events.length);
+    const parIdx = Math.floor(random() * pool.paradoxes.length);
+    eras.push({
+      eraName: pool.name,
+      event: pool.events[evIdx],
+      paradoxDetail: pool.paradoxes[parIdx],
+      culturalShift: pool.shifts
+    });
+  });
+  return eras;
+}
+function collapseQuantumCivilization(systemId, planetIndex, seed) {
+  const random = lcg(seed * 7331 + systemId * 137 + planetIndex * 43);
+  const qpu = new QpuSimulator(random);
+  const { stateIndex, bits } = qpu.measureWavefunction(random);
+  const techCode = bits[1] << 1 | bits[0];
+  let techLevel = "Primitive";
+  let psionicAffinity = 25;
+  if (techCode === 1) {
+    techLevel = "Industrial";
+    psionicAffinity = 45;
+  } else if (techCode === 2) {
+    techLevel = "Spacefaring";
+    psionicAffinity = 75;
+  } else if (techCode === 3) {
+    techLevel = "Hyper-Advanced";
+    psionicAffinity = 95;
+  }
+  const socialCode = bits[3] << 1 | bits[2];
+  let archetype = "Symbiotische Bio-Kommune";
+  let doctrine = "Defensive";
+  let factionId = "free_traders";
+  if (socialCode === 0) {
+    archetype = "Telepathischer Synapsen-Schwarm";
+    doctrine = "Pacifist";
+    factionId = "olyndar_psion";
+  } else if (socialCode === 1) {
+    archetype = "Kybernetisches Nullpunkt-Kollektiv";
+    doctrine = "Defensive";
+    factionId = "vega_collective";
+  } else if (socialCode === 2) {
+    archetype = "Merkantile Gilden-Konföderation";
+    doctrine = "Pacifist";
+    factionId = "free_traders";
+  } else {
+    archetype = "Xenomilitärischer Kreuzzug";
+    doctrine = "Militaristic";
+    factionId = "xenomilitary_ash";
+  }
+  if (techLevel === "Hyper-Advanced" && bits[6] === 1) {
+    archetype = "Ewige Vorläufer-Wächter";
+    doctrine = "Defensive";
+    factionId = "aethelgard_guardians";
+  }
+  const worshipCode = bits[5] << 1 | bits[4];
+  const worshipsPlayer = worshipCode === 0 || factionId === "olyndar_psion";
+  const historyEras = generateQuantumWalkHistory(seed, bits);
+  const entanglementIndex = Math.round(55 + stateIndex % 45);
+  const paradoxFactor = Number(((bits[0] * 0.3 + bits[3] * 0.4 + bits[7] * 0.3) * 1.8 + 0.2).toFixed(2));
+  const collapseLog = `|Ψ⟩ kollabiert zu Zustand #${stateIndex.toString(16).toUpperCase()} (${bits.join("")}₂) | Verschränkungsgrad: ${entanglementIndex}%`;
+  return {
+    qubitStateVector: bits,
+    entanglementIndex,
+    societalArchetype: archetype,
+    paradoxFactor,
+    historyEras,
+    factionId,
+    worshipsPlayer,
+    quantumTechLevel: techLevel,
+    psionicAffinityScore: psionicAffinity,
+    militaryDoctrine: doctrine,
+    quantumCollapseLog: collapseLog
+  };
+}
+
+// src/systems/factions.ts
+var FACTIONS = {
+  vega_collective: {
+    id: "vega_collective",
+    name: "Das Vega-Qubit-Kollektiv",
+    shortName: "Vega-Kollektiv",
+    emblem: "⚛️",
+    color: "0x6366f1",
+    colorCss: "#6366f1",
+    doctrine: "Quanten-Logik & Kybernetische Ordnung",
+    description: "Ein Verbund aus vernetzten Maschinen-Intelligenzen und Transhumanen, die das Universum als gigantische Rechenoperation begreifen.",
+    specialTrait: "+30% Silizium-Handelskurs | EMP-Resistente Drohnen",
+    baseDisposition: "Defensive"
+  },
+  olyndar_psion: {
+    id: "olyndar_psion",
+    name: "Der Psionische Bund von Olyndar",
+    shortName: "Psioniker von Olyndar",
+    emblem: "\uD83D\uDD2E",
+    color: "0xd946ef",
+    colorCss: "#d946ef",
+    doctrine: "Telepathische Resonanz & Bio-Götterkult",
+    description: "Spirituelle Wesen, die mit der kosmischen Leere resonieren und dein Bio-Schiff als lebendige Sternengottheit verehren.",
+    specialTrait: "Freiwillige Crew-Kandidaten | Keine Abfangstaffeln",
+    baseDisposition: "Pacifist"
+  },
+  xenomilitary_ash: {
+    id: "xenomilitary_ash",
+    name: "Die Asche-Gilde der Xenomilitärs",
+    shortName: "Asche-Gilde",
+    emblem: "⚔️",
+    color: "0xf43f5e",
+    colorCss: "#f43f5e",
+    doctrine: "Totale Vorherrschaft & Kinetische Feuerkraft",
+    description: "Eine schwer gepanzerte Militär-Junta mit Schlachtschiffen und automatisierten Orbital-Bastionen. Misstraut organischen Anomalien.",
+    specialTrait: "Schwere Kampf-Korvetten | Verfolgung über Sektorgrenzen",
+    baseDisposition: "Militaristic"
+  },
+  free_traders: {
+    id: "free_traders",
+    name: "Konsortium der Freien Sternen-Händler",
+    shortName: "Händler-Konsortium",
+    emblem: "\uD83C\uDF3F",
+    color: "0x10b981",
+    colorCss: "#10b981",
+    doctrine: "Freier Austausch & Symbiotische Allianzen",
+    description: "Pragmatische interstellare Händlergilden, die bereitwillig Silizium gegen Biomasse tauschen und Schiffsreparaturen anbieten.",
+    specialTrait: "Günstiger Ressourcentausch | Kartographie-Angebote",
+    baseDisposition: "Pacifist"
+  },
+  aethelgard_guardians: {
+    id: "aethelgard_guardians",
+    name: "Die Vorläufer-Wächter von Aethelgard",
+    shortName: "Aethelgard-Wächter",
+    emblem: "\uD83C\uDF0C",
+    color: "0x38bdf8",
+    colorCss: "#38bdf8",
+    doctrine: "Bewahrung des Kosmischen Gleichgewichts",
+    description: "Eine uralte, schlummernde Zivilisation, deren Relikte und Megastrukturen seit Millionen Jahren die Expansion der Galaxie dämpfen.",
+    specialTrait: "Exklusive Vorläufer-Mutationen | Hyper-Raumzeit-Schilde",
+    baseDisposition: "Defensive"
+  }
+};
+function getFaction(id) {
+  return FACTIONS[id] || FACTIONS.free_traders;
+}
+function getReputationTitle(score) {
+  if (score >= 60) {
+    return { label: "\uD83C\uDF1F Verehrt / Heilige Allianz", color: "#d946ef", tier: "allied" };
+  } else if (score >= 20) {
+    return { label: "\uD83E\uDD1D Kooperativ / Handelspartner", color: "#10b981", tier: "friendly" };
+  } else if (score > -20) {
+    return { label: "⚖️ Neutral", color: "#94a3b8", tier: "neutral" };
+  } else if (score > -60) {
+    return { label: "⚔️ Feindselig / Wachsam", color: "#f59e0b", tier: "hostile" };
+  } else {
+    return { label: "\uD83D\uDEA8 Todfeind / Galaktisches Kopfgeld", color: "#f43f5e", tier: "nemesis" };
+  }
+}
+function modifyReputation(factionId, delta, reason) {
+  if (!STATE.reputation[factionId]) {
+    STATE.reputation[factionId] = 0;
+  }
+  const prevScore = STATE.reputation[factionId];
+  STATE.reputation[factionId] = Math.max(-100, Math.min(100, STATE.reputation[factionId] + delta));
+  const newScore = STATE.reputation[factionId];
+  const faction = getFaction(factionId);
+  const sign = delta > 0 ? `+${delta}` : `${delta}`;
+  if (delta > 0) {
+    addLogEntry("SYSTEM", `\uD83C\uDF1F REPUTATION GESTIEGEN: ${faction.name} (${sign} -> ${newScore} Punkte). ${reason}`);
+  } else {
+    addLogEntry("SYSTEM", `⚠️ REPUTATION GESUNKEN: ${faction.name} (${sign} -> ${newScore} Punkte). ${reason}`);
+  }
+  renderFactionReputationUI();
+}
+function renderFactionReputationUI() {
+  const listContainer = document.getElementById("faction-reputation-list");
+  if (!listContainer)
+    return;
+  listContainer.innerHTML = "";
+  Object.keys(FACTIONS).forEach((fId) => {
+    const faction = FACTIONS[fId];
+    const score = STATE.reputation[fId] || 0;
+    const repInfo = getReputationTitle(score);
+    const card = document.createElement("div");
+    card.className = "faction-rep-card";
+    card.innerHTML = `
+            <div class="faction-card-header">
+                <span class="faction-emblem">${faction.emblem}</span>
+                <div class="faction-title-group">
+                    <span class="faction-name" style="color: ${faction.colorCss};">${faction.shortName}</span>
+                    <span class="faction-doctrine">${faction.doctrine}</span>
+                </div>
+                <span class="faction-score" style="color: ${repInfo.color};">${score > 0 ? "+" : ""}${score}</span>
+            </div>
+            <div class="faction-rep-bar-bg">
+                <div class="faction-rep-bar" style="width: ${Math.max(5, (score + 100) / 2)}%; background: ${repInfo.color};"></div>
+            </div>
+            <div class="faction-status-row">
+                <span class="faction-status-label" style="color: ${repInfo.color};">${repInfo.label}</span>
+                <span class="faction-trait-tag">${faction.specialTrait}</span>
+            </div>
+        `;
+    listContainer.appendChild(card);
+  });
+}
+
+// src/systems/diplomacy.ts
+var ALIEN_GLYPHS = ["⍝", "⏁", "⍀", "⏃", "⋏", "⌇", "⌰", "⏃", "⏁", "⟟", "⍜", "⋏", "⍾", "⎍", "⏃", "⋏", "⏁", "⎍", "⋔", "Ψ", "Ω", "Δ", "Ξ", "Φ", "λ", "θ", "π", "Σ"];
+function generateAlienGlyphs(length = 120) {
+  let s = "";
+  for (let i = 0;i < length; i++) {
+    s += ALIEN_GLYPHS[Math.floor(Math.random() * ALIEN_GLYPHS.length)];
+    if (i % 8 === 0 && i > 0)
+      s += " ";
+  }
+  return s;
+}
+function openDiplomacyComms(planet) {
+  if (!planet || !planet.attributes.species)
+    return;
+  STATE.activeDiplomacyPlanet = planet;
+  const spec = planet.attributes.species;
+  const factionId = spec.factionId || (spec.quantumCiv ? spec.quantumCiv.factionId : "free_traders");
+  const faction = getFaction(factionId);
+  const repScore = STATE.reputation[factionId] || 0;
+  const repInfo = getReputationTitle(repScore);
+  const hasTranslator = STATE.mutations.translator && STATE.mutations.translator.purchased;
+  const overlay = document.getElementById("diplomacy-overlay");
+  if (!overlay)
+    return;
+  overlay.style.display = "flex";
+  const headerTitle = document.getElementById("diplomacy-planet-name");
+  const factionEmblem = document.getElementById("diplomacy-faction-emblem");
+  const factionName = document.getElementById("diplomacy-faction-name");
+  const repBadge = document.getElementById("diplomacy-rep-badge");
+  if (headerTitle)
+    headerTitle.innerText = `${planet.name} – ${spec.name}`;
+  if (factionEmblem)
+    factionEmblem.innerText = faction.emblem;
+  if (factionName) {
+    factionName.innerText = faction.name;
+    factionName.style.color = faction.colorCss;
+  }
+  if (repBadge) {
+    repBadge.innerText = `${repInfo.label} (${repScore > 0 ? "+" : ""}${repScore})`;
+    repBadge.style.color = repInfo.color;
+  }
+  const dialogueBox = document.getElementById("diplomacy-dialogue-text");
+  const historyBox = document.getElementById("diplomacy-history-chronicle");
+  if (dialogueBox) {
+    if (!hasTranslator) {
+      dialogueBox.innerHTML = `
+                <div class="untranslated-warning">⚠️ KEIN DSCHINN-ÜBERSETZER AKTIV: Übertragungsfrequenz stark verschlüsselt.</div>
+                <div class="alien-glyph-stream">${generateAlienGlyphs(160)}</div>
+                <div class="translator-hint">Kaufe die Mutation 'Dschinn-Übersetzer' im Evolutions-Deck, um Sprache, Absichten und Quests zu verstehen.</div>
+            `;
+    } else {
+      let greeting = "";
+      if (spec.quantumCiv && spec.quantumCiv.worshipsPlayer) {
+        greeting = `„O Reisende aus dem gefalteten Raum! Unsere Synapsen-Priester haben dein Erscheinen im Quanten-Rauschen vorhergesagt. Dein lebendiger Leib trägt das Erbe der Ur-Schöpfer. Wie dürfen wir deinem Glanz dienen?“`;
+      } else if (repScore < -40) {
+        greeting = `„Achtung, bio-organische Anomalie! Deine Entführungen und Grenzverletzungen sind im gesamten Sektor registriert. Drehe sofort ab, oder unsere planetaren Railguns eröffnen das Feuer!“`;
+      } else if (factionId === "vega_collective") {
+        greeting = `„Logische Grußsequenz initiiert. Wir registrieren eine 99.4% nicht-mechanische Entropie-Signatur in deinem Kern. Wir schlagen einen Datenaustausch von Silizium-Ressourcen gegen Hyperraum-Telemetrie vor.“`;
+      } else if (factionId === "xenomilitary_ash") {
+        greeting = `„Hier spricht die Grenzkontrolle der Asche-Gilde. Halte deine Tentakel in neutraler Position. Wir tolerieren keine psionischen Übergriffe in diesem System.“`;
+      } else {
+        greeting = `„Willkommen im Orbit von ${planet.name}, fremder Wanderer! Unsere Handelsgilden sind bereit, Rohstoffe auszutauschen und deine Hülle zu versorgen.“`;
+      }
+      dialogueBox.innerHTML = `
+                <p class="translated-speech">${greeting}</p>
+                <div class="quantum-entanglement-tag">
+                    ⚛️ ${spec.quantumCiv ? spec.quantumCiv.quantumCollapseLog : "Quanten-Resonanz stabil"}
+                </div>
+            `;
+    }
+  }
+  if (historyBox) {
+    if (spec.quantumCiv && spec.quantumCiv.historyEras) {
+      historyBox.innerHTML = spec.quantumCiv.historyEras.map((era) => `
+                <div class="era-chronicle-item">
+                    <span class="era-title">\uD83D\uDCDC ${era.eraName}</span>
+                    <p class="era-desc">${era.event}</p>
+                    <span class="era-paradox">\uD83C\uDF00 Quanten-Paradoxon: ${era.paradoxDetail}</span>
+                </div>
+            `).join("");
+    } else {
+      historyBox.innerHTML = `<p style="color: #64748b;">Keine historischen Aufzeichnungen im aktuellen Sektor gefunden.</p>`;
+    }
+  }
+  renderDiplomacyActions(planet, factionId);
+}
+function renderDiplomacyActions(planet, factionId) {
+  const actionsContainer = document.getElementById("diplomacy-actions-container");
+  if (!actionsContainer)
+    return;
+  actionsContainer.innerHTML = "";
+  const tradeBtn = document.createElement("button");
+  tradeBtn.className = "diplo-action-btn trade";
+  tradeBtn.innerHTML = `<span>\uD83D\uDD04 Ressourcen-Tausch (40 Silizium ➔ 45 Bio)</span><span class="diplo-badge">+8 Rep</span>`;
+  tradeBtn.onclick = () => {
+    if (STATE.siliconRes >= 40) {
+      STATE.siliconRes -= 40;
+      STATE.bioRes += 45;
+      playBioCollectSound();
+      modifyReputation(factionId, 8, `Erfolgreicher Handelsvertrag mit ${planet.name}.`);
+      openDiplomacyComms(planet);
+    } else {
+      addLogEntry("SYSTEM", "Zu wenig Silizium für diesen Handel (40 benötigt)!");
+    }
+  };
+  actionsContainer.appendChild(tradeBtn);
+  const tributeBtn = document.createElement("button");
+  tributeBtn.className = "diplo-action-btn tribute";
+  tributeBtn.innerHTML = `<span>\uD83C\uDF81 Friedens-Tribut darbringen (30 Bio opfern)</span><span class="diplo-badge">+15 Rep</span>`;
+  tributeBtn.onclick = () => {
+    if (STATE.bioRes >= 30) {
+      STATE.bioRes -= 30;
+      STATE.health = Math.min(STATE.maxHealth, STATE.health + 25);
+      playSiliconCollectSound();
+      modifyReputation(factionId, 15, `Großzügiger Tribut an ${planet.name} übergeben (+25 HP Hüllenreparatur).`);
+      openDiplomacyComms(planet);
+    } else {
+      addLogEntry("SYSTEM", "Zu wenig Biomasse für Tribut (30 benötigt)!");
+    }
+  };
+  actionsContainer.appendChild(tributeBtn);
+  const blessingBtn = document.createElement("button");
+  blessingBtn.className = "diplo-action-btn psionic";
+  blessingBtn.innerHTML = `<span>\uD83E\uDDE0 Telepathischer Segen (25 Mentalkraft)</span><span class="diplo-badge">+20 Rep</span>`;
+  blessingBtn.onclick = () => {
+    if (STATE.mentalEnergy >= 25) {
+      STATE.mentalEnergy -= 25;
+      STATE.crew.forEach((c) => c.stress = Math.max(0, c.stress - 20));
+      modifyReputation(factionId, 20, `Telepathischer Segen harmonisiert planetare Geister (-20 Crew-Stress).`);
+      openDiplomacyComms(planet);
+    } else {
+      addLogEntry("SYSTEM", "Zu wenig Mentalkraft für telepathischen Segen (25% benötigt)!");
+    }
+  };
+  actionsContainer.appendChild(blessingBtn);
+  const threatBtn = document.createElement("button");
+  threatBtn.className = "diplo-action-btn threat";
+  threatBtn.innerHTML = `<span>⚔️ Drohung & Unterwerfung fordern</span><span class="diplo-badge danger">-30 Rep</span>`;
+  threatBtn.onclick = () => {
+    modifyReputation(factionId, -30, `Kriegerische Drohung gegen ${planet.name} ausgesprochen! Alarmstufe erhöht.`);
+    closeDiplomacyComms();
+  };
+  actionsContainer.appendChild(threatBtn);
+}
+function closeDiplomacyComms() {
+  const overlay = document.getElementById("diplomacy-overlay");
+  if (overlay)
+    overlay.style.display = "none";
+  STATE.activeDiplomacyPlanet = null;
+}
+
 // src/systems/scanner.ts
 var scanOsc = null;
 var scanGain = null;
@@ -28713,12 +29223,8 @@ function generatePlanetAttributes(p) {
     bio = hash % 3 === 0 ? "Biolumineszierende Flora" : hash % 3 === 1 ? "Mikrobielle Kolonien" : "Komplexes Ökosystem";
     res = "Reich an Biomasse, Kohlenstoff & O2";
     const candidatePool = [
-      { name: "Capt. Alan Miller", species: "Mensch / Terraner", role: "pilot", roleName: "\uD83E\uDDD1‍✈️ Chef-Navigator", buffDesc: "+15% Schub & -15% Manöverkosten", baseStressRate: 0.3 },
-      { name: "Dr. Elena Song", species: "Mensch / Terranerin", role: "biologist", roleName: "\uD83D\uDD2C Xenobiologin", buffDesc: "+30% Bio-Ertrag & +25% Scan-Speed", baseStressRate: 0.25 },
-      { name: "Ing. Viktor Petrov", species: "Mensch / Terraner", role: "engineer", roleName: "\uD83D\uDD27 Chef-Ingenieur", buffDesc: "+0.6 HP/s Naniten-Reparatur", baseStressRate: 0.4 },
-      { name: "Dr. Julian Vance", species: "Mensch / Terraner", role: "psychologist", roleName: "\uD83E\uDDD8 Neuro-Therapeut", buffDesc: "-40% Crew-Stressaufbau", baseStressRate: 0.15 },
-      { name: "Lt. Kira Novak", species: "Mensch / Terranerin", role: "cryptologist", roleName: "\uD83D\uDCE1 Quanten-Kryptologin", buffDesc: "+30 LJ Psio-Sensorhorizont", baseStressRate: 0.2 },
-      { name: "Prof. T'Kora", species: "Vulkanoid", role: "biologist", roleName: "\uD83D\uDD2C Bio-Analytikerin", buffDesc: "+30% Bio-Ertrag & +25% Scan-Speed", baseStressRate: 0.1 },
+      { name: "Navigator Elian", species: "Menschlicher Kolonist", role: "pilot", roleName: "\uD83D\uDEF8 Astral-Pilot", buffDesc: "+30% Schubkraft & Manövrierbarkeit", baseStressRate: 0.18 },
+      { name: "Dr. Vaelen", species: "Xeno-Botaniker", role: "biologist", roleName: "\uD83C\uDF31 Bio-Architekt", buffDesc: "+40% Biomasse-Ertrag beim Ernten", baseStressRate: 0.15 },
       { name: "Cyber-Adept Rex", species: "Cyborg-Pionier", role: "engineer", roleName: "\uD83D\uDD27 Naniten-Meister", buffDesc: "+0.6 HP/s Naniten-Reparatur", baseStressRate: 0.2 },
       { name: "Gesandte Maya", species: "Empathin", role: "psychologist", roleName: "\uD83E\uDDD8 Gedanken-Diplomatin", buffDesc: "-40% Crew-Stressaufbau", baseStressRate: 0.12 }
     ];
@@ -28730,18 +29236,18 @@ function generatePlanetAttributes(p) {
     if (hash % 2 === 0) {
       pool.push({ ...c2, id: Date.now() + Math.random() + 1, stress: 25, illusionStability: 100, status: "Friedlich", thought: "Führt Atmosphärenmessungen durch..." });
     }
-    const techLevels = ["Primitive", "Industrial", "Spacefaring", "Hyper-Advanced"];
-    const tech = techLevels[hash % techLevels.length];
-    const defenseRating = tech === "Primitive" ? 0 : tech === "Industrial" ? 20 : tech === "Spacefaring" ? 65 : 95;
-    const disposition = hash % 3 === 0 ? "Militaristic" : hash % 3 === 1 ? "Defensive" : "Pacifist";
+    const qCiv = collapseQuantumCivilization(STATE.currentSystemId, hash % 8, hash);
+    const faction = getFaction(qCiv.factionId);
     species = {
       hasSentient: true,
-      name: pool[0].species.includes("Mensch") ? "Terranische Exploratoren" : `${pool[0].species}-Präsenz`,
-      population: pool.length,
+      name: `${qCiv.societalArchetype} (${faction.shortName})`,
+      population: pool.length * 1000 + hash % 500,
       candidates: pool,
-      techLevel: tech,
-      defenseRating,
-      fleetDisposition: disposition
+      techLevel: qCiv.quantumTechLevel,
+      defenseRating: qCiv.quantumTechLevel === "Primitive" ? 0 : qCiv.quantumTechLevel === "Industrial" ? 20 : qCiv.quantumTechLevel === "Spacefaring" ? 65 : 95,
+      fleetDisposition: qCiv.militaryDoctrine === "Militaristic" ? "Militaristic" : qCiv.militaryDoctrine === "Pacifist" ? "Pacifist" : "Defensive",
+      factionId: qCiv.factionId,
+      quantumCiv: qCiv
     };
   } else if (p.type === "Gas Giant") {
     atmos = hash % 2 === 0 ? "Flüssiges Helium & Wasserstoff" : "Superdichtes Ammoniak & Methan";
@@ -28989,6 +29495,11 @@ function updateScannerUI(planet, dist) {
         fleetRow.style.display = "none";
       }
     }
+    const commsBtn = document.getElementById("start-comms-btn");
+    if (commsBtn) {
+      commsBtn.style.display = inRange && hasSentient ? "block" : "none";
+      commsBtn.onclick = () => openDiplomacyComms(planet);
+    }
     if (harvestBtn) {
       harvestBtn.style.display = inRange && !STATE.extractingPlanet && !STATE.abductActive ? "block" : "none";
     }
@@ -29004,6 +29515,9 @@ function updateScannerUI(planet, dist) {
       harvestBtn.style.display = "none";
     if (abductBtn)
       abductBtn.style.display = "none";
+    const commsBtn = document.getElementById("start-comms-btn");
+    if (commsBtn)
+      commsBtn.style.display = "none";
   }
 }
 
@@ -29324,19 +29838,20 @@ function initDeckUI() {
       btn.classList.add("active");
       const crewContent = document.getElementById("tab-content-crew");
       const evoContent = document.getElementById("tab-content-evolution");
-      if (targetTab === "crew") {
-        if (crewContent)
-          crewContent.classList.add("active");
-        if (evoContent)
-          evoContent.classList.remove("active");
-      } else if (targetTab === "evolution") {
-        if (crewContent)
-          crewContent.classList.remove("active");
-        if (evoContent)
-          evoContent.classList.add("active");
+      const facContent = document.getElementById("tab-content-factions");
+      if (crewContent)
+        crewContent.classList.toggle("active", targetTab === "crew");
+      if (evoContent)
+        evoContent.classList.toggle("active", targetTab === "evolution");
+      if (facContent) {
+        facContent.classList.toggle("active", targetTab === "factions");
+        if (targetTab === "factions") {
+          renderFactionReputationUI();
+        }
       }
     });
   });
+  renderFactionReputationUI();
   const mutButtons = document.querySelectorAll(".mut-btn");
   mutButtons.forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -31183,6 +31698,15 @@ function setupControls() {
     }
     if (key === "x") {
       triggerBioDischarge();
+    }
+    if (key === "c") {
+      const target = STATE.lockedTarget || STATE.nearestPlanet;
+      if (target && target.attributes.species) {
+        openDiplomacyComms(target);
+      }
+    }
+    if (key === "escape") {
+      closeDiplomacyComms();
     }
     if (key === "f") {
       if (STATE.nearestPlanet) {

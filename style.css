@@ -2387,3 +2387,420 @@ body.game-started .hud-left {
 .gp-glyph.btn-y { border-color: #facc15; color: #facc15; }
 .gp-glyph.btn-b { border-color: #ef4444; color: #ef4444; }
 .gp-glyph.btn-trigger { border-radius: 4px; border-color: #c084fc; color: #c084fc; font-size: 0.55rem; }
+
+/* --- DIPLOMACY & FACTIONS STYLES (PHASE C/D) --- */
+.comms-btn {
+    width: 100%;
+    margin-top: 8px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(217, 70, 239, 0.25));
+    border: 1px solid rgba(168, 85, 247, 0.5);
+    color: #e2e8f0;
+    padding: 9px 12px;
+    border-radius: 6px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.2);
+}
+
+.comms-btn:hover {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(217, 70, 239, 0.4));
+    border-color: #d946ef;
+    box-shadow: 0 0 20px rgba(217, 70, 239, 0.4);
+    transform: translateY(-1px);
+}
+
+/* Factions Deck Tab */
+.faction-reputation-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.faction-rep-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.faction-rep-card:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(15, 23, 42, 0.85);
+}
+
+.faction-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.faction-emblem {
+    font-size: 1.25rem;
+}
+
+.faction-title-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.faction-name {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.faction-doctrine {
+    font-size: 0.68rem;
+    color: #94a3b8;
+}
+
+.faction-score {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 800;
+}
+
+.faction-rep-bar-bg {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.faction-rep-bar {
+    height: 100%;
+    transition: width 0.4s ease, background-color 0.4s ease;
+}
+
+.faction-status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.68rem;
+}
+
+.faction-status-label {
+    font-weight: 600;
+}
+
+.faction-trait-tag {
+    color: #64748b;
+    font-size: 0.62rem;
+}
+
+/* Diplomacy Overlay Modal */
+.diplomacy-content {
+    max-width: 900px;
+    width: 92%;
+    background: rgba(7, 12, 25, 0.94);
+    border: 1px solid rgba(168, 85, 247, 0.4);
+    box-shadow: 0 0 50px rgba(168, 85, 247, 0.25);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 88vh;
+    overflow-y: auto;
+}
+
+.diplomacy-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 12px;
+}
+
+.diplomacy-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.diplomacy-emblem {
+    font-size: 2rem;
+    filter: drop-shadow(0 0 10px rgba(217, 70, 239, 0.5));
+}
+
+.diplomacy-header h2 {
+    margin: 0;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.15rem;
+    color: #f8fafc;
+}
+
+.diplomacy-faction-name {
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+.diplomacy-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.diplomacy-rep-badge {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+}
+
+.close-diplo-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.3rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.close-diplo-btn:hover {
+    color: #f43f5e;
+    transform: scale(1.15);
+}
+
+.diplomacy-body {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 18px;
+}
+
+@media (max-width: 768px) {
+    .diplomacy-body {
+        grid-template-columns: 1fr;
+    }
+}
+
+.diplomacy-portrait-box {
+    position: relative;
+    height: 140px;
+    background: radial-gradient(circle at center, rgba(99, 102, 241, 0.15), rgba(15, 23, 42, 0.9));
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.hologram-scanline {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: rgba(56, 189, 248, 0.7);
+    box-shadow: 0 0 8px #38bdf8;
+    animation: scanline 2.5s linear infinite;
+}
+
+@keyframes scanline {
+    0% { top: 0%; opacity: 0.8; }
+    50% { opacity: 0.4; }
+    100% { top: 100%; opacity: 0.8; }
+}
+
+.diplomacy-avatar {
+    font-size: 3.5rem;
+    filter: drop-shadow(0 0 15px rgba(56, 189, 248, 0.4));
+}
+
+.transmission-status {
+    position: absolute;
+    bottom: 6px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.58rem;
+    color: #10b981;
+    letter-spacing: 0.05em;
+}
+
+.diplomacy-history-box {
+    margin-top: 12px;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.diplomacy-history-box h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+}
+
+.history-chronicle-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.era-chronicle-item {
+    border-left: 2px solid #6366f1;
+    padding-left: 8px;
+    font-size: 0.7rem;
+}
+
+.era-title {
+    font-weight: bold;
+    color: #38bdf8;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.era-desc {
+    margin: 0 0 2px 0;
+    color: #cbd5e1;
+    line-height: 1.3;
+}
+
+.era-paradox {
+    color: #d946ef;
+    font-style: italic;
+    font-size: 0.65rem;
+    display: block;
+}
+
+.diplomacy-dialogue-box {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 14px;
+    min-height: 140px;
+}
+
+.diplomacy-dialogue-box h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.72rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+}
+
+.untranslated-warning {
+    color: #f59e0b;
+    font-weight: bold;
+    font-size: 0.75rem;
+    margin-bottom: 8px;
+}
+
+.alien-glyph-stream {
+    font-family: monospace;
+    font-size: 0.95rem;
+    color: #00ff88;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 10px;
+    border-radius: 6px;
+    word-break: break-all;
+    line-height: 1.5;
+    letter-spacing: 0.15em;
+    animation: glyphFlicker 3s infinite;
+}
+
+@keyframes glyphFlicker {
+    0%, 100% { opacity: 0.9; }
+    50% { opacity: 0.5; }
+}
+
+.translator-hint {
+    margin-top: 8px;
+    font-size: 0.7rem;
+    color: #64748b;
+}
+
+.translated-speech {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: #f1f5f9;
+    margin: 0 0 10px 0;
+    font-style: italic;
+}
+
+.quantum-entanglement-tag {
+    font-family: monospace;
+    font-size: 0.68rem;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.diplomacy-actions-section {
+    margin-top: 14px;
+}
+
+.diplomacy-actions-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    text-transform: uppercase;
+}
+
+.diplomacy-actions-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.diplo-action-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #f1f5f9;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.diplo-action-btn:hover {
+    background: rgba(51, 65, 85, 0.8);
+    border-color: #38bdf8;
+    transform: translateX(4px);
+}
+
+.diplo-action-btn.threat:hover {
+    border-color: #f43f5e;
+    background: rgba(244, 63, 94, 0.2);
+}
+
+.diplo-badge {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.diplo-badge.danger {
+    color: #f43f5e;
+    background: rgba(244, 63, 94, 0.15);
+}
