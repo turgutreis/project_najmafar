@@ -1,5 +1,6 @@
 import { STATE } from '../core/state';
 import { addLogEntry } from '../ui/hud';
+import { toggleTelepathy } from '../input/controls';
 
 export function calculateCrewBuffs() {
     let thrustMult = 1.0;
@@ -33,6 +34,110 @@ export function calculateCrewBuffs() {
 
     const basePsio = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 140 : 75;
     STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
+}
+
+export function updateCrewSimulation(dt: number) {
+    const totalCrew = STATE.crew.length;
+    const uniqueRoles = new Set(STATE.crew.map(c => c.role)).size;
+
+    // 1. Loneliness & Satiety Decay System
+    let targetLoneliness = 100;
+    let isHarmony = false;
+
+    if (totalCrew === 0) {
+        targetLoneliness = 100;
+    } else if (totalCrew === 1) {
+        STATE.crewSatietyTimer += dt;
+        const decay = Math.min(25, (STATE.crewSatietyTimer / 90) * 25);
+        targetLoneliness = 40 + decay;
+    } else if (uniqueRoles === 2) {
+        targetLoneliness = 25;
+    } else if (uniqueRoles >= 3) {
+        targetLoneliness = 5;
+        isHarmony = true;
+    }
+
+    if (STATE.loneliness < targetLoneliness) {
+        STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
+    } else if (STATE.loneliness > targetLoneliness) {
+        STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
+    }
+
+    if (isHarmony) {
+        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
+        STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
+    }
+
+    // 2. Individual Dream Matrix & Stress Loop
+    let speed = STATE.playerVelocity.length();
+    let speedStressModifier = speed > 10.0 ? 0.6 : 0;
+
+    STATE.crew.forEach(c => {
+        const decayRate = (0.35 + c.stress * 0.006) * dt;
+        c.illusionStability = Math.max(0, c.illusionStability - decayRate);
+
+        if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
+            c.stress = Math.max(0, c.stress - 7.5 * dt);
+            c.illusionStability = Math.min(100, c.illusionStability + 8.0 * dt);
+            c.status = "Traum-Trance";
+            c.thought = "Fühlt eine warme, beruhigende Welle... 'Alles ist friedlich.'";
+        } else {
+            if (c.illusionStability < 35) {
+                c.stress = Math.min(100, c.stress + (4.5 + speedStressModifier) * dt);
+                c.status = "Panik";
+                c.thought = "Verzweifelt: 'Die Wände pulsieren... das ist keine Station!'";
+            } else if (c.illusionStability < 65) {
+                c.stress = Math.min(100, c.stress + (1.2 + speedStressModifier) * dt);
+                c.status = "Misstrauisch";
+                c.thought = "Stutzt: 'Höre ich ein Atmen in den Lüftungsschächten?'";
+            } else {
+                c.stress = Math.max(0, c.stress - 2.0 * dt);
+                c.status = "Arbeitet";
+                c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
+            }
+        }
+
+        // Symbiotic Perks from calm minds
+        if (c.illusionStability >= 50) {
+            if (c.role === 'engineer') {
+                STATE.health = Math.min(STATE.maxHealth, STATE.health + 0.25 * dt);
+            } else if (c.role === 'biologist') {
+                STATE.bioRes += 0.1 * dt;
+            } else if (c.role === 'psychologist') {
+                STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 1.5 * dt);
+            }
+        }
+
+        // Panic Sabotage at extreme stress
+        if (c.stress >= 85) {
+            STATE.health = Math.max(0, STATE.health - 1.8 * dt);
+            if (Math.random() < 0.004) {
+                addLogEntry("CREW", `MATRIX-ALARM: ${c.name} greift in Panik die organische Zellwand an! (Zellschaden)`);
+            }
+        }
+    });
+
+    // 3. Mental Energy Drain / Regen
+    if (STATE.telepathyActive) {
+        STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 6 * dt);
+        if (STATE.mentalEnergy === 0) {
+            toggleTelepathy();
+            addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
+        }
+    } else {
+        const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 8 * dt : 4 * dt;
+        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
+    }
+
+    // 4. Periodic Multi-Crew Dialogue
+    STATE.crewDialogueTimer -= dt;
+    if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
+        STATE.crewDialogueTimer = 20 + Math.random() * 8;
+        triggerMultiCrewDialogue();
+    }
+
+    // Update Crew DOM cards periodically
+    renderCrewUI();
 }
 
 export function renderCrewUI() {

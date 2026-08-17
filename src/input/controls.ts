@@ -241,42 +241,96 @@ export function toggleTelepathy() {
     }
 }
 
-export function pollGamepadControls(dt: number) {
-    if (!navigator.getGamepads) return;
-    const gamepads = navigator.getGamepads();
-    let gp: Gamepad | null = null;
-    for (let i = 0; i < gamepads.length; i++) {
-        if (gamepads[i] && gamepads[i]!.connected) {
-            gp = gamepads[i];
-            break;
-        }
-    }
-    if (!gp) return;
-
-    // 1. Left Analog Stick
-    const deadzone = 0.15;
-    let stickX = gp.axes[0] || 0;
-    let stickY = gp.axes[1] || 0;
-    if (Math.abs(stickX) < deadzone) stickX = 0;
-    if (Math.abs(stickY) < deadzone) stickY = 0;
-
-    // D-Pad buttons fallback
-    if (gp.buttons[12] && gp.buttons[12].pressed) stickY = -1.0;
-    if (gp.buttons[13] && gp.buttons[13].pressed) stickY = 1.0;
-    if (gp.buttons[14] && gp.buttons[14].pressed) stickX = -1.0;
-    if (gp.buttons[15] && gp.buttons[15].pressed) stickX = 1.0;
-
-    // Movement Input Integration
+export function processInput(dt: number) {
     const inputVec = new THREE.Vector3(0, 0, 0);
+
+    // 1. Keyboard Input
     if (STATE.keys.w) inputVec.z -= 1;
     if (STATE.keys.s) inputVec.z += 1;
     if (STATE.keys.a) inputVec.x -= 1;
     if (STATE.keys.d) inputVec.x += 1;
 
-    if (inputVec.lengthSq() === 0 && (Math.abs(stickX) > 0 || Math.abs(stickY) > 0)) {
-        inputVec.set(stickX, 0, stickY);
+    // 2. Gamepad Input
+    let gp: Gamepad | null = null;
+    if (navigator.getGamepads) {
+        const gamepads = navigator.getGamepads();
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i] && gamepads[i]!.connected) {
+                gp = gamepads[i];
+                break;
+            }
+        }
     }
 
+    if (gp) {
+        const deadzone = 0.15;
+        let stickX = gp.axes[0] || 0;
+        let stickY = gp.axes[1] || 0;
+        if (Math.abs(stickX) < deadzone) stickX = 0;
+        if (Math.abs(stickY) < deadzone) stickY = 0;
+
+        // D-Pad buttons
+        if (gp.buttons[12] && gp.buttons[12].pressed) stickY = -1.0;
+        if (gp.buttons[13] && gp.buttons[13].pressed) stickY = 1.0;
+        if (gp.buttons[14] && gp.buttons[14].pressed) stickX = -1.0;
+        if (gp.buttons[15] && gp.buttons[15].pressed) stickX = 1.0;
+
+        if (inputVec.lengthSq() === 0 && (Math.abs(stickX) > 0 || Math.abs(stickY) > 0)) {
+            inputVec.set(stickX, 0, stickY);
+        }
+
+        // Left Trigger (Button 6) = Hold Telepathic Calming Field
+        const ltPressed = (gp.buttons[6] && gp.buttons[6].pressed) || (gp.buttons[6] && gp.buttons[6].value > 0.3);
+        if (ltPressed && !STATE.telepathyActive) {
+            toggleTelepathy();
+        } else if (!ltPressed && STATE.telepathyActive && !STATE.keys.Space) {
+            toggleTelepathy();
+        }
+
+        // Edge-triggered Buttons
+        function isPressedEdge(btnIdx: number) {
+            const btn = gp!.buttons[btnIdx];
+            const isDown = btn ? (btn.pressed || btn.value > 0.5) : false;
+            const wasDown = prevGpButtons[btnIdx] || false;
+            return isDown && !wasDown;
+        }
+
+        if (isPressedEdge(0)) { // Button A
+            if (STATE.nearestPlanet) {
+                const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
+                if (isScanned && STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
+                    triggerAbductStart();
+                } else {
+                    triggerScanStart();
+                }
+            }
+        }
+
+        if (isPressedEdge(2)) triggerHarvestStart(); // Button X
+        if (isPressedEdge(3)) triggerPsionicSonar();   // Button Y
+        if (isPressedEdge(1)) {                      // Button B
+            if (isMapOpen()) {
+                toggleGalaxyMap();
+            } else if (STATE.lockedTarget) {
+                clearLockedTarget();
+            }
+        }
+
+        if (isPressedEdge(4)) cycleTarget(-1); // LB
+        if (isPressedEdge(5)) cycleTarget(1);  // RB
+        if (isPressedEdge(8)) toggleGalaxyMap(); // Select
+
+        if (isPressedEdge(9)) { // Start / Menu
+            const mainMenu = document.getElementById('main-menu');
+            if (mainMenu && STATE.gameStarted) {
+                mainMenu.classList.toggle('menu-hidden');
+            }
+        }
+
+        prevGpButtons = gp.buttons.map(b => b ? (b.pressed || b.value > 0.5) : false);
+    }
+
+    // 3. Movement Integration
     const isThrusting = inputVec.lengthSq() > 0;
     if (isThrusting) {
         inputVec.normalize();
@@ -299,60 +353,4 @@ export function pollGamepadControls(dt: number) {
     } else {
         setThrusterSound(false);
     }
-
-    // 2. Left Trigger (Button 6) = Hold Telepathic Calming Field
-    const ltPressed = (gp.buttons[6] && gp.buttons[6].pressed) || (gp.buttons[6] && gp.buttons[6].value > 0.3);
-    if (ltPressed && !STATE.telepathyActive) {
-        toggleTelepathy();
-    } else if (!ltPressed && STATE.telepathyActive && !STATE.keys.Space) {
-        toggleTelepathy();
-    }
-
-    // 3. Edge-triggered Buttons
-    function isPressedEdge(btnIdx: number) {
-        const btn = gp!.buttons[btnIdx];
-        const isDown = btn ? (btn.pressed || btn.value > 0.5) : false;
-        const wasDown = prevGpButtons[btnIdx] || false;
-        return isDown && !wasDown;
-    }
-
-    if (isPressedEdge(0)) { // Button A
-        if (STATE.nearestPlanet) {
-            const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
-            if (isScanned && STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
-                triggerAbductStart();
-            } else {
-                triggerScanStart();
-            }
-        }
-    }
-
-    if (isPressedEdge(2)) { // Button X
-        triggerHarvestStart();
-    }
-
-    if (isPressedEdge(3)) { // Button Y
-        triggerPsionicSonar();
-    }
-
-    if (isPressedEdge(1)) { // Button B
-        if (isMapOpen()) {
-            toggleGalaxyMap();
-        } else if (STATE.lockedTarget) {
-            clearLockedTarget();
-        }
-    }
-
-    if (isPressedEdge(4)) cycleTarget(-1); // LB
-    if (isPressedEdge(5)) cycleTarget(1);  // RB
-    if (isPressedEdge(8)) toggleGalaxyMap(); // Select
-
-    if (isPressedEdge(9)) { // Start / Menu
-        const mainMenu = document.getElementById('main-menu');
-        if (mainMenu && STATE.gameStarted) {
-            mainMenu.classList.toggle('menu-hidden');
-        }
-    }
-
-    prevGpButtons = gp.buttons.map(b => b ? (b.pressed || b.value > 0.5) : false);
 }

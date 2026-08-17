@@ -54,23 +54,30 @@ export function addLogEntry(category: string, message: string) {
 }
 
 export function updateHUDStats(isHarmony = false) {
-    const hpBar = document.getElementById('health-bar');
-    const hpTxt = document.getElementById('health-text');
-    const bioBar = document.getElementById('energy-bar');
-    const bioTxt = document.getElementById('energy-text');
-    const mentalBar = document.getElementById('mental-bar');
-    const mentalTxt = document.getElementById('mental-text');
+    const hpBar = document.getElementById('core-health-bar') || document.getElementById('health-bar');
+    const hpTxt = document.getElementById('core-health-text') || document.getElementById('health-text');
+    const bioBar = document.getElementById('bio-energy-bar') || document.getElementById('energy-bar');
+    const bioTxt = document.getElementById('bio-energy-text') || document.getElementById('energy-text');
+    const mentalBar = document.getElementById('telepathy-energy-bar') || document.getElementById('mental-bar');
+    const mentalTxt = document.getElementById('telepathy-energy-text') || document.getElementById('mental-text');
     const loneBar = document.getElementById('loneliness-bar');
     const loneTxt = document.getElementById('loneliness-text');
 
-    if (hpBar) hpBar.style.width = `${(STATE.health / STATE.maxHealth) * 100}%`;
+    if (hpBar) {
+        hpBar.style.width = `${(STATE.health / STATE.maxHealth) * 100}%`;
+        if (STATE.health < 30) {
+            hpBar.className = "progress-bar health danger";
+        } else {
+            hpBar.className = "progress-bar health";
+        }
+    }
     if (hpTxt) hpTxt.innerText = `${Math.round(STATE.health)}%`;
 
     if (bioBar) bioBar.style.width = `${(STATE.bioEnergy / STATE.maxBioEnergy) * 100}%`;
     if (bioTxt) bioTxt.innerText = `${Math.round(STATE.bioEnergy)}%`;
 
     if (mentalBar) mentalBar.style.width = `${(STATE.mentalEnergy / STATE.maxMentalEnergy) * 100}%`;
-    if (mentalTxt) mentalTxt.innerText = `${Math.round(STATE.mentalEnergy)}%`;
+    if (mentalTxt) mentalTxt.innerText = `${Math.round(STATE.mentalEnergy)}/${STATE.maxMentalEnergy}`;
 
     if (loneBar) {
         loneBar.style.width = `${STATE.loneliness}%`;

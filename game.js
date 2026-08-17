@@ -26973,16 +26973,22 @@ function addLogEntry(category, message) {
   }
 }
 function updateHUDStats(isHarmony = false) {
-  const hpBar = document.getElementById("health-bar");
-  const hpTxt = document.getElementById("health-text");
-  const bioBar = document.getElementById("energy-bar");
-  const bioTxt = document.getElementById("energy-text");
-  const mentalBar = document.getElementById("mental-bar");
-  const mentalTxt = document.getElementById("mental-text");
+  const hpBar = document.getElementById("core-health-bar") || document.getElementById("health-bar");
+  const hpTxt = document.getElementById("core-health-text") || document.getElementById("health-text");
+  const bioBar = document.getElementById("bio-energy-bar") || document.getElementById("energy-bar");
+  const bioTxt = document.getElementById("bio-energy-text") || document.getElementById("energy-text");
+  const mentalBar = document.getElementById("telepathy-energy-bar") || document.getElementById("mental-bar");
+  const mentalTxt = document.getElementById("telepathy-energy-text") || document.getElementById("mental-text");
   const loneBar = document.getElementById("loneliness-bar");
   const loneTxt = document.getElementById("loneliness-text");
-  if (hpBar)
+  if (hpBar) {
     hpBar.style.width = `${STATE.health / STATE.maxHealth * 100}%`;
+    if (STATE.health < 30) {
+      hpBar.className = "progress-bar health danger";
+    } else {
+      hpBar.className = "progress-bar health";
+    }
+  }
   if (hpTxt)
     hpTxt.innerText = `${Math.round(STATE.health)}%`;
   if (bioBar)
@@ -26992,7 +26998,7 @@ function updateHUDStats(isHarmony = false) {
   if (mentalBar)
     mentalBar.style.width = `${STATE.mentalEnergy / STATE.maxMentalEnergy * 100}%`;
   if (mentalTxt)
-    mentalTxt.innerText = `${Math.round(STATE.mentalEnergy)}%`;
+    mentalTxt.innerText = `${Math.round(STATE.mentalEnergy)}/${STATE.maxMentalEnergy}`;
   if (loneBar) {
     loneBar.style.width = `${STATE.loneliness}%`;
     if (isHarmony) {
@@ -27308,6 +27314,8 @@ function createStarTexture(colorHex, seed) {
 }
 
 // src/systems/scanner.ts
+var scanOsc = null;
+var scanGain = null;
 function generatePlanetAttributes(p) {
   const hash = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
   let atmos, temp, bio, res, species;
@@ -27399,7 +27407,90 @@ function triggerScanStart() {
   const scanBtn = document.getElementById("start-scan-btn");
   if (scanBtn)
     scanBtn.setAttribute("disabled", "true");
+  startScanSound();
   addLogEntry("SYSTEM", `Spektral-Scan initiiert für: ${STATE.scanningPlanet.name}. Halte Position (Distanz < 20)...`);
+}
+function updateScanning(dt) {
+  if (!STATE.scanningPlanet)
+    return;
+  const dx = STATE.playerPosition.x - STATE.scanningPlanet.mesh.position.x;
+  const dz = STATE.playerPosition.z - STATE.scanningPlanet.mesh.position.z;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  if (dist > 25) {
+    cancelScanning("Signalverlust. Abstand überschritt Sicherheitsradius.");
+    return;
+  }
+  const scanSpeedMult = STATE.crewBuffs ? STATE.crewBuffs.scanSpeed : 1;
+  STATE.scanProgress += dt * 35 * scanSpeedMult;
+  const bar = document.getElementById("scan-progress-bar");
+  const text = document.getElementById("scan-progress-text");
+  if (bar)
+    bar.style.width = `${STATE.scanProgress}%`;
+  if (text)
+    text.innerText = `${Math.round(STATE.scanProgress)}%`;
+  if (STATE.scanProgress >= 100) {
+    completeScanning();
+  }
+}
+function cancelScanning(reason) {
+  stopScanSound();
+  addLogEntry("SYSTEM", `Scan abgebrochen: ${reason}`);
+  STATE.scanningPlanet = null;
+  STATE.scanProgress = 0;
+  const progContainer = document.getElementById("scan-progress-container");
+  if (progContainer)
+    progContainer.style.display = "none";
+}
+function completeScanning() {
+  stopScanSound();
+  const progContainer = document.getElementById("scan-progress-container");
+  if (progContainer)
+    progContainer.style.display = "none";
+  const planet = STATE.scanningPlanet;
+  if (planet) {
+    planet.scanned = true;
+    STATE.scannedPlanets[planet.name] = true;
+    STATE.bioRes += 15;
+    STATE.siliconRes += 10;
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 15);
+    addLogEntry("SYSTEM", `Spektral-Scan von ${planet.name} abgeschlossen! Atmosphärendatenbank aktualisiert (+15 Bio | +10 Silizium).`);
+    if (planet.attributes.species && planet.attributes.species.population > 0) {
+      addLogEntry("SYSTEM", `PSIO-DETEKTION: Intelligentes Leben (${planet.attributes.species.name}) auf ${planet.name} entdeckt! Psionischer Transfer [F] bereit.`);
+    }
+    updateScannerUI(planet, 10);
+  }
+  STATE.scanningPlanet = null;
+  STATE.scanProgress = 0;
+}
+function startScanSound() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  scanOsc = ctx.createOscillator();
+  scanGain = ctx.createGain();
+  scanOsc.type = "sawtooth";
+  scanOsc.frequency.setValueAtTime(440, ctx.currentTime);
+  scanOsc.frequency.linearRampToValueAtTime(880, ctx.currentTime + 2.5);
+  scanGain.gain.setValueAtTime(0, ctx.currentTime);
+  scanGain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.1);
+  scanOsc.connect(scanGain);
+  scanGain.connect(ctx.destination);
+  scanOsc.start();
+}
+function stopScanSound() {
+  if (scanOsc) {
+    const ctx = getAudioContext();
+    if (ctx && scanGain) {
+      scanGain.gain.cancelScheduledValues(ctx.currentTime);
+      scanGain.gain.setValueAtTime(scanGain.gain.value, ctx.currentTime);
+      scanGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      scanOsc.stop(ctx.currentTime + 0.12);
+    } else {
+      scanOsc.stop();
+    }
+    scanOsc = null;
+    scanGain = null;
+  }
 }
 function updateScannerUI(planet, dist) {
   const nameEl = document.getElementById("nearest-planet-name");
@@ -28267,6 +28358,90 @@ function calculateCrewBuffs() {
   const basePsio = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 140 : 75;
   STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
 }
+function updateCrewSimulation(dt) {
+  const totalCrew = STATE.crew.length;
+  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
+  let targetLoneliness = 100;
+  let isHarmony = false;
+  if (totalCrew === 0) {
+    targetLoneliness = 100;
+  } else if (totalCrew === 1) {
+    STATE.crewSatietyTimer += dt;
+    const decay = Math.min(25, STATE.crewSatietyTimer / 90 * 25);
+    targetLoneliness = 40 + decay;
+  } else if (uniqueRoles === 2) {
+    targetLoneliness = 25;
+  } else if (uniqueRoles >= 3) {
+    targetLoneliness = 5;
+    isHarmony = true;
+  }
+  if (STATE.loneliness < targetLoneliness) {
+    STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
+  } else if (STATE.loneliness > targetLoneliness) {
+    STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
+  }
+  if (isHarmony) {
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
+    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
+  }
+  let speed = STATE.playerVelocity.length();
+  let speedStressModifier = speed > 10 ? 0.6 : 0;
+  STATE.crew.forEach((c) => {
+    const decayRate = (0.35 + c.stress * 0.006) * dt;
+    c.illusionStability = Math.max(0, c.illusionStability - decayRate);
+    if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
+      c.stress = Math.max(0, c.stress - 7.5 * dt);
+      c.illusionStability = Math.min(100, c.illusionStability + 8 * dt);
+      c.status = "Traum-Trance";
+      c.thought = "Fühlt eine warme, beruhigende Welle... 'Alles ist friedlich.'";
+    } else {
+      if (c.illusionStability < 35) {
+        c.stress = Math.min(100, c.stress + (4.5 + speedStressModifier) * dt);
+        c.status = "Panik";
+        c.thought = "Verzweifelt: 'Die Wände pulsieren... das ist keine Station!'";
+      } else if (c.illusionStability < 65) {
+        c.stress = Math.min(100, c.stress + (1.2 + speedStressModifier) * dt);
+        c.status = "Misstrauisch";
+        c.thought = "Stutzt: 'Höre ich ein Atmen in den Lüftungsschächten?'";
+      } else {
+        c.stress = Math.max(0, c.stress - 2 * dt);
+        c.status = "Arbeitet";
+        c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
+      }
+    }
+    if (c.illusionStability >= 50) {
+      if (c.role === "engineer") {
+        STATE.health = Math.min(STATE.maxHealth, STATE.health + 0.25 * dt);
+      } else if (c.role === "biologist") {
+        STATE.bioRes += 0.1 * dt;
+      } else if (c.role === "psychologist") {
+        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 1.5 * dt);
+      }
+    }
+    if (c.stress >= 85) {
+      STATE.health = Math.max(0, STATE.health - 1.8 * dt);
+      if (Math.random() < 0.004) {
+        addLogEntry("CREW", `MATRIX-ALARM: ${c.name} greift in Panik die organische Zellwand an! (Zellschaden)`);
+      }
+    }
+  });
+  if (STATE.telepathyActive) {
+    STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 6 * dt);
+    if (STATE.mentalEnergy === 0) {
+      toggleTelepathy();
+      addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
+    }
+  } else {
+    const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 8 * dt : 4 * dt;
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
+  }
+  STATE.crewDialogueTimer -= dt;
+  if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
+    STATE.crewDialogueTimer = 20 + Math.random() * 8;
+    triggerMultiCrewDialogue();
+  }
+  renderCrewUI();
+}
 function renderCrewUI() {
   const container = document.getElementById("crew-list-container");
   const badge = document.getElementById("crew-count-badge");
@@ -28972,34 +29147,7 @@ function toggleTelepathy() {
     }
   }
 }
-function pollGamepadControls(dt) {
-  if (!navigator.getGamepads)
-    return;
-  const gamepads = navigator.getGamepads();
-  let gp = null;
-  for (let i = 0;i < gamepads.length; i++) {
-    if (gamepads[i] && gamepads[i].connected) {
-      gp = gamepads[i];
-      break;
-    }
-  }
-  if (!gp)
-    return;
-  const deadzone = 0.15;
-  let stickX = gp.axes[0] || 0;
-  let stickY = gp.axes[1] || 0;
-  if (Math.abs(stickX) < deadzone)
-    stickX = 0;
-  if (Math.abs(stickY) < deadzone)
-    stickY = 0;
-  if (gp.buttons[12] && gp.buttons[12].pressed)
-    stickY = -1;
-  if (gp.buttons[13] && gp.buttons[13].pressed)
-    stickY = 1;
-  if (gp.buttons[14] && gp.buttons[14].pressed)
-    stickX = -1;
-  if (gp.buttons[15] && gp.buttons[15].pressed)
-    stickX = 1;
+function processInput(dt) {
   const inputVec = new Vector3(0, 0, 0);
   if (STATE.keys.w)
     inputVec.z -= 1;
@@ -29009,8 +29157,81 @@ function pollGamepadControls(dt) {
     inputVec.x -= 1;
   if (STATE.keys.d)
     inputVec.x += 1;
-  if (inputVec.lengthSq() === 0 && (Math.abs(stickX) > 0 || Math.abs(stickY) > 0)) {
-    inputVec.set(stickX, 0, stickY);
+  let gp = null;
+  if (navigator.getGamepads) {
+    const gamepads = navigator.getGamepads();
+    for (let i = 0;i < gamepads.length; i++) {
+      if (gamepads[i] && gamepads[i].connected) {
+        gp = gamepads[i];
+        break;
+      }
+    }
+  }
+  if (gp) {
+    let isPressedEdge = function(btnIdx) {
+      const btn = gp.buttons[btnIdx];
+      const isDown = btn ? btn.pressed || btn.value > 0.5 : false;
+      const wasDown = prevGpButtons[btnIdx] || false;
+      return isDown && !wasDown;
+    };
+    const deadzone = 0.15;
+    let stickX = gp.axes[0] || 0;
+    let stickY = gp.axes[1] || 0;
+    if (Math.abs(stickX) < deadzone)
+      stickX = 0;
+    if (Math.abs(stickY) < deadzone)
+      stickY = 0;
+    if (gp.buttons[12] && gp.buttons[12].pressed)
+      stickY = -1;
+    if (gp.buttons[13] && gp.buttons[13].pressed)
+      stickY = 1;
+    if (gp.buttons[14] && gp.buttons[14].pressed)
+      stickX = -1;
+    if (gp.buttons[15] && gp.buttons[15].pressed)
+      stickX = 1;
+    if (inputVec.lengthSq() === 0 && (Math.abs(stickX) > 0 || Math.abs(stickY) > 0)) {
+      inputVec.set(stickX, 0, stickY);
+    }
+    const ltPressed = gp.buttons[6] && gp.buttons[6].pressed || gp.buttons[6] && gp.buttons[6].value > 0.3;
+    if (ltPressed && !STATE.telepathyActive) {
+      toggleTelepathy();
+    } else if (!ltPressed && STATE.telepathyActive && !STATE.keys.Space) {
+      toggleTelepathy();
+    }
+    if (isPressedEdge(0)) {
+      if (STATE.nearestPlanet) {
+        const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
+        if (isScanned && STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
+          triggerAbductStart();
+        } else {
+          triggerScanStart();
+        }
+      }
+    }
+    if (isPressedEdge(2))
+      triggerHarvestStart();
+    if (isPressedEdge(3))
+      triggerPsionicSonar();
+    if (isPressedEdge(1)) {
+      if (isMapOpen()) {
+        toggleGalaxyMap();
+      } else if (STATE.lockedTarget) {
+        clearLockedTarget();
+      }
+    }
+    if (isPressedEdge(4))
+      cycleTarget(-1);
+    if (isPressedEdge(5))
+      cycleTarget(1);
+    if (isPressedEdge(8))
+      toggleGalaxyMap();
+    if (isPressedEdge(9)) {
+      const mainMenu = document.getElementById("main-menu");
+      if (mainMenu && STATE.gameStarted) {
+        mainMenu.classList.toggle("menu-hidden");
+      }
+    }
+    prevGpButtons = gp.buttons.map((b) => b ? b.pressed || b.value > 0.5 : false);
   }
   const isThrusting = inputVec.lengthSq() > 0;
   if (isThrusting) {
@@ -29030,54 +29251,6 @@ function pollGamepadControls(dt) {
   } else {
     setThrusterSound(false);
   }
-  const ltPressed = gp.buttons[6] && gp.buttons[6].pressed || gp.buttons[6] && gp.buttons[6].value > 0.3;
-  if (ltPressed && !STATE.telepathyActive) {
-    toggleTelepathy();
-  } else if (!ltPressed && STATE.telepathyActive && !STATE.keys.Space) {
-    toggleTelepathy();
-  }
-  function isPressedEdge(btnIdx) {
-    const btn = gp.buttons[btnIdx];
-    const isDown = btn ? btn.pressed || btn.value > 0.5 : false;
-    const wasDown = prevGpButtons[btnIdx] || false;
-    return isDown && !wasDown;
-  }
-  if (isPressedEdge(0)) {
-    if (STATE.nearestPlanet) {
-      const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
-      if (isScanned && STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
-        triggerAbductStart();
-      } else {
-        triggerScanStart();
-      }
-    }
-  }
-  if (isPressedEdge(2)) {
-    triggerHarvestStart();
-  }
-  if (isPressedEdge(3)) {
-    triggerPsionicSonar();
-  }
-  if (isPressedEdge(1)) {
-    if (isMapOpen()) {
-      toggleGalaxyMap();
-    } else if (STATE.lockedTarget) {
-      clearLockedTarget();
-    }
-  }
-  if (isPressedEdge(4))
-    cycleTarget(-1);
-  if (isPressedEdge(5))
-    cycleTarget(1);
-  if (isPressedEdge(8))
-    toggleGalaxyMap();
-  if (isPressedEdge(9)) {
-    const mainMenu = document.getElementById("main-menu");
-    if (mainMenu && STATE.gameStarted) {
-      mainMenu.classList.toggle("menu-hidden");
-    }
-  }
-  prevGpButtons = gp.buttons.map((b) => b ? b.pressed || b.value > 0.5 : false);
 }
 
 // src/engine/physics.ts
@@ -29399,10 +29572,12 @@ function animate(time) {
     c.mesh.material.opacity = c.baseOpacity + timePulse * (c.baseOpacity * 0.5);
   });
   if (STATE.gameStarted) {
-    pollGamepadControls(dt);
+    processInput(dt);
     updatePhysics(dt);
+    updateScanning(dt);
     updateHarvesting(dt);
     updateAbduction(dt);
+    updateCrewSimulation(dt);
     updateSonarWave(dt);
     updateTrajectory();
     updateMinimap();

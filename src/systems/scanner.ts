@@ -1,5 +1,9 @@
 import { STATE } from '../core/state';
 import { addLogEntry } from '../ui/hud';
+import { getAudioContext } from '../engine/audio';
+
+let scanOsc: OscillatorNode | null = null;
+let scanGain: GainNode | null = null;
 
 export function generatePlanetAttributes(p: any) {
     const hash = p.name.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
@@ -98,7 +102,103 @@ export function triggerScanStart() {
     const scanBtn = document.getElementById('start-scan-btn');
     if (scanBtn) scanBtn.setAttribute('disabled', 'true');
 
+    startScanSound();
     addLogEntry("SYSTEM", `Spektral-Scan initiiert für: ${STATE.scanningPlanet.name}. Halte Position (Distanz < 20)...`);
+}
+
+export function updateScanning(dt: number) {
+    if (!STATE.scanningPlanet) return;
+
+    const dx = STATE.playerPosition.x - STATE.scanningPlanet.mesh.position.x;
+    const dz = STATE.playerPosition.z - STATE.scanningPlanet.mesh.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+
+    if (dist > 25) {
+        cancelScanning("Signalverlust. Abstand überschritt Sicherheitsradius.");
+        return;
+    }
+
+    const scanSpeedMult = (STATE.crewBuffs ? STATE.crewBuffs.scanSpeed : 1.0);
+    STATE.scanProgress += dt * 35 * scanSpeedMult;
+
+    const bar = document.getElementById('scan-progress-bar');
+    const text = document.getElementById('scan-progress-text');
+    if (bar) bar.style.width = `${STATE.scanProgress}%`;
+    if (text) text.innerText = `${Math.round(STATE.scanProgress)}%`;
+
+    if (STATE.scanProgress >= 100) {
+        completeScanning();
+    }
+}
+
+export function cancelScanning(reason: string) {
+    stopScanSound();
+    addLogEntry("SYSTEM", `Scan abgebrochen: ${reason}`);
+    STATE.scanningPlanet = null;
+    STATE.scanProgress = 0;
+    const progContainer = document.getElementById('scan-progress-container');
+    if (progContainer) progContainer.style.display = 'none';
+}
+
+export function completeScanning() {
+    stopScanSound();
+    const progContainer = document.getElementById('scan-progress-container');
+    if (progContainer) progContainer.style.display = 'none';
+
+    const planet = STATE.scanningPlanet;
+    if (planet) {
+        planet.scanned = true;
+        STATE.scannedPlanets[planet.name] = true;
+
+        STATE.bioRes += 15;
+        STATE.siliconRes += 10;
+        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 15);
+
+        addLogEntry("SYSTEM", `Spektral-Scan von ${planet.name} abgeschlossen! Atmosphärendatenbank aktualisiert (+15 Bio | +10 Silizium).`);
+
+        if (planet.attributes.species && planet.attributes.species.population > 0) {
+            addLogEntry("SYSTEM", `PSIO-DETEKTION: Intelligentes Leben (${planet.attributes.species.name}) auf ${planet.name} entdeckt! Psionischer Transfer [F] bereit.`);
+        }
+
+        updateScannerUI(planet, 10);
+    }
+
+    STATE.scanningPlanet = null;
+    STATE.scanProgress = 0;
+}
+
+export function startScanSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    scanOsc = ctx.createOscillator();
+    scanGain = ctx.createGain();
+    scanOsc.type = 'sawtooth';
+    scanOsc.frequency.setValueAtTime(440, ctx.currentTime);
+    scanOsc.frequency.linearRampToValueAtTime(880, ctx.currentTime + 2.5);
+
+    scanGain.gain.setValueAtTime(0, ctx.currentTime);
+    scanGain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.1);
+
+    scanOsc.connect(scanGain);
+    scanGain.connect(ctx.destination);
+    scanOsc.start();
+}
+
+export function stopScanSound() {
+    if (scanOsc) {
+        const ctx = getAudioContext();
+        if (ctx && scanGain) {
+            scanGain.gain.cancelScheduledValues(ctx.currentTime);
+            scanGain.gain.setValueAtTime(scanGain.gain.value, ctx.currentTime);
+            scanGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+            scanOsc.stop(ctx.currentTime + 0.12);
+        } else {
+            scanOsc.stop();
+        }
+        scanOsc = null;
+        scanGain = null;
+    }
 }
 
 export function updateScannerUI(planet: any, dist: number) {

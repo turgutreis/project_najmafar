@@ -3,17 +3,16 @@ import { STATE } from './core/state';
 import { initScene, starfield, renderer, scene, camera } from './engine/scene';
 import { initTrajectory, updateTrajectory } from './engine/trajectory';
 import { createPlayerMesh, playerMesh, playerGlowMesh, gravityCircles } from './procedural/meshes';
-import { setupControls, pollGamepadControls } from './input/controls';
+import { setupControls, processInput } from './input/controls';
 import { checkUniverseData } from './systems/universe';
 import { updatePhysics } from './engine/physics';
+import { updateScanning, triggerScanStart } from './systems/scanner';
 import { updateHarvesting, triggerHarvestStart } from './systems/harvesting';
 import { updateAbduction, triggerAbductStart } from './systems/abduction';
+import { updateCrewSimulation, renderCrewUI } from './systems/crew';
 import { updateMinimap, updateSonarWave, initHUD, addLogEntry } from './ui/hud';
 import { initDeckUI, updateMutationUI } from './ui/deck';
-import { renderCrewUI } from './systems/crew';
 import { toggleGalaxyMap, warpToSystem } from './systems/galaxy-map';
-import { triggerScanStart } from './systems/scanner';
-
 import { toggleMusic, isMusicPlaying, isMusicUserMuted } from './engine/audio';
 
 let lastTime = 0;
@@ -39,15 +38,17 @@ function animate(time: number) {
     });
 
     if (STATE.gameStarted) {
-        // Poll Gamepad controls
-        pollGamepadControls(dt);
+        // Unified Keyboard and Gamepad input processing
+        processInput(dt);
 
-        // Core Physics simulation
+        // Core Physics simulation (orbits, gravity, collisions)
         updatePhysics(dt);
 
         // Subsystems updates
+        updateScanning(dt);
         updateHarvesting(dt);
         updateAbduction(dt);
+        updateCrewSimulation(dt);
         updateSonarWave(dt);
 
         // Trajectory prediction
