@@ -177,6 +177,8 @@ export interface GameState {
     maxMentalEnergy: number;
     telepathyActive: boolean;
     gameStarted: boolean;
+    isGameOver: boolean;
+    systemsVisited: number;
 
     // Evolution Resources
     bioRes: number;

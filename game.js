@@ -26418,6 +26418,8 @@ var STATE = {
   maxMentalEnergy: 100,
   telepathyActive: false,
   gameStarted: false,
+  isGameOver: false,
+  systemsVisited: 1,
   bioRes: 0,
   siliconRes: 0,
   psionicRange: 75,
@@ -28002,6 +28004,503 @@ function updateScannerUI(planet, dist) {
   }
 }
 
+// src/systems/crew.ts
+function calculateCrewBuffs() {
+  let thrustMult = 1;
+  let bioMult = 1;
+  let scanMult = 1;
+  let repair = 0;
+  let stressDamp = 1;
+  let psioBonus = 0;
+  const hiveBonus = STATE.mutations.hivemind && STATE.mutations.hivemind.purchased ? 1.2 : 1;
+  STATE.crew.forEach((c) => {
+    if (c.role === "pilot")
+      thrustMult += 0.15 * hiveBonus;
+    if (c.role === "biologist") {
+      bioMult += 0.3 * hiveBonus;
+      scanMult += 0.25 * hiveBonus;
+    }
+    if (c.role === "engineer")
+      repair += 0.6 * hiveBonus;
+    if (c.role === "psychologist")
+      stressDamp *= 1 - 0.4 * hiveBonus;
+    if (c.role === "cryptologist")
+      psioBonus += 30 * hiveBonus;
+  });
+  STATE.crewBuffs = {
+    thrust: thrustMult,
+    bioGain: bioMult,
+    scanSpeed: scanMult,
+    repairRate: repair,
+    stressDampening: stressDamp,
+    psionicBonus: Math.round(psioBonus)
+  };
+  const basePsio = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 140 : 75;
+  STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
+}
+var STORY_LOGS = [
+  { time: 6, sender: "Capt. Miller", text: "Das Ding lebt! Wir sind im Bauch eines Lovecraft-Monsters gefangen! Wo ist die Luft?" },
+  { time: 24, sender: "Dr. Song", text: "Die Schiffswände atmen... Valeria, das Schiff absorbiert Weltraummaterie um sich zu heilen!" },
+  { time: 48, sender: "Valeria", text: "Jamal, guck dir die Messgeräte an. Die kosmische Hintergrundstrahlung... Die Expansion verlangsamt sich!" },
+  { time: 70, sender: "Jamal", text: "Das ist kein Fehler. Jemand macht eine kosmische Vollbremsung. Dieses Wesen... versucht es uns zu warnen?" },
+  { time: 95, sender: "Capt. Miller", text: "Es sendet Gedankenwellen. Die Software übersetzt es als... Dschinn? Es ist einsam." }
+];
+var storyIndex = 0;
+var playTime = 0;
+function encryptText(text) {
+  const alienGlyphs = "⏁⊑⟒⋔⍜⋏☿⏁⟒⍃⍜⌰⎍⌇⌇⊑⟟⌿⌇⏃⋏⎅⌇⏁⏃⍀⌇⏁⍀⟒☍⏁⊑⟒⌇⊑⟟⌿⟟⌇⏃⌰⟟⎎⟒";
+  return text.split("").map((char) => {
+    if (char === " " || char === '"' || char === "'" || char === ":" || char === "." || char === "," || char === "?" || char === "!" || char === "-" || char === "(" || char === ")")
+      return char;
+    return alienGlyphs[Math.floor(Math.random() * alienGlyphs.length)];
+  }).join("");
+}
+function encryptCrewMessage(sender, text) {
+  let outText = text;
+  if (!STATE.mutations.translator.purchased) {
+    outText = encryptText(text);
+  }
+  return `${sender}: "${outText}"`;
+}
+function updateCrewSimulation(dt) {
+  playTime += dt;
+  if (storyIndex < STORY_LOGS.length && playTime >= STORY_LOGS[storyIndex].time) {
+    const logObj = STORY_LOGS[storyIndex];
+    storyIndex++;
+    addLogEntry("CREW", encryptCrewMessage(logObj.sender, logObj.text));
+  }
+  const totalCrew = STATE.crew.length;
+  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
+  let targetLoneliness = 100;
+  let isHarmony = false;
+  if (totalCrew === 0) {
+    targetLoneliness = 100;
+  } else if (totalCrew === 1) {
+    STATE.crewSatietyTimer += dt;
+    const decay = Math.min(25, STATE.crewSatietyTimer / 90 * 25);
+    targetLoneliness = 40 + decay;
+  } else if (uniqueRoles === 2) {
+    targetLoneliness = 25;
+  } else if (uniqueRoles >= 3) {
+    targetLoneliness = 5;
+    isHarmony = true;
+  }
+  if (STATE.loneliness < targetLoneliness) {
+    STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
+  } else if (STATE.loneliness > targetLoneliness) {
+    STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
+  }
+  if (isHarmony) {
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
+    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
+  }
+  let speed = STATE.playerVelocity.length();
+  let speedStressModifier = speed > 10 ? 0.6 : 0;
+  STATE.crew.forEach((c) => {
+    const decayRate = (0.35 + c.stress * 0.006) * dt;
+    c.illusionStability = Math.max(0, c.illusionStability - decayRate);
+    if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
+      c.stress = Math.max(0, c.stress - 7.5 * dt);
+      c.illusionStability = Math.min(100, c.illusionStability + 8 * dt);
+      c.status = "Traum-Trance";
+      c.thought = "Fühlt eine warme, beruhigende Welle... 'Alles ist friedlich.'";
+    } else {
+      if (c.illusionStability < 35) {
+        c.stress = Math.min(100, c.stress + (4.5 + speedStressModifier) * dt);
+        c.status = "Panik";
+        c.thought = "Verzweifelt: 'Die Wände pulsieren... das ist keine Station!'";
+      } else if (c.illusionStability < 65) {
+        c.stress = Math.min(100, c.stress + (1.2 + speedStressModifier) * dt);
+        c.status = "Misstrauisch";
+        c.thought = "Stutzt: 'Höre ich ein Atmen in den Lüftungsschächten?'";
+      } else {
+        c.stress = Math.max(0, c.stress - 2 * dt);
+        c.status = "Arbeitet";
+        c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
+      }
+    }
+    if (c.illusionStability >= 50) {
+      if (c.role === "engineer") {
+        STATE.health = Math.min(STATE.maxHealth, STATE.health + 0.25 * dt);
+      } else if (c.role === "biologist") {
+        STATE.bioRes += 0.1 * dt;
+      } else if (c.role === "psychologist") {
+        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 1.5 * dt);
+      }
+    }
+    if (c.stress >= 85) {
+      STATE.health = Math.max(0, STATE.health - 1.8 * dt);
+      if (Math.random() < 0.004) {
+        addLogEntry("CREW", `MATRIX-ALARM: ${c.name} greift in Panik die organische Zellwand an! (Zellschaden)`);
+      }
+    }
+  });
+  if (STATE.telepathyActive) {
+    STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 6 * dt);
+    if (STATE.mentalEnergy === 0) {
+      toggleTelepathy();
+      addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
+    }
+  } else {
+    const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 8 * dt : 4 * dt;
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
+  }
+  STATE.crewDialogueTimer -= dt;
+  if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
+    STATE.crewDialogueTimer = 20 + Math.random() * 8;
+    triggerMultiCrewDialogue();
+  }
+  renderCrewUI();
+}
+function renderCrewUI() {
+  const container = document.getElementById("crew-list-container");
+  const badge = document.getElementById("crew-count-badge");
+  const capText = document.getElementById("crew-capacity-text");
+  const synTitle = document.getElementById("crew-synergy-title");
+  const synDesc = document.getElementById("crew-synergy-desc");
+  const synBanner = document.getElementById("crew-synergy-banner");
+  if (badge)
+    badge.innerText = String(STATE.crew.length);
+  if (capText)
+    capText.innerText = `${STATE.crew.length} / ${STATE.maxCrewCapacity}`;
+  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
+  const totalCrew = STATE.crew.length;
+  if (synBanner && synTitle && synDesc) {
+    if (totalCrew === 0) {
+      synBanner.className = "crew-synergy-banner";
+      synTitle.innerText = "\uD83C\uDF0C Kosmische Einsamkeit";
+      synDesc.innerText = "Keine Geister an Bord. Das Wesen sehnt sich nach Gedanken-Resonanz.";
+    } else if (totalCrew === 1) {
+      if (STATE.crewSatietyTimer > 45) {
+        synBanner.className = "crew-synergy-banner satiety-decay";
+        synTitle.innerText = "⏳ Geistige Sättigung (Eintönigkeit)";
+        synDesc.innerText = "Alle Gedanken des Individuums erforscht. Das Wesen verlangt nach neuen Perspektiven!";
+      } else {
+        synBanner.className = "crew-synergy-banner";
+        synTitle.innerText = "\uD83C\uDF31 Erste Gedanken-Resonanz";
+        synDesc.innerText = "1 Geist an Bord. Erweitere das Kollektiv für stärkere Synergien.";
+      }
+    } else if (uniqueRoles === 2) {
+      synBanner.className = "crew-synergy-banner";
+      synTitle.innerText = "✨ Duale Resonanz";
+      synDesc.innerText = "2 Rollen im Einklang. Einsamkeit stabil, passive Buffs verstärkt.";
+    } else if (uniqueRoles >= 3) {
+      synBanner.className = "crew-synergy-banner harmony";
+      synTitle.innerText = "\uD83D\uDCAB Kosmische Harmonie";
+      synDesc.innerText = "Diverses Kollektiv aktiv! Einsamkeit auf 0% & +15% Bio/Mental-Regeneration!";
+    }
+  }
+  if (!container)
+    return;
+  if (STATE.crew.length === 0) {
+    container.innerHTML = `
+            <div class="matrix-empty-card">
+                <span class="highlight">Keine Vernunftbegabten Wesen</span>
+                Die psionische Traum-Matrix ist leer. Das Schiff leidet unter existenzieller kosmischer Einsamkeit.<br><br>
+                <em>Scanne habitable Planeten nach intelligentem Leben und starte eine psionische Entführung [F]!</em>
+            </div>
+        `;
+    return;
+  }
+  let html = "";
+  STATE.crew.forEach((c) => {
+    let cardClass = "crew-member";
+    if (c.illusionStability < 35 || c.stress > 70)
+      cardClass += " panic";
+    else if (c.illusionStability < 65 || c.stress > 45)
+      cardClass += " suspicious";
+    html += `
+            <div class="${cardClass}">
+                <div class="crew-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
+                    <span class="crew-role-badge">${c.roleIcon || "\uD83D\uDC64"} ${c.roleName || c.role}</span>
+                </div>
+                <div class="crew-buff-tag">⚡ ${c.buffDesc || c.perk}</div>
+                
+                <div class="stability-container">
+                    <span class="stability-label">Traum-Stabilität:</span>
+                    <div class="stability-bar-bg">
+                        <div class="stability-bar" style="width: ${c.illusionStability}%;"></div>
+                    </div>
+                    <span style="color: #a855f7; font-size: 0.68rem; font-weight: 700;">${Math.round(c.illusionStability)}%</span>
+                </div>
+
+                <div class="stress-container" style="display: flex; align-items: center; gap: 6px;">
+                    <span class="stress-label" style="width: 90px; font-size: 0.68rem; color: #94a3b8;">Stress:</span>
+                    <div class="stress-bar-bg" style="flex: 1; height: 5px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden;">
+                        <div class="stress-bar" style="width: ${c.stress}%; height: 100%; background: ${c.stress > 70 ? "#ef4444" : "#f59e0b"};"></div>
+                    </div>
+                    <span class="stress-percentage" style="font-size: 0.68rem;">${Math.round(c.stress)}%</span>
+                </div>
+
+                <div class="thought-whisper ${c.illusionStability < 35 ? "terrified" : ""}">
+                    \uD83D\uDCAD "${c.thought}"
+                </div>
+            </div>
+        `;
+  });
+  container.innerHTML = html;
+}
+var crewDialogueBank = {
+  pilot_engineer: [
+    { lineA: 'Miller: "Petrov, diese biomolekularen Trägheitsdämpfer... das Schiff richtet die Schubvektoren aus, bevor ich überhaupt lenke."', lineB: 'Petrov: "Die Naniten im Chitin leiten unsere Gedanken direkt weiter. Das ist kein Raumschiff, das ist ein lebendes Cockpit."' },
+    { lineA: 'Miller: "Wie sieht die Hüllenintegrität aus, wenn wir durch Asteroidengürtel tauchen?"', lineB: 'Petrov: "Silizium-Naniten schließen Risse im Flug. Solange wir Mineralien aufnehmen, hält die organische Panzerung stand."' }
+  ],
+  biologist_psychologist: [
+    { lineA: 'Dr. Song: "Die Traum-Matrix synchronisiert unsere neuronalen REM-Phasen. Es absorbiert nicht unsere Körper, sondern unsere Gefühle."', lineB: 'Dr. Vance: "Ein psionischer Stoffwechsel. Solange wir Gelassenheit und Zuversicht ausstrahlen, ernährt sich die Entität von Harmonie statt Verzweiflung."' },
+    { lineA: 'Dr. Song: "Die Biolumineszenz an den Synapsen-Wänden pulsiert im Takt unseres Herzschlags."', lineB: 'Dr. Vance: "Ein biologischer Resonanzraum. Wir halten das Wesen am Leben – und es beschützt uns vor der tödlichen Kälte des Alls."' }
+  ],
+  cryptologist_pilot: [
+    { lineA: 'Novak: "Ich fange schwache Tachyonen-Echos aus dem nächsten Sternensystem auf. Psio-Sensorhorizont erweitert."', lineB: 'Miller: "Kurs ist korrigiert, Novak. Bringen wir uns in den nächsten planetaren Orbit."' }
+  ],
+  engineer_biologist: [
+    { lineA: 'Petrov: "Dr. Song, die organischen Leitungen um die Faltungsmembran regenerieren erstaunlich schnell."', lineB: 'Dr. Song: "Es ist ein symbiotisches Ökosystem. Jede Ressource, die wir assimilieren, stärkt die Zellwände des Schiffes."' }
+  ],
+  general: [
+    { lineA: 'Crew-Funk: "Die Traum-Matrix flüstert Erinnerungen an Sternensysteme, die Lichtjahre entfernt liegen..."', lineB: 'Crew-Funk: "Wir reisen durch das Herz einer Galaxie, die kein Mensch zuvor erblickt hat."' }
+  ]
+};
+function triggerMultiCrewDialogue() {
+  if (STATE.crew.length < 2)
+    return;
+  const hasTranslator = STATE.mutations.translator && STATE.mutations.translator.purchased;
+  const c1 = STATE.crew[Math.floor(Math.random() * STATE.crew.length)];
+  const others = STATE.crew.filter((c) => c !== c1);
+  const c2 = others[Math.floor(Math.random() * others.length)];
+  let pairKey = `${c1.role}_${c2.role}`;
+  let revPairKey = `${c2.role}_${c1.role}`;
+  let dialogues = crewDialogueBank[pairKey] || crewDialogueBank[revPairKey] || crewDialogueBank.general;
+  const dialog = dialogues[Math.floor(Math.random() * dialogues.length)];
+  const name1 = c1.name.split(" ")[1] || c1.name;
+  const name2 = c2.name.split(" ")[1] || c2.name;
+  if (hasTranslator) {
+    addLogEntry("CREW", dialog.lineA.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name1));
+    setTimeout(() => {
+      addLogEntry("CREW", dialog.lineB.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name2));
+    }, 3200);
+  } else {
+    addLogEntry("CREW", `[Verschlüsselter Datenstrom zwischen ${c1.name} & ${c2.name}... Dschinn-Übersetzer benötigt!]`);
+  }
+}
+
+// src/ui/deck.ts
+function initDeckUI() {
+  const leftCollapseBtn = document.getElementById("left-collapse-btn");
+  const leftDeckPanel = document.getElementById("left-deck-panel");
+  if (leftCollapseBtn && leftDeckPanel) {
+    leftCollapseBtn.addEventListener("click", () => {
+      leftDeckPanel.classList.toggle("collapsed");
+      if (leftDeckPanel.classList.contains("collapsed")) {
+        leftCollapseBtn.innerText = "›";
+        leftCollapseBtn.title = "Sensoren ausklappen";
+      } else {
+        leftCollapseBtn.innerText = "‹";
+        leftCollapseBtn.title = "Sensoren einklappen";
+      }
+    });
+  }
+  const rightCollapseBtn = document.getElementById("right-collapse-btn");
+  const rightDeckPanel = document.getElementById("right-deck-panel");
+  if (rightCollapseBtn && rightDeckPanel) {
+    rightCollapseBtn.addEventListener("click", () => {
+      rightDeckPanel.classList.toggle("collapsed");
+      if (rightDeckPanel.classList.contains("collapsed")) {
+        rightCollapseBtn.innerText = "‹";
+        rightCollapseBtn.title = "Status-Deck ausklappen";
+      } else {
+        rightCollapseBtn.innerText = "›";
+        rightCollapseBtn.title = "Status-Deck einklappen";
+      }
+    });
+  }
+  const tabButtons = document.querySelectorAll("#right-deck-tabs .tab-btn");
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetTab = btn.getAttribute("data-tab");
+      tabButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const crewContent = document.getElementById("tab-content-crew");
+      const evoContent = document.getElementById("tab-content-evolution");
+      if (targetTab === "crew") {
+        if (crewContent)
+          crewContent.classList.add("active");
+        if (evoContent)
+          evoContent.classList.remove("active");
+      } else if (targetTab === "evolution") {
+        if (crewContent)
+          crewContent.classList.remove("active");
+        if (evoContent)
+          evoContent.classList.add("active");
+      }
+    });
+  });
+  const mutButtons = document.querySelectorAll(".mut-btn");
+  mutButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mutType = btn.getAttribute("data-mutation");
+      if (mutType) {
+        buyMutation(mutType);
+      }
+    });
+  });
+}
+function buyMutation(type) {
+  const mut = STATE.mutations[type];
+  if (!mut || mut.purchased)
+    return;
+  if (STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost) {
+    STATE.bioRes -= mut.bioCost;
+    STATE.siliconRes -= mut.siliconCost;
+    mut.purchased = true;
+    playSiliconCollectSound();
+    const btn = document.querySelector(`.mut-btn[data-mutation="${type}"]`);
+    if (btn) {
+      btn.classList.add("purchased");
+      btn.innerHTML = "Aktiviert ✓";
+    }
+    if (type === "armor") {
+      addLogEntry("EVOLUTION", "Organische Chitin-Panzerung gehärtet. Kollisionsschaden um 50% reduziert.");
+      const hull = document.getElementById("schematic-hull");
+      if (hull)
+        hull.setAttribute("stroke-width", "4");
+    } else if (type === "o2") {
+      addLogEntry("EVOLUTION", "Metabolische O2-Synthese aktiviert. Stress-Zuwachs halbiert.");
+    } else if (type === "synapses") {
+      STATE.psionicRange = 140;
+      calculateCrewBuffs();
+      addLogEntry("EVOLUTION", "Psionische Synapsen erweitert! Gedanken-Echo Reichweite auf 140 LJ vergrößert.");
+    } else if (type === "cocoon") {
+      STATE.maxCrewCapacity = 4;
+      addLogEntry("EVOLUTION", "Neuronales Kokon-Gewebe mutiert! Maximale Crew-Kapazität auf 4 erweitert.");
+      renderCrewUI();
+    } else if (type === "hivemind") {
+      STATE.maxCrewCapacity = 6;
+      calculateCrewBuffs();
+      addLogEntry("EVOLUTION", "Symbiotische Synapsen-Kammer erwacht! Kapazität auf 6 erhöht & alle Spezialisten-Buffs um +20% verstärkt!");
+      renderCrewUI();
+    } else if (type === "folddrive") {
+      STATE.warpRange = 160;
+      addLogEntry("EVOLUTION", "Raumfaltungs-Membran mutiert! Warp-Reichweite auf 160 LJ erweitert, Faltungskosten um 30% gesenkt.");
+    } else if (type === "translator") {
+      addLogEntry("EVOLUTION", "Dschinn-Übersetzer integriert! Alien-Funksignale & Crew-Dialoge werden vollautomatisch dechiffriert.");
+    }
+    updateMutationUI();
+  } else {
+    addLogEntry("SYSTEM", `Evolution fehlgeschlagen: Nicht genügend Ressourcen (${mut.bioCost} Bio | ${mut.siliconCost} Silizium benötigt)!`);
+  }
+}
+function updateMutationUI() {
+  const bioEl = document.getElementById("res-bio-count");
+  const silEl = document.getElementById("res-silicon-count");
+  if (bioEl)
+    bioEl.innerText = `${Math.floor(STATE.bioRes)}`;
+  if (silEl)
+    silEl.innerText = `${Math.floor(STATE.siliconRes)}`;
+  Object.keys(STATE.mutations).forEach((key) => {
+    const mut = STATE.mutations[key];
+    const btn = document.querySelector(`.mut-btn[data-mutation="${key}"]`);
+    if (btn) {
+      if (mut.purchased) {
+        btn.disabled = true;
+        btn.classList.add("purchased");
+        btn.innerText = "Aktiviert ✓";
+      } else {
+        const canAfford = STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost;
+        btn.disabled = !canAfford;
+      }
+    }
+  });
+}
+
+// src/engine/game-over.ts
+function initGameOverUI() {
+  const respawnBtn = document.getElementById("respawn-btn");
+  if (respawnBtn) {
+    respawnBtn.addEventListener("click", () => {
+      respawnPlayer();
+    });
+  }
+  const restartBtn = document.getElementById("restart-game-btn");
+  if (restartBtn) {
+    restartBtn.addEventListener("click", () => {
+      restartGame();
+    });
+  }
+}
+function triggerGameOver(reason = "Kritischer Hüllenschaden und Kollaps des biologischen Zellkerns.") {
+  if (STATE.isGameOver)
+    return;
+  STATE.isGameOver = true;
+  STATE.health = 0;
+  playCrashSound();
+  addLogEntry("SYSTEM", `⚠️ KRITISCHER BIOLOGISCHER KOLLAPS: ${reason}`);
+  const modal = document.getElementById("game-over-modal");
+  const reasonEl = document.getElementById("game-over-reason");
+  const systemsEl = document.getElementById("go-stat-systems");
+  const scannedEl = document.getElementById("go-stat-scanned");
+  const crewEl = document.getElementById("go-stat-crew");
+  const resEl = document.getElementById("go-stat-resources");
+  if (reasonEl)
+    reasonEl.innerText = reason;
+  if (systemsEl)
+    systemsEl.innerText = `${STATE.systemsVisited} Sternensysteme`;
+  if (scannedEl)
+    scannedEl.innerText = `${Object.keys(STATE.scannedPlanets).length} Welten`;
+  if (crewEl)
+    crewEl.innerText = `${STATE.crew.length} Individuen`;
+  if (resEl)
+    resEl.innerText = `${Math.floor(STATE.bioRes)} Bio / ${Math.floor(STATE.siliconRes)} Silizium`;
+  if (modal) {
+    modal.style.display = "flex";
+  }
+}
+function respawnPlayer() {
+  STATE.health = STATE.maxHealth;
+  STATE.bioEnergy = STATE.maxBioEnergy;
+  STATE.mentalEnergy = STATE.maxMentalEnergy;
+  STATE.isGameOver = false;
+  STATE.playerPosition.set(0, 0, 65);
+  STATE.playerVelocity.set(5, 0, 0);
+  STATE.playerAcceleration.set(0, 0, 0);
+  if (STATE.playerGroup) {
+    STATE.playerGroup.position.set(0, 0, 65);
+  }
+  const modal = document.getElementById("game-over-modal");
+  if (modal)
+    modal.style.display = "none";
+  playSiliconCollectSound();
+  addLogEntry("SYSTEM", "\uD83E\uDDEC Phönix-Zellregeneration abgeschlossen. Zellkern & Traum-Matrix auf 100% wiederhergestellt.");
+}
+function restartGame() {
+  STATE.health = STATE.maxHealth;
+  STATE.bioEnergy = STATE.maxBioEnergy;
+  STATE.mentalEnergy = STATE.maxMentalEnergy;
+  STATE.isGameOver = false;
+  STATE.systemsVisited = 1;
+  STATE.bioRes = 0;
+  STATE.siliconRes = 0;
+  STATE.crew = [];
+  STATE.scannedPlanets = {};
+  STATE.currentSystemId = 0;
+  Object.keys(STATE.mutations).forEach((key) => {
+    STATE.mutations[key].purchased = false;
+  });
+  const modal = document.getElementById("game-over-modal");
+  if (modal)
+    modal.style.display = "none";
+  clearActiveSystem();
+  spawnPlanetsAndAsteroids();
+  STATE.playerPosition.set(0, 0, 65);
+  STATE.playerVelocity.set(5, 0, 0);
+  STATE.playerAcceleration.set(0, 0, 0);
+  if (STATE.playerGroup) {
+    STATE.playerGroup.position.set(0, 0, 65);
+  }
+  renderCrewUI();
+  updateMutationUI();
+  addLogEntry("SYSTEM", "\uD83C\uDF0C Neues Universum initialisiert. Sternensystem 0 erreicht.");
+}
+
 // src/systems/fleet.ts
 var shockwaveMesh = null;
 var shockwaveTimer = 0;
@@ -28169,7 +28668,11 @@ function updateFleet(dt) {
         c.stress = Math.min(100, c.stress + 8.5);
         c.illusionStability = Math.max(0, c.illusionStability - 12);
       });
-      addLogEntry("CREW", `ALARM: EMP-Geschoss durchschlägt Hülle! Die Illusion flackert (+Stress). Stabilisiere mit [LEERTASTE]!`);
+      if (STATE.health <= 0 && !STATE.isGameOver) {
+        triggerGameOver("Biologischer Zellkern zerstört durch planetare Abfanggeschwader.");
+      } else {
+        addLogEntry("CREW", `ALARM: EMP-Geschoss durchschlägt Hülle! Die Illusion flackert (+Stress). Stabilisiere mit [LEERTASTE]!`);
+      }
       scene.remove(proj.mesh);
       proj.mesh.geometry.dispose();
       proj.mesh.material.dispose();
@@ -29159,6 +29662,7 @@ function warpToSystem(systemId) {
   playCrashSound();
   setTimeout(() => {
     STATE.currentSystemId = systemId;
+    STATE.systemsVisited++;
     const activeSystem = STATE.universe.systems[systemId];
     clearActiveSystem();
     spawnPlanetsAndAsteroids();
@@ -29173,414 +29677,6 @@ function warpToSystem(systemId) {
     }
     toggleGalaxyMap();
   }, 600);
-}
-
-// src/systems/crew.ts
-function calculateCrewBuffs() {
-  let thrustMult = 1;
-  let bioMult = 1;
-  let scanMult = 1;
-  let repair = 0;
-  let stressDamp = 1;
-  let psioBonus = 0;
-  const hiveBonus = STATE.mutations.hivemind && STATE.mutations.hivemind.purchased ? 1.2 : 1;
-  STATE.crew.forEach((c) => {
-    if (c.role === "pilot")
-      thrustMult += 0.15 * hiveBonus;
-    if (c.role === "biologist") {
-      bioMult += 0.3 * hiveBonus;
-      scanMult += 0.25 * hiveBonus;
-    }
-    if (c.role === "engineer")
-      repair += 0.6 * hiveBonus;
-    if (c.role === "psychologist")
-      stressDamp *= 1 - 0.4 * hiveBonus;
-    if (c.role === "cryptologist")
-      psioBonus += 30 * hiveBonus;
-  });
-  STATE.crewBuffs = {
-    thrust: thrustMult,
-    bioGain: bioMult,
-    scanSpeed: scanMult,
-    repairRate: repair,
-    stressDampening: stressDamp,
-    psionicBonus: Math.round(psioBonus)
-  };
-  const basePsio = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 140 : 75;
-  STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
-}
-var STORY_LOGS = [
-  { time: 6, sender: "Capt. Miller", text: "Das Ding lebt! Wir sind im Bauch eines Lovecraft-Monsters gefangen! Wo ist die Luft?" },
-  { time: 24, sender: "Dr. Song", text: "Die Schiffswände atmen... Valeria, das Schiff absorbiert Weltraummaterie um sich zu heilen!" },
-  { time: 48, sender: "Valeria", text: "Jamal, guck dir die Messgeräte an. Die kosmische Hintergrundstrahlung... Die Expansion verlangsamt sich!" },
-  { time: 70, sender: "Jamal", text: "Das ist kein Fehler. Jemand macht eine kosmische Vollbremsung. Dieses Wesen... versucht es uns zu warnen?" },
-  { time: 95, sender: "Capt. Miller", text: "Es sendet Gedankenwellen. Die Software übersetzt es als... Dschinn? Es ist einsam." }
-];
-var storyIndex = 0;
-var playTime = 0;
-function encryptText(text) {
-  const alienGlyphs = "⏁⊑⟒⋔⍜⋏☿⏁⟒⍃⍜⌰⎍⌇⌇⊑⟟⌿⌇⏃⋏⎅⌇⏁⏃⍀⌇⏁⍀⟒☍⏁⊑⟒⌇⊑⟟⌿⟟⌇⏃⌰⟟⎎⟒";
-  return text.split("").map((char) => {
-    if (char === " " || char === '"' || char === "'" || char === ":" || char === "." || char === "," || char === "?" || char === "!" || char === "-" || char === "(" || char === ")")
-      return char;
-    return alienGlyphs[Math.floor(Math.random() * alienGlyphs.length)];
-  }).join("");
-}
-function encryptCrewMessage(sender, text) {
-  let outText = text;
-  if (!STATE.mutations.translator.purchased) {
-    outText = encryptText(text);
-  }
-  return `${sender}: "${outText}"`;
-}
-function updateCrewSimulation(dt) {
-  playTime += dt;
-  if (storyIndex < STORY_LOGS.length && playTime >= STORY_LOGS[storyIndex].time) {
-    const logObj = STORY_LOGS[storyIndex];
-    storyIndex++;
-    addLogEntry("CREW", encryptCrewMessage(logObj.sender, logObj.text));
-  }
-  const totalCrew = STATE.crew.length;
-  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
-  let targetLoneliness = 100;
-  let isHarmony = false;
-  if (totalCrew === 0) {
-    targetLoneliness = 100;
-  } else if (totalCrew === 1) {
-    STATE.crewSatietyTimer += dt;
-    const decay = Math.min(25, STATE.crewSatietyTimer / 90 * 25);
-    targetLoneliness = 40 + decay;
-  } else if (uniqueRoles === 2) {
-    targetLoneliness = 25;
-  } else if (uniqueRoles >= 3) {
-    targetLoneliness = 5;
-    isHarmony = true;
-  }
-  if (STATE.loneliness < targetLoneliness) {
-    STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
-  } else if (STATE.loneliness > targetLoneliness) {
-    STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
-  }
-  if (isHarmony) {
-    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
-    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
-  }
-  let speed = STATE.playerVelocity.length();
-  let speedStressModifier = speed > 10 ? 0.6 : 0;
-  STATE.crew.forEach((c) => {
-    const decayRate = (0.35 + c.stress * 0.006) * dt;
-    c.illusionStability = Math.max(0, c.illusionStability - decayRate);
-    if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
-      c.stress = Math.max(0, c.stress - 7.5 * dt);
-      c.illusionStability = Math.min(100, c.illusionStability + 8 * dt);
-      c.status = "Traum-Trance";
-      c.thought = "Fühlt eine warme, beruhigende Welle... 'Alles ist friedlich.'";
-    } else {
-      if (c.illusionStability < 35) {
-        c.stress = Math.min(100, c.stress + (4.5 + speedStressModifier) * dt);
-        c.status = "Panik";
-        c.thought = "Verzweifelt: 'Die Wände pulsieren... das ist keine Station!'";
-      } else if (c.illusionStability < 65) {
-        c.stress = Math.min(100, c.stress + (1.2 + speedStressModifier) * dt);
-        c.status = "Misstrauisch";
-        c.thought = "Stutzt: 'Höre ich ein Atmen in den Lüftungsschächten?'";
-      } else {
-        c.stress = Math.max(0, c.stress - 2 * dt);
-        c.status = "Arbeitet";
-        c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
-      }
-    }
-    if (c.illusionStability >= 50) {
-      if (c.role === "engineer") {
-        STATE.health = Math.min(STATE.maxHealth, STATE.health + 0.25 * dt);
-      } else if (c.role === "biologist") {
-        STATE.bioRes += 0.1 * dt;
-      } else if (c.role === "psychologist") {
-        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 1.5 * dt);
-      }
-    }
-    if (c.stress >= 85) {
-      STATE.health = Math.max(0, STATE.health - 1.8 * dt);
-      if (Math.random() < 0.004) {
-        addLogEntry("CREW", `MATRIX-ALARM: ${c.name} greift in Panik die organische Zellwand an! (Zellschaden)`);
-      }
-    }
-  });
-  if (STATE.telepathyActive) {
-    STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 6 * dt);
-    if (STATE.mentalEnergy === 0) {
-      toggleTelepathy();
-      addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
-    }
-  } else {
-    const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 8 * dt : 4 * dt;
-    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
-  }
-  STATE.crewDialogueTimer -= dt;
-  if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
-    STATE.crewDialogueTimer = 20 + Math.random() * 8;
-    triggerMultiCrewDialogue();
-  }
-  renderCrewUI();
-}
-function renderCrewUI() {
-  const container = document.getElementById("crew-list-container");
-  const badge = document.getElementById("crew-count-badge");
-  const capText = document.getElementById("crew-capacity-text");
-  const synTitle = document.getElementById("crew-synergy-title");
-  const synDesc = document.getElementById("crew-synergy-desc");
-  const synBanner = document.getElementById("crew-synergy-banner");
-  if (badge)
-    badge.innerText = String(STATE.crew.length);
-  if (capText)
-    capText.innerText = `${STATE.crew.length} / ${STATE.maxCrewCapacity}`;
-  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
-  const totalCrew = STATE.crew.length;
-  if (synBanner && synTitle && synDesc) {
-    if (totalCrew === 0) {
-      synBanner.className = "crew-synergy-banner";
-      synTitle.innerText = "\uD83C\uDF0C Kosmische Einsamkeit";
-      synDesc.innerText = "Keine Geister an Bord. Das Wesen sehnt sich nach Gedanken-Resonanz.";
-    } else if (totalCrew === 1) {
-      if (STATE.crewSatietyTimer > 45) {
-        synBanner.className = "crew-synergy-banner satiety-decay";
-        synTitle.innerText = "⏳ Geistige Sättigung (Eintönigkeit)";
-        synDesc.innerText = "Alle Gedanken des Individuums erforscht. Das Wesen verlangt nach neuen Perspektiven!";
-      } else {
-        synBanner.className = "crew-synergy-banner";
-        synTitle.innerText = "\uD83C\uDF31 Erste Gedanken-Resonanz";
-        synDesc.innerText = "1 Geist an Bord. Erweitere das Kollektiv für stärkere Synergien.";
-      }
-    } else if (uniqueRoles === 2) {
-      synBanner.className = "crew-synergy-banner";
-      synTitle.innerText = "✨ Duale Resonanz";
-      synDesc.innerText = "2 Rollen im Einklang. Einsamkeit stabil, passive Buffs verstärkt.";
-    } else if (uniqueRoles >= 3) {
-      synBanner.className = "crew-synergy-banner harmony";
-      synTitle.innerText = "\uD83D\uDCAB Kosmische Harmonie";
-      synDesc.innerText = "Diverses Kollektiv aktiv! Einsamkeit auf 0% & +15% Bio/Mental-Regeneration!";
-    }
-  }
-  if (!container)
-    return;
-  if (STATE.crew.length === 0) {
-    container.innerHTML = `
-            <div class="matrix-empty-card">
-                <span class="highlight">Keine Vernunftbegabten Wesen</span>
-                Die psionische Traum-Matrix ist leer. Das Schiff leidet unter existenzieller kosmischer Einsamkeit.<br><br>
-                <em>Scanne habitable Planeten nach intelligentem Leben und starte eine psionische Entführung [F]!</em>
-            </div>
-        `;
-    return;
-  }
-  let html = "";
-  STATE.crew.forEach((c) => {
-    let cardClass = "crew-member";
-    if (c.illusionStability < 35 || c.stress > 70)
-      cardClass += " panic";
-    else if (c.illusionStability < 65 || c.stress > 45)
-      cardClass += " suspicious";
-    html += `
-            <div class="${cardClass}">
-                <div class="crew-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
-                    <span class="crew-role-badge">${c.roleIcon || "\uD83D\uDC64"} ${c.roleName || c.role}</span>
-                </div>
-                <div class="crew-buff-tag">⚡ ${c.buffDesc || c.perk}</div>
-                
-                <div class="stability-container">
-                    <span class="stability-label">Traum-Stabilität:</span>
-                    <div class="stability-bar-bg">
-                        <div class="stability-bar" style="width: ${c.illusionStability}%;"></div>
-                    </div>
-                    <span style="color: #a855f7; font-size: 0.68rem; font-weight: 700;">${Math.round(c.illusionStability)}%</span>
-                </div>
-
-                <div class="stress-container" style="display: flex; align-items: center; gap: 6px;">
-                    <span class="stress-label" style="width: 90px; font-size: 0.68rem; color: #94a3b8;">Stress:</span>
-                    <div class="stress-bar-bg" style="flex: 1; height: 5px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden;">
-                        <div class="stress-bar" style="width: ${c.stress}%; height: 100%; background: ${c.stress > 70 ? "#ef4444" : "#f59e0b"};"></div>
-                    </div>
-                    <span class="stress-percentage" style="font-size: 0.68rem;">${Math.round(c.stress)}%</span>
-                </div>
-
-                <div class="thought-whisper ${c.illusionStability < 35 ? "terrified" : ""}">
-                    \uD83D\uDCAD "${c.thought}"
-                </div>
-            </div>
-        `;
-  });
-  container.innerHTML = html;
-}
-var crewDialogueBank = {
-  pilot_engineer: [
-    { lineA: 'Miller: "Petrov, diese biomolekularen Trägheitsdämpfer... das Schiff richtet die Schubvektoren aus, bevor ich überhaupt lenke."', lineB: 'Petrov: "Die Naniten im Chitin leiten unsere Gedanken direkt weiter. Das ist kein Raumschiff, das ist ein lebendes Cockpit."' },
-    { lineA: 'Miller: "Wie sieht die Hüllenintegrität aus, wenn wir durch Asteroidengürtel tauchen?"', lineB: 'Petrov: "Silizium-Naniten schließen Risse im Flug. Solange wir Mineralien aufnehmen, hält die organische Panzerung stand."' }
-  ],
-  biologist_psychologist: [
-    { lineA: 'Dr. Song: "Die Traum-Matrix synchronisiert unsere neuronalen REM-Phasen. Es absorbiert nicht unsere Körper, sondern unsere Gefühle."', lineB: 'Dr. Vance: "Ein psionischer Stoffwechsel. Solange wir Gelassenheit und Zuversicht ausstrahlen, ernährt sich die Entität von Harmonie statt Verzweiflung."' },
-    { lineA: 'Dr. Song: "Die Biolumineszenz an den Synapsen-Wänden pulsiert im Takt unseres Herzschlags."', lineB: 'Dr. Vance: "Ein biologischer Resonanzraum. Wir halten das Wesen am Leben – und es beschützt uns vor der tödlichen Kälte des Alls."' }
-  ],
-  cryptologist_pilot: [
-    { lineA: 'Novak: "Ich fange schwache Tachyonen-Echos aus dem nächsten Sternensystem auf. Psio-Sensorhorizont erweitert."', lineB: 'Miller: "Kurs ist korrigiert, Novak. Bringen wir uns in den nächsten planetaren Orbit."' }
-  ],
-  engineer_biologist: [
-    { lineA: 'Petrov: "Dr. Song, die organischen Leitungen um die Faltungsmembran regenerieren erstaunlich schnell."', lineB: 'Dr. Song: "Es ist ein symbiotisches Ökosystem. Jede Ressource, die wir assimilieren, stärkt die Zellwände des Schiffes."' }
-  ],
-  general: [
-    { lineA: 'Crew-Funk: "Die Traum-Matrix flüstert Erinnerungen an Sternensysteme, die Lichtjahre entfernt liegen..."', lineB: 'Crew-Funk: "Wir reisen durch das Herz einer Galaxie, die kein Mensch zuvor erblickt hat."' }
-  ]
-};
-function triggerMultiCrewDialogue() {
-  if (STATE.crew.length < 2)
-    return;
-  const hasTranslator = STATE.mutations.translator && STATE.mutations.translator.purchased;
-  const c1 = STATE.crew[Math.floor(Math.random() * STATE.crew.length)];
-  const others = STATE.crew.filter((c) => c !== c1);
-  const c2 = others[Math.floor(Math.random() * others.length)];
-  let pairKey = `${c1.role}_${c2.role}`;
-  let revPairKey = `${c2.role}_${c1.role}`;
-  let dialogues = crewDialogueBank[pairKey] || crewDialogueBank[revPairKey] || crewDialogueBank.general;
-  const dialog = dialogues[Math.floor(Math.random() * dialogues.length)];
-  const name1 = c1.name.split(" ")[1] || c1.name;
-  const name2 = c2.name.split(" ")[1] || c2.name;
-  if (hasTranslator) {
-    addLogEntry("CREW", dialog.lineA.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name1));
-    setTimeout(() => {
-      addLogEntry("CREW", dialog.lineB.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name2));
-    }, 3200);
-  } else {
-    addLogEntry("CREW", `[Verschlüsselter Datenstrom zwischen ${c1.name} & ${c2.name}... Dschinn-Übersetzer benötigt!]`);
-  }
-}
-
-// src/ui/deck.ts
-function initDeckUI() {
-  const leftCollapseBtn = document.getElementById("left-collapse-btn");
-  const leftDeckPanel = document.getElementById("left-deck-panel");
-  if (leftCollapseBtn && leftDeckPanel) {
-    leftCollapseBtn.addEventListener("click", () => {
-      leftDeckPanel.classList.toggle("collapsed");
-      if (leftDeckPanel.classList.contains("collapsed")) {
-        leftCollapseBtn.innerText = "›";
-        leftCollapseBtn.title = "Sensoren ausklappen";
-      } else {
-        leftCollapseBtn.innerText = "‹";
-        leftCollapseBtn.title = "Sensoren einklappen";
-      }
-    });
-  }
-  const rightCollapseBtn = document.getElementById("right-collapse-btn");
-  const rightDeckPanel = document.getElementById("right-deck-panel");
-  if (rightCollapseBtn && rightDeckPanel) {
-    rightCollapseBtn.addEventListener("click", () => {
-      rightDeckPanel.classList.toggle("collapsed");
-      if (rightDeckPanel.classList.contains("collapsed")) {
-        rightCollapseBtn.innerText = "‹";
-        rightCollapseBtn.title = "Status-Deck ausklappen";
-      } else {
-        rightCollapseBtn.innerText = "›";
-        rightCollapseBtn.title = "Status-Deck einklappen";
-      }
-    });
-  }
-  const tabButtons = document.querySelectorAll("#right-deck-tabs .tab-btn");
-  tabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetTab = btn.getAttribute("data-tab");
-      tabButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const crewContent = document.getElementById("tab-content-crew");
-      const evoContent = document.getElementById("tab-content-evolution");
-      if (targetTab === "crew") {
-        if (crewContent)
-          crewContent.classList.add("active");
-        if (evoContent)
-          evoContent.classList.remove("active");
-      } else if (targetTab === "evolution") {
-        if (crewContent)
-          crewContent.classList.remove("active");
-        if (evoContent)
-          evoContent.classList.add("active");
-      }
-    });
-  });
-  const mutButtons = document.querySelectorAll(".mut-btn");
-  mutButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const mutType = btn.getAttribute("data-mutation");
-      if (mutType) {
-        buyMutation(mutType);
-      }
-    });
-  });
-}
-function buyMutation(type) {
-  const mut = STATE.mutations[type];
-  if (!mut || mut.purchased)
-    return;
-  if (STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost) {
-    STATE.bioRes -= mut.bioCost;
-    STATE.siliconRes -= mut.siliconCost;
-    mut.purchased = true;
-    playSiliconCollectSound();
-    const btn = document.querySelector(`.mut-btn[data-mutation="${type}"]`);
-    if (btn) {
-      btn.classList.add("purchased");
-      btn.innerHTML = "Aktiviert ✓";
-    }
-    if (type === "armor") {
-      addLogEntry("EVOLUTION", "Organische Chitin-Panzerung gehärtet. Kollisionsschaden um 50% reduziert.");
-      const hull = document.getElementById("schematic-hull");
-      if (hull)
-        hull.setAttribute("stroke-width", "4");
-    } else if (type === "o2") {
-      addLogEntry("EVOLUTION", "Metabolische O2-Synthese aktiviert. Stress-Zuwachs halbiert.");
-    } else if (type === "synapses") {
-      STATE.psionicRange = 140;
-      calculateCrewBuffs();
-      addLogEntry("EVOLUTION", "Psionische Synapsen erweitert! Gedanken-Echo Reichweite auf 140 LJ vergrößert.");
-    } else if (type === "cocoon") {
-      STATE.maxCrewCapacity = 4;
-      addLogEntry("EVOLUTION", "Neuronales Kokon-Gewebe mutiert! Maximale Crew-Kapazität auf 4 erweitert.");
-      renderCrewUI();
-    } else if (type === "hivemind") {
-      STATE.maxCrewCapacity = 6;
-      calculateCrewBuffs();
-      addLogEntry("EVOLUTION", "Symbiotische Synapsen-Kammer erwacht! Kapazität auf 6 erhöht & alle Spezialisten-Buffs um +20% verstärkt!");
-      renderCrewUI();
-    } else if (type === "folddrive") {
-      STATE.warpRange = 160;
-      addLogEntry("EVOLUTION", "Raumfaltungs-Membran mutiert! Warp-Reichweite auf 160 LJ erweitert, Faltungskosten um 30% gesenkt.");
-    } else if (type === "translator") {
-      addLogEntry("EVOLUTION", "Dschinn-Übersetzer integriert! Alien-Funksignale & Crew-Dialoge werden vollautomatisch dechiffriert.");
-    }
-    updateMutationUI();
-  } else {
-    addLogEntry("SYSTEM", `Evolution fehlgeschlagen: Nicht genügend Ressourcen (${mut.bioCost} Bio | ${mut.siliconCost} Silizium benötigt)!`);
-  }
-}
-function updateMutationUI() {
-  const bioEl = document.getElementById("res-bio-count");
-  const silEl = document.getElementById("res-silicon-count");
-  if (bioEl)
-    bioEl.innerText = `${Math.floor(STATE.bioRes)}`;
-  if (silEl)
-    silEl.innerText = `${Math.floor(STATE.siliconRes)}`;
-  Object.keys(STATE.mutations).forEach((key) => {
-    const mut = STATE.mutations[key];
-    const btn = document.querySelector(`.mut-btn[data-mutation="${key}"]`);
-    if (btn) {
-      if (mut.purchased) {
-        btn.disabled = true;
-        btn.classList.add("purchased");
-        btn.innerText = "Aktiviert ✓";
-      } else {
-        const canAfford = STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost;
-        btn.disabled = !canAfford;
-      }
-    }
-  });
 }
 
 // src/systems/harvesting.ts
@@ -30315,6 +30411,10 @@ function updatePhysics(dt) {
   camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
   camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
   camera.position.y = 80;
+  if (STATE.health <= 0 && !STATE.isGameOver && STATE.gameStarted) {
+    triggerGameOver("Biologischer Zellkern kollabiert durch extreme Umwelteinflüsse & Hüllenschaden.");
+    return;
+  }
   updateCollisions(dt);
   if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.05 && STATE.health < STATE.maxHealth) {
     STATE.health = Math.min(STATE.maxHealth, STATE.health + STATE.crewBuffs.repairRate * dt);
@@ -30515,6 +30615,7 @@ function init() {
   setupControls();
   initHUD();
   initDeckUI();
+  initGameOverUI();
   renderCrewUI();
   updateMutationUI();
   checkUniverseData();

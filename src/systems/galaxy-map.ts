@@ -579,6 +579,7 @@ export function warpToSystem(systemId: number) {
     // Fast 600ms hyperspace jump
     setTimeout(() => {
         STATE.currentSystemId = systemId;
+        STATE.systemsVisited++;
         const activeSystem = STATE.universe!.systems[systemId];
 
         // Clear current and spawn new

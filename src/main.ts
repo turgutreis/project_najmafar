@@ -15,6 +15,7 @@ import { updateMinimap, updateSonarWave, initHUD, addLogEntry } from './ui/hud';
 import { initDeckUI, updateMutationUI } from './ui/deck';
 import { toggleGalaxyMap, warpToSystem, isMapOpen } from './systems/galaxy-map';
 import { toggleMusic, isMusicPlaying, isMusicUserMuted } from './engine/audio';
+import { initGameOverUI } from './engine/game-over';
 
 let lastTime = 0;
 
@@ -115,6 +116,7 @@ function init() {
     setupControls();
     initHUD();
     initDeckUI();
+    initGameOverUI();
     renderCrewUI();
     updateMutationUI();
 

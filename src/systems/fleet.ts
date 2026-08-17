@@ -4,6 +4,7 @@ import { scene } from '../engine/scene';
 import { FleetShip, FleetProjectile, PlanetEntry } from '../types/game';
 import { addLogEntry } from '../ui/hud';
 import { playCrashSound, playSiliconCollectSound } from '../engine/audio';
+import { triggerGameOver } from '../engine/game-over';
 
 let shockwaveMesh: THREE.Mesh | null = null;
 let shockwaveTimer = 0;
@@ -233,7 +234,11 @@ export function updateFleet(dt: number) {
                 c.illusionStability = Math.max(0, c.illusionStability - 12.0);
             });
 
-            addLogEntry("CREW", `ALARM: EMP-Geschoss durchschlägt Hülle! Die Illusion flackert (+Stress). Stabilisiere mit [LEERTASTE]!`);
+            if (STATE.health <= 0 && !STATE.isGameOver) {
+                triggerGameOver("Biologischer Zellkern zerstört durch planetare Abfanggeschwader.");
+            } else {
+                addLogEntry("CREW", `ALARM: EMP-Geschoss durchschlägt Hülle! Die Illusion flackert (+Stress). Stabilisiere mit [LEERTASTE]!`);
+            }
 
             // Dispose projectile
             scene.remove(proj.mesh);

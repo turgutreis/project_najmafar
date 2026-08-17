@@ -6,6 +6,7 @@ import { targetReticleGroup, createTargetReticle } from '../procedural/meshes';
 import { addLogEntry, updateHUDStats } from '../ui/hud';
 import { updateScannerUI } from '../systems/scanner';
 import { updateMutationUI } from '../ui/deck';
+import { triggerGameOver } from './game-over';
 
 // Cached vectors for zero GC pressure
 const _predPos = new THREE.Vector3();
@@ -200,6 +201,12 @@ export function updatePhysics(dt: number) {
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
     camera.position.y = 80;
+
+    // Check for Critical Biological Collapse (Game Over)
+    if (STATE.health <= 0 && !STATE.isGameOver && STATE.gameStarted) {
+        triggerGameOver("Biologischer Zellkern kollabiert durch extreme Umwelteinflüsse & Hüllenschaden.");
+        return;
+    }
 
     // 7. Update Collisions
     updateCollisions(dt);

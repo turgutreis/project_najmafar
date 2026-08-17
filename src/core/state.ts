@@ -11,6 +11,8 @@ export const STATE: GameState = {
     maxMentalEnergy: 100,
     telepathyActive: false,
     gameStarted: false,
+    isGameOver: false,
+    systemsVisited: 1,
 
     // Evolution Resources
     bioRes: 0,
