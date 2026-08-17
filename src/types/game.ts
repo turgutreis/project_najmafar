@@ -176,6 +176,8 @@ export interface GameState {
     playerVelocity: THREE.Vector3;
     playerAcceleration: THREE.Vector3;
     thrustStrength: number;
+    drag: number;
+    brakeDrag: number;
     currentDrag: number;
     gConstant: number;
     collisionCooldown: number;

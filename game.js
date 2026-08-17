@@ -26293,9 +26293,11 @@ var STATE = {
   playerPosition: new Vector3(0, 0, 50),
   playerVelocity: new Vector3(0, 0, 0),
   playerAcceleration: new Vector3(0, 0, 0),
-  thrustStrength: 65,
-  currentDrag: 0.85,
-  gConstant: 1200,
+  thrustStrength: 25,
+  drag: 0.4,
+  brakeDrag: 2.2,
+  currentDrag: 0.4,
+  gConstant: 15,
   collisionCooldown: 0,
   keys: {
     w: false,
@@ -29148,6 +29150,7 @@ function toggleTelepathy() {
   }
 }
 function processInput(dt) {
+  STATE.playerAcceleration.set(0, 0, 0);
   const inputVec = new Vector3(0, 0, 0);
   if (STATE.keys.w)
     inputVec.z -= 1;
@@ -29234,21 +29237,18 @@ function processInput(dt) {
     prevGpButtons = gp.buttons.map((b) => b ? b.pressed || b.value > 0.5 : false);
   }
   const isThrusting = inputVec.lengthSq() > 0;
-  if (isThrusting) {
+  if (isThrusting && STATE.bioEnergy > 0) {
     inputVec.normalize();
-    const thrustMult = STATE.crewBuffs ? STATE.crewBuffs.thrust : 1;
-    const energyFactor = STATE.bioEnergy > 0 ? 1 : 0.5;
-    const thrust = STATE.thrustStrength * thrustMult * energyFactor * dt;
-    STATE.playerVelocity.x += inputVec.x * thrust;
-    STATE.playerVelocity.z += inputVec.z * thrust;
-    const fuelCostMult = STATE.crew.some((c) => c.role === "pilot") ? 0.85 : 1;
-    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.08 * fuelCostMult * dt);
+    STATE.playerAcceleration.addScaledVector(inputVec, STATE.thrustStrength);
+    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.45 * dt);
     if (STATE.playerGroup) {
-      const angle = Math.atan2(inputVec.x, inputVec.z);
-      STATE.playerGroup.rotation.y = angle;
+      const targetAngle = Math.atan2(inputVec.x, inputVec.z);
+      STATE.playerGroup.rotation.y = MathUtils.lerp(STATE.playerGroup.rotation.y, targetAngle, 0.1);
     }
+    STATE.currentDrag = STATE.drag;
     setThrusterSound(true);
   } else {
+    STATE.currentDrag = STATE.brakeDrag;
     setThrusterSound(false);
   }
 }
@@ -29362,7 +29362,6 @@ function updatePhysics(dt) {
       compassHud.style.display = "none";
     }
   }
-  STATE.playerAcceleration.set(0, 0, 0);
   const sources = STATE.gravitySources;
   const sourceCount = sources.length;
   let minSourceDist = Infinity;
@@ -29430,36 +29429,6 @@ function updatePhysics(dt) {
     STATE.health = Math.min(STATE.maxHealth, STATE.health + STATE.crewBuffs.repairRate * dt);
     STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.04 * dt);
   }
-  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
-  const totalCrew = STATE.crew.length;
-  let targetLoneliness = 100;
-  let isHarmony = false;
-  if (totalCrew === 0) {
-    targetLoneliness = 100;
-  } else if (totalCrew === 1) {
-    STATE.crewSatietyTimer += dt;
-    const decay = Math.min(25, STATE.crewSatietyTimer / 90 * 25);
-    targetLoneliness = 40 + decay;
-  } else if (uniqueRoles === 2) {
-    targetLoneliness = 25;
-  } else if (uniqueRoles >= 3) {
-    targetLoneliness = 5;
-    isHarmony = true;
-  }
-  if (STATE.loneliness < targetLoneliness) {
-    STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
-  } else if (STATE.loneliness > targetLoneliness) {
-    STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
-  }
-  if (isHarmony) {
-    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
-    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
-  }
-  STATE.crewDialogueTimer -= dt;
-  if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
-    STATE.crewDialogueTimer = 20 + Math.random() * 8;
-    triggerMultiCrewDialogue();
-  }
   if (STATE.bioEnergy < 15) {
     const regenRate = STATE.bioEnergy <= 0 ? 1.5 : 0.8;
     STATE.bioEnergy = Math.min(15, STATE.bioEnergy + regenRate * dt);
@@ -29473,6 +29442,8 @@ function updatePhysics(dt) {
       addLogEntry("SYSTEM", "Kritischer Nahrungsmangel. Organismus verhungert (-1.2 Kernintegrität).");
     }
   }
+  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
+  const isHarmony = uniqueRoles >= 3 && STATE.crew.length >= 3;
   updateHUDStats(isHarmony);
 }
 function updateCollisions(dt) {

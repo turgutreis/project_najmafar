@@ -5,7 +5,6 @@ import { playCrashSound, playBioCollectSound, playSiliconCollectSound } from './
 import { targetReticleGroup, createTargetReticle } from '../procedural/meshes';
 import { addLogEntry, updateHUDStats } from '../ui/hud';
 import { updateScannerUI } from '../systems/scanner';
-import { triggerMultiCrewDialogue } from '../systems/crew';
 import { updateMutationUI } from '../ui/deck';
 
 // Cached vectors for zero GC pressure
@@ -132,8 +131,7 @@ export function updatePhysics(dt: number) {
         }
     }
 
-    // 5. Calculate Net Gravitational Forces
-    STATE.playerAcceleration.set(0, 0, 0);
+    // 5. Calculate Net Gravitational Forces (Input thrust already added by processInput)
 
     const sources = STATE.gravitySources;
     const sourceCount = sources.length;
@@ -212,45 +210,7 @@ export function updatePhysics(dt: number) {
         STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.04 * dt);
     }
 
-    // 9. Dynamic Loneliness & Satiety Decay
-    const uniqueRoles = new Set(STATE.crew.map(c => c.role)).size;
-    const totalCrew = STATE.crew.length;
-
-    let targetLoneliness = 100;
-    let isHarmony = false;
-
-    if (totalCrew === 0) {
-        targetLoneliness = 100;
-    } else if (totalCrew === 1) {
-        STATE.crewSatietyTimer += dt;
-        const decay = Math.min(25, (STATE.crewSatietyTimer / 90) * 25);
-        targetLoneliness = 40 + decay;
-    } else if (uniqueRoles === 2) {
-        targetLoneliness = 25;
-    } else if (uniqueRoles >= 3) {
-        targetLoneliness = 5;
-        isHarmony = true;
-    }
-
-    if (STATE.loneliness < targetLoneliness) {
-        STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
-    } else if (STATE.loneliness > targetLoneliness) {
-        STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
-    }
-
-    if (isHarmony) {
-        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
-        STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
-    }
-
-    // 10. Multi-Crew Periodic Dialogue
-    STATE.crewDialogueTimer -= dt;
-    if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
-        STATE.crewDialogueTimer = 20 + Math.random() * 8;
-        triggerMultiCrewDialogue();
-    }
-
-    // 11. Emergency Bio-Photosynthesis Trickle
+    // 9. Emergency Bio-Photosynthesis Trickle
     if (STATE.bioEnergy < 15) {
         const regenRate = STATE.bioEnergy <= 0 ? 1.5 : 0.8;
         STATE.bioEnergy = Math.min(15, STATE.bioEnergy + regenRate * dt);
@@ -267,6 +227,10 @@ export function updatePhysics(dt: number) {
             addLogEntry("SYSTEM", "Kritischer Nahrungsmangel. Organismus verhungert (-1.2 Kernintegrität).");
         }
     }
+
+    // 10. Determine harmony state for HUD
+    const uniqueRoles = new Set(STATE.crew.map(c => c.role)).size;
+    const isHarmony = uniqueRoles >= 3 && STATE.crew.length >= 3;
 
     updateHUDStats(isHarmony);
 }

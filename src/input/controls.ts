@@ -242,6 +242,9 @@ export function toggleTelepathy() {
 }
 
 export function processInput(dt: number) {
+    // Reset acceleration each frame (input adds thrust, then physics adds gravity)
+    STATE.playerAcceleration.set(0, 0, 0);
+
     const inputVec = new THREE.Vector3(0, 0, 0);
 
     // 1. Keyboard Input
@@ -330,27 +333,33 @@ export function processInput(dt: number) {
         prevGpButtons = gp.buttons.map(b => b ? (b.pressed || b.value > 0.5) : false);
     }
 
-    // 3. Movement Integration
+    // 3. Movement Integration (via Acceleration, not direct Velocity)
     const isThrusting = inputVec.lengthSq() > 0;
-    if (isThrusting) {
+    if (isThrusting && STATE.bioEnergy > 0) {
         inputVec.normalize();
 
-        const thrustMult = (STATE.crewBuffs ? STATE.crewBuffs.thrust : 1.0);
-        const energyFactor = STATE.bioEnergy > 0 ? 1.0 : 0.5;
-        const thrust = STATE.thrustStrength * thrustMult * energyFactor * dt;
-        STATE.playerVelocity.x += inputVec.x * thrust;
-        STATE.playerVelocity.z += inputVec.z * thrust;
+        // Apply thrust as acceleration (integrated later in physics.ts)
+        STATE.playerAcceleration.addScaledVector(inputVec, STATE.thrustStrength);
 
-        const fuelCostMult = STATE.crew.some(c => c.role === 'pilot') ? 0.85 : 1.0;
-        STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.08 * fuelCostMult * dt);
+        // Fuel consumption
+        STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.45 * dt);
 
+        // Rotate ship towards movement direction smoothly
         if (STATE.playerGroup) {
-            const angle = Math.atan2(inputVec.x, inputVec.z);
-            STATE.playerGroup.rotation.y = angle;
+            const targetAngle = Math.atan2(inputVec.x, inputVec.z);
+            STATE.playerGroup.rotation.y = THREE.MathUtils.lerp(
+                STATE.playerGroup.rotation.y, targetAngle, 0.1
+            );
         }
+
+        // Thrusting drag (low - responsive flight)
+        STATE.currentDrag = STATE.drag;
 
         setThrusterSound(true);
     } else {
+        // Retro-dampening (high drag - ship brakes when not thrusting)
+        STATE.currentDrag = STATE.brakeDrag;
+
         setThrusterSound(false);
     }
 }
