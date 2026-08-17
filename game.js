@@ -26478,13 +26478,13 @@ var STATE = {
     psionicBonus: 0
   },
   mutations: {
-    armor: { purchased: false, bioCost: 150, siliconCost: 80 },
-    o2: { purchased: false, bioCost: 100, siliconCost: 40 },
-    synapses: { purchased: false, bioCost: 200, siliconCost: 120 },
-    cocoon: { purchased: false, bioCost: 250, siliconCost: 100 },
-    hivemind: { purchased: false, bioCost: 400, siliconCost: 250 },
-    folddrive: { purchased: false, bioCost: 300, siliconCost: 350 },
-    translator: { purchased: false, bioCost: 80, siliconCost: 50 }
+    armor: { purchased: false, bioCost: 180, siliconCost: 110 },
+    o2: { purchased: false, bioCost: 140, siliconCost: 60 },
+    synapses: { purchased: false, bioCost: 260, siliconCost: 160 },
+    cocoon: { purchased: false, bioCost: 320, siliconCost: 140 },
+    hivemind: { purchased: false, bioCost: 500, siliconCost: 320 },
+    folddrive: { purchased: false, bioCost: 380, siliconCost: 420 },
+    translator: { purchased: false, bioCost: 120, siliconCost: 80 }
   },
   playerPosition: new Vector3(0, 0, 65),
   playerVelocity: new Vector3(5, 0, 0),
@@ -28215,13 +28215,13 @@ function updateCrewSimulation(dt) {
     }
   });
   if (STATE.telepathyActive) {
-    STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 6 * dt);
+    STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 8.5 * dt);
     if (STATE.mentalEnergy === 0) {
       toggleTelepathy();
       addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
     }
   } else {
-    const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 8 * dt : 4 * dt;
+    const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 7 * dt : 3.5 * dt;
     STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
   }
   STATE.crewDialogueTimer -= dt;
@@ -30410,10 +30410,14 @@ function processInput(dt) {
     prevGpButtons = gp.buttons.map((b) => b ? b.pressed || b.value > 0.5 : false);
   }
   const isThrusting = inputVec.lengthSq() > 0;
-  if (isThrusting && STATE.bioEnergy > 0) {
+  if (isThrusting) {
     inputVec.normalize();
-    STATE.playerAcceleration.addScaledVector(inputVec, STATE.thrustStrength);
-    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.45 * dt);
+    const hasEnergy = STATE.bioEnergy > 0;
+    const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
+    STATE.playerAcceleration.addScaledVector(inputVec, effectiveThrust);
+    if (hasEnergy) {
+      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.2 * dt);
+    }
     if (STATE.playerGroup) {
       const targetAngle = Math.atan2(inputVec.x, inputVec.z);
       STATE.playerGroup.rotation.y = MathUtils.lerp(STATE.playerGroup.rotation.y, targetAngle, 0.1);
@@ -30602,21 +30606,19 @@ function updatePhysics(dt) {
     return;
   }
   updateCollisions(dt);
-  if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.05 && STATE.health < STATE.maxHealth) {
+  if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.15 && STATE.health < STATE.maxHealth) {
     STATE.health = Math.min(STATE.maxHealth, STATE.health + STATE.crewBuffs.repairRate * dt);
-    STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.04 * dt);
+    STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.25 * dt);
   }
-  if (STATE.bioEnergy < 15) {
-    const regenRate = STATE.bioEnergy <= 0 ? 1.5 : 0.8;
-    STATE.bioEnergy = Math.min(15, STATE.bioEnergy + regenRate * dt);
-  }
-  if (STATE.bioEnergy > 15) {
-    STATE.bioEnergy = Math.max(15, STATE.bioEnergy - 0.35 * dt);
+  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.65 * dt);
+  if (STATE.bioEnergy < 8) {
+    const regenRate = STATE.bioEnergy <= 0 ? 0.9 : 0.4;
+    STATE.bioEnergy = Math.min(8, STATE.bioEnergy + regenRate * dt);
   }
   if (STATE.bioEnergy <= 0) {
-    STATE.health = Math.max(0, STATE.health - 1.2 * dt);
-    if (Math.random() < 0.004) {
-      addLogEntry("SYSTEM", "Kritischer Nahrungsmangel. Organismus verhungert (-1.2 Kernintegrität).");
+    STATE.health = Math.max(0, STATE.health - 2 * dt);
+    if (Math.random() < 0.006) {
+      addLogEntry("SYSTEM", "⚠️ KRITISCHER NAHRUNGSMANGEL: Organismus verhungert (-2.0 HP/s). Assimiliere Bio-Asteroiden!");
     }
   }
   const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;

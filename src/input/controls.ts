@@ -339,14 +339,19 @@ export function processInput(dt: number) {
 
     // 3. Movement Integration (via Acceleration, not direct Velocity)
     const isThrusting = inputVec.lengthSq() > 0;
-    if (isThrusting && STATE.bioEnergy > 0) {
+    if (isThrusting) {
         inputVec.normalize();
 
-        // Apply thrust as acceleration (integrated later in physics.ts)
-        STATE.playerAcceleration.addScaledVector(inputVec, STATE.thrustStrength);
+        const hasEnergy = STATE.bioEnergy > 0;
+        const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
 
-        // Fuel consumption
-        STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.45 * dt);
+        // Apply thrust as acceleration (integrated later in physics.ts)
+        STATE.playerAcceleration.addScaledVector(inputVec, effectiveThrust);
+
+        // Fuel consumption: 3.2 Bio-Energy/s during active thrusting
+        if (hasEnergy) {
+            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.2 * dt);
+        }
 
         // Rotate ship towards movement direction smoothly
         if (STATE.playerGroup) {

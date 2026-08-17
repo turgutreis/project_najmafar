@@ -152,13 +152,13 @@ export function updateCrewSimulation(dt: number) {
 
     // 3. Mental Energy Drain / Regen
     if (STATE.telepathyActive) {
-        STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 6 * dt);
+        STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 8.5 * dt);
         if (STATE.mentalEnergy === 0) {
             toggleTelepathy();
             addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
         }
     } else {
-        const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 8 * dt : 4 * dt;
+        const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 7.0 * dt : 3.5 * dt;
         STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
     }
 

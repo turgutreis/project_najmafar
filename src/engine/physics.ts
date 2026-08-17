@@ -211,27 +211,25 @@ export function updatePhysics(dt: number) {
     // 7. Update Collisions
     updateCollisions(dt);
 
-    // 8. Passive Engineer Repair
-    if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.05 && STATE.health < STATE.maxHealth) {
+    // 8. Passive Engineer Repair (Requires Silicon Nanites)
+    if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.15 && STATE.health < STATE.maxHealth) {
         STATE.health = Math.min(STATE.maxHealth, STATE.health + STATE.crewBuffs.repairRate * dt);
-        STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.04 * dt);
+        STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.25 * dt);
     }
 
-    // 9. Emergency Bio-Photosynthesis Trickle
-    if (STATE.bioEnergy < 15) {
-        const regenRate = STATE.bioEnergy <= 0 ? 1.5 : 0.8;
-        STATE.bioEnergy = Math.min(15, STATE.bioEnergy + regenRate * dt);
-    }
+    // Basal Metabolic Energy Drain: Living bioship consumes 0.65 Bio-Energy/s
+    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.65 * dt);
 
-    // Passive decay of bioEnergy over time
-    if (STATE.bioEnergy > 15) {
-        STATE.bioEnergy = Math.max(15, STATE.bioEnergy - 0.35 * dt);
+    // Emergency Bio-Photosynthesis Trickle (only up to 8% when completely starved)
+    if (STATE.bioEnergy < 8) {
+        const regenRate = STATE.bioEnergy <= 0 ? 0.9 : 0.4;
+        STATE.bioEnergy = Math.min(8, STATE.bioEnergy + regenRate * dt);
     }
 
     if (STATE.bioEnergy <= 0) {
-        STATE.health = Math.max(0, STATE.health - 1.2 * dt);
-        if (Math.random() < 0.004) {
-            addLogEntry("SYSTEM", "Kritischer Nahrungsmangel. Organismus verhungert (-1.2 Kernintegrität).");
+        STATE.health = Math.max(0, STATE.health - 2.0 * dt);
+        if (Math.random() < 0.006) {
+            addLogEntry("SYSTEM", "⚠️ KRITISCHER NAHRUNGSMANGEL: Organismus verhungert (-2.0 HP/s). Assimiliere Bio-Asteroiden!");
         }
     }
 

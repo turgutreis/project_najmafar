@@ -37,13 +37,13 @@ export const STATE: GameState = {
 
     // Mutations
     mutations: {
-        armor: { purchased: false, bioCost: 150, siliconCost: 80 },
-        o2: { purchased: false, bioCost: 100, siliconCost: 40 },
-        synapses: { purchased: false, bioCost: 200, siliconCost: 120 },
-        cocoon: { purchased: false, bioCost: 250, siliconCost: 100 },
-        hivemind: { purchased: false, bioCost: 400, siliconCost: 250 },
-        folddrive: { purchased: false, bioCost: 300, siliconCost: 350 },
-        translator: { purchased: false, bioCost: 80, siliconCost: 50 }
+        armor: { purchased: false, bioCost: 180, siliconCost: 110 },
+        o2: { purchased: false, bioCost: 140, siliconCost: 60 },
+        synapses: { purchased: false, bioCost: 260, siliconCost: 160 },
+        cocoon: { purchased: false, bioCost: 320, siliconCost: 140 },
+        hivemind: { purchased: false, bioCost: 500, siliconCost: 320 },
+        folddrive: { purchased: false, bioCost: 380, siliconCost: 420 },
+        translator: { purchased: false, bioCost: 120, siliconCost: 80 }
     },
 
     // Physics
