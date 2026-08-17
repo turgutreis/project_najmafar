@@ -79,10 +79,18 @@ function animate(time: number) {
             });
         }
 
-        // Bioluminescent shell pulse
+        // Bioluminescent shell pulse & dynamic color reaction
         if (playerGlowMesh) {
             const glowPulse = 1.0 + Math.sin(Date.now() * 0.004) * 0.08;
             playerGlowMesh.scale.set(1.6 * glowPulse, 0.9 * glowPulse, 0.9 * glowPulse);
+
+            if (STATE.health < 30) {
+                (playerGlowMesh.material as THREE.MeshBasicMaterial).color.setHex(0xf43f5e); // Red emergency alert
+            } else if (STATE.telepathyActive) {
+                (playerGlowMesh.material as THREE.MeshBasicMaterial).color.setHex(0xa855f7); // Purple psionic trance
+            } else {
+                (playerGlowMesh.material as THREE.MeshBasicMaterial).color.setHex(0x00ff88); // Bio green nominal
+            }
         }
     }
 

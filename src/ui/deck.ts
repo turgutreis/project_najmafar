@@ -53,6 +53,16 @@ export function initDeckUI() {
             }
         });
     });
+
+    const mutButtons = document.querySelectorAll('.mut-btn');
+    mutButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const mutType = btn.getAttribute('data-mutation');
+            if (mutType) {
+                buyMutation(mutType);
+            }
+        });
+    });
 }
 
 export function buyMutation(type: string) {

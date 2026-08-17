@@ -28675,7 +28675,37 @@ function calculateCrewBuffs() {
   const basePsio = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 140 : 75;
   STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
 }
+var STORY_LOGS = [
+  { time: 6, sender: "Capt. Miller", text: "Das Ding lebt! Wir sind im Bauch eines Lovecraft-Monsters gefangen! Wo ist die Luft?" },
+  { time: 24, sender: "Dr. Song", text: "Die Schiffswände atmen... Valeria, das Schiff absorbiert Weltraummaterie um sich zu heilen!" },
+  { time: 48, sender: "Valeria", text: "Jamal, guck dir die Messgeräte an. Die kosmische Hintergrundstrahlung... Die Expansion verlangsamt sich!" },
+  { time: 70, sender: "Jamal", text: "Das ist kein Fehler. Jemand macht eine kosmische Vollbremsung. Dieses Wesen... versucht es uns zu warnen?" },
+  { time: 95, sender: "Capt. Miller", text: "Es sendet Gedankenwellen. Die Software übersetzt es als... Dschinn? Es ist einsam." }
+];
+var storyIndex = 0;
+var playTime = 0;
+function encryptText(text) {
+  const alienGlyphs = "⏁⊑⟒⋔⍜⋏☿⏁⟒⍃⍜⌰⎍⌇⌇⊑⟟⌿⌇⏃⋏⎅⌇⏁⏃⍀⌇⏁⍀⟒☍⏁⊑⟒⌇⊑⟟⌿⟟⌇⏃⌰⟟⎎⟒";
+  return text.split("").map((char) => {
+    if (char === " " || char === '"' || char === "'" || char === ":" || char === "." || char === "," || char === "?" || char === "!" || char === "-" || char === "(" || char === ")")
+      return char;
+    return alienGlyphs[Math.floor(Math.random() * alienGlyphs.length)];
+  }).join("");
+}
+function encryptCrewMessage(sender, text) {
+  let outText = text;
+  if (!STATE.mutations.translator.purchased) {
+    outText = encryptText(text);
+  }
+  return `${sender}: "${outText}"`;
+}
 function updateCrewSimulation(dt) {
+  playTime += dt;
+  if (storyIndex < STORY_LOGS.length && playTime >= STORY_LOGS[storyIndex].time) {
+    const logObj = STORY_LOGS[storyIndex];
+    storyIndex++;
+    addLogEntry("CREW", encryptCrewMessage(logObj.sender, logObj.text));
+  }
   const totalCrew = STATE.crew.length;
   const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
   let targetLoneliness = 100;
@@ -28938,6 +28968,15 @@ function initDeckUI() {
           crewContent.classList.remove("active");
         if (evoContent)
           evoContent.classList.add("active");
+      }
+    });
+  });
+  const mutButtons = document.querySelectorAll(".mut-btn");
+  mutButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mutType = btn.getAttribute("data-mutation");
+      if (mutType) {
+        buyMutation(mutType);
       }
     });
   });
@@ -29917,6 +29956,13 @@ function animate(time) {
     if (playerGlowMesh) {
       const glowPulse = 1 + Math.sin(Date.now() * 0.004) * 0.08;
       playerGlowMesh.scale.set(1.6 * glowPulse, 0.9 * glowPulse, 0.9 * glowPulse);
+      if (STATE.health < 30) {
+        playerGlowMesh.material.color.setHex(16007006);
+      } else if (STATE.telepathyActive) {
+        playerGlowMesh.material.color.setHex(11032055);
+      } else {
+        playerGlowMesh.material.color.setHex(65416);
+      }
     }
   }
   renderer.render(scene, camera);

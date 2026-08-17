@@ -36,7 +36,40 @@ export function calculateCrewBuffs() {
     STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
 }
 
+const STORY_LOGS = [
+    { time: 6, sender: "Capt. Miller", text: "Das Ding lebt! Wir sind im Bauch eines Lovecraft-Monsters gefangen! Wo ist die Luft?" },
+    { time: 24, sender: "Dr. Song", text: "Die Schiffswände atmen... Valeria, das Schiff absorbiert Weltraummaterie um sich zu heilen!" },
+    { time: 48, sender: "Valeria", text: "Jamal, guck dir die Messgeräte an. Die kosmische Hintergrundstrahlung... Die Expansion verlangsamt sich!" },
+    { time: 70, sender: "Jamal", text: "Das ist kein Fehler. Jemand macht eine kosmische Vollbremsung. Dieses Wesen... versucht es uns zu warnen?" },
+    { time: 95, sender: "Capt. Miller", text: "Es sendet Gedankenwellen. Die Software übersetzt es als... Dschinn? Es ist einsam." }
+];
+let storyIndex = 0;
+let playTime = 0;
+
+export function encryptText(text: string): string {
+    const alienGlyphs = "⏁⊑⟒⋔⍜⋏☿⏁⟒⍃⍜⌰⎍⌇⌇⊑⟟⌿⌇⏃⋏⎅⌇⏁⏃⍀⌇⏁⍀⟒☍⏁⊑⟒⌇⊑⟟⌿⟟⌇⏃⌰⟟⎎⟒";
+    return text.split('').map(char => {
+        if (char === ' ' || char === '"' || char === '\'' || char === ':' || char === '.' || char === ',' || char === '?' || char === '!' || char === '-' || char === '(' || char === ')') return char;
+        return alienGlyphs[Math.floor(Math.random() * alienGlyphs.length)];
+    }).join('');
+}
+
+export function encryptCrewMessage(sender: string, text: string): string {
+    let outText = text;
+    if (!STATE.mutations.translator.purchased) {
+        outText = encryptText(text);
+    }
+    return `${sender}: "${outText}"`;
+}
+
 export function updateCrewSimulation(dt: number) {
+    playTime += dt;
+    if (storyIndex < STORY_LOGS.length && playTime >= STORY_LOGS[storyIndex].time) {
+        const logObj = STORY_LOGS[storyIndex];
+        storyIndex++;
+        addLogEntry("CREW", encryptCrewMessage(logObj.sender, logObj.text));
+    }
+
     const totalCrew = STATE.crew.length;
     const uniqueRoles = new Set(STATE.crew.map(c => c.role)).size;
 
