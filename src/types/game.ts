@@ -78,6 +78,7 @@ export interface StarSystem {
     z: number;
     star: StarData;
     planets: PlanetData[];
+    asteroids?: any[];
 }
 
 export interface UniverseData {

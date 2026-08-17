@@ -341,50 +341,68 @@ export function spawnPlanetsAndAsteroids() {
         });
     });
 
-    // 3. Asteroid Resource Belts
-    spawnAsteroidBelt();
-}
-
-function spawnAsteroidBelt() {
-    const beltCount = 35;
-    for (let i = 0; i < beltCount; i++) {
-        const isBio = Math.random() > 0.45;
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 35 + Math.random() * 110;
-        const x = Math.cos(angle) * dist;
-        const z = Math.sin(angle) * dist;
-        const size = 0.8 + Math.random() * 1.4;
-
-        const color = isBio ? 0x10b981 : 0x38bdf8;
+    // 3. Spawn Asteroids (Realistic cosmic debris & fragment scaling)
+    const asteroidsList = (activeSystem.asteroids && activeSystem.asteroids.length > 0) ? activeSystem.asteroids : generateFallbackAsteroids();
+    asteroidsList.forEach((ast: any) => {
+        const size = 0.4 + Math.random() * 0.45;
         const geo = new THREE.DodecahedronGeometry(size, 1);
+
+        const posAttr = geo.attributes.position;
+        for (let j = 0; j < posAttr.count; j++) {
+            const vx = posAttr.getX(j);
+            const vy = posAttr.getY(j);
+            const vz = posAttr.getZ(j);
+            const scale = 1 + (Math.random() - 0.5) * 0.3;
+            posAttr.setXYZ(j, vx * scale, vy * scale, vz * scale);
+        }
+        geo.computeVertexNormals();
+
+        const isOrganic = ast.type === 'bio';
+        const color = isOrganic ? 0x00ff88 : 0x06b6d4;
+
         const mat = new THREE.MeshStandardMaterial({
             color: color,
-            roughness: 0.8,
-            metalness: 0.2,
-            wireframe: false
+            roughness: 0.9,
+            metalness: 0.8,
+            emissive: isOrganic ? 0x003311 : 0x002233
         });
 
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(x, 0, z);
+        mesh.position.set(ast.x, 0, ast.z);
         scene.add(mesh);
 
         const range = size * 3;
         const sourceObj: any = {
             mesh: mesh,
             type: 'asteroid',
-            name: isBio ? `Organischer Asteroid` : `Silizium-Komet`,
-            resourceType: isBio ? 'bio' : 'silicon',
-            isResource: true,
-            isAbsorbed: false,
+            name: isOrganic ? "Organische Biosphäre" : "Silizium-Komet",
             mass: size * 4,
             radius: size,
             gravityRange: range,
-            position: new THREE.Vector3(x, 0, z)
+            position: new THREE.Vector3(ast.x, 0, ast.z),
+            isResource: true,
+            resourceType: isOrganic ? 'bio' : 'silicon',
+            isAbsorbed: false,
+            ringMesh: null
         };
 
         STATE.gravitySources.push(sourceObj);
         STATE.asteroids.push(sourceObj);
+        sourceObj.ringMesh = createGravityRing(ast.x, ast.z, range, color, 0.05);
+    });
+}
 
-        sourceObj.ringMesh = createGravityRing(x, z, range, color, 0.05);
+function generateFallbackAsteroids() {
+    const list = [];
+    const count = 35;
+    for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = 35 + Math.random() * 110;
+        list.push({
+            x: Math.cos(angle) * dist,
+            z: Math.sin(angle) * dist,
+            type: Math.random() > 0.45 ? 'bio' : 'energy'
+        });
     }
+    return list;
 }

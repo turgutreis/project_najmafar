@@ -309,20 +309,52 @@ function respawnAsteroid(sourceObj: any) {
         const dist = 30 + Math.random() * 120;
         const x = Math.cos(angle) * dist;
         const z = Math.sin(angle) * dist;
-        const size = 0.8 + Math.random() * 1.2;
+        const size = 0.4 + Math.random() * 0.45;
+
+        const geo = new THREE.DodecahedronGeometry(size, 1);
+        const posAttr = geo.attributes.position;
+        for (let j = 0; j < posAttr.count; j++) {
+            const vx = posAttr.getX(j);
+            const vy = posAttr.getY(j);
+            const vz = posAttr.getZ(j);
+            const scale = 1 + (Math.random() - 0.5) * 0.3;
+            posAttr.setXYZ(j, vx * scale, vy * scale, vz * scale);
+        }
+        geo.computeVertexNormals();
+
+        const isOrganic = Math.random() > 0.45;
+        const color = isOrganic ? 0x00ff88 : 0x06b6d4;
+
+        const mat = new THREE.MeshStandardMaterial({
+            color: color,
+            roughness: 0.9,
+            metalness: 0.8,
+            emissive: isOrganic ? 0x003311 : 0x002233
+        });
+
+        if (sourceObj.mesh) {
+            scene.remove(sourceObj.mesh);
+            sourceObj.mesh.geometry.dispose();
+            sourceObj.mesh.material.dispose();
+        }
+
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(x, 0, z);
+        scene.add(mesh);
 
         sourceObj.position.set(x, 0, z);
+        sourceObj.mesh = mesh;
+        sourceObj.name = isOrganic ? "Organische Biosphäre" : "Silizium-Komet";
+        sourceObj.resourceType = isOrganic ? 'bio' : 'silicon';
         sourceObj.mass = size * 4;
         sourceObj.radius = size;
         sourceObj.gravityRange = size * 3;
         sourceObj.isAbsorbed = false;
 
-        if (sourceObj.mesh) {
-            sourceObj.mesh.position.set(x, 0, z);
-            sourceObj.mesh.scale.set(1, 1, 1);
-        }
         if (sourceObj.ringMesh) {
             sourceObj.ringMesh.position.set(x, 0, z);
+            sourceObj.ringMesh.scale.set(sourceObj.gravityRange / (size * 3), 1, sourceObj.gravityRange / (size * 3));
+            (sourceObj.ringMesh.material as THREE.MeshBasicMaterial).color.setHex(color);
         }
     }, 15000);
 }

@@ -28068,45 +28068,62 @@ function spawnPlanetsAndAsteroids() {
       activePlanets.push(moonEntry);
     });
   });
-  spawnAsteroidBelt();
-}
-function spawnAsteroidBelt() {
-  const beltCount = 35;
-  for (let i = 0;i < beltCount; i++) {
-    const isBio = Math.random() > 0.45;
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 35 + Math.random() * 110;
-    const x = Math.cos(angle) * dist;
-    const z = Math.sin(angle) * dist;
-    const size = 0.8 + Math.random() * 1.4;
-    const color = isBio ? 1096065 : 3718648;
+  const asteroidsList = activeSystem.asteroids && activeSystem.asteroids.length > 0 ? activeSystem.asteroids : generateFallbackAsteroids();
+  asteroidsList.forEach((ast) => {
+    const size = 0.4 + Math.random() * 0.45;
     const geo = new DodecahedronGeometry(size, 1);
+    const posAttr = geo.attributes.position;
+    for (let j = 0;j < posAttr.count; j++) {
+      const vx = posAttr.getX(j);
+      const vy = posAttr.getY(j);
+      const vz = posAttr.getZ(j);
+      const scale = 1 + (Math.random() - 0.5) * 0.3;
+      posAttr.setXYZ(j, vx * scale, vy * scale, vz * scale);
+    }
+    geo.computeVertexNormals();
+    const isOrganic = ast.type === "bio";
+    const color = isOrganic ? 65416 : 440020;
     const mat = new MeshStandardMaterial({
       color,
-      roughness: 0.8,
-      metalness: 0.2,
-      wireframe: false
+      roughness: 0.9,
+      metalness: 0.8,
+      emissive: isOrganic ? 13073 : 8755
     });
     const mesh = new Mesh(geo, mat);
-    mesh.position.set(x, 0, z);
+    mesh.position.set(ast.x, 0, ast.z);
     scene.add(mesh);
     const range = size * 3;
     const sourceObj = {
       mesh,
       type: "asteroid",
-      name: isBio ? `Organischer Asteroid` : `Silizium-Komet`,
-      resourceType: isBio ? "bio" : "silicon",
-      isResource: true,
-      isAbsorbed: false,
+      name: isOrganic ? "Organische Biosphäre" : "Silizium-Komet",
       mass: size * 4,
       radius: size,
       gravityRange: range,
-      position: new Vector3(x, 0, z)
+      position: new Vector3(ast.x, 0, ast.z),
+      isResource: true,
+      resourceType: isOrganic ? "bio" : "silicon",
+      isAbsorbed: false,
+      ringMesh: null
     };
     STATE.gravitySources.push(sourceObj);
     STATE.asteroids.push(sourceObj);
-    sourceObj.ringMesh = createGravityRing(x, z, range, color, 0.05);
+    sourceObj.ringMesh = createGravityRing(ast.x, ast.z, range, color, 0.05);
+  });
+}
+function generateFallbackAsteroids() {
+  const list = [];
+  const count = 35;
+  for (let i = 0;i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 35 + Math.random() * 110;
+    list.push({
+      x: Math.cos(angle) * dist,
+      z: Math.sin(angle) * dist,
+      type: Math.random() > 0.45 ? "bio" : "energy"
+    });
   }
+  return list;
 }
 
 // src/systems/galaxy-map.ts
@@ -29806,18 +29823,45 @@ function respawnAsteroid(sourceObj) {
     const dist = 30 + Math.random() * 120;
     const x = Math.cos(angle) * dist;
     const z = Math.sin(angle) * dist;
-    const size = 0.8 + Math.random() * 1.2;
+    const size = 0.4 + Math.random() * 0.45;
+    const geo = new DodecahedronGeometry(size, 1);
+    const posAttr = geo.attributes.position;
+    for (let j = 0;j < posAttr.count; j++) {
+      const vx = posAttr.getX(j);
+      const vy = posAttr.getY(j);
+      const vz = posAttr.getZ(j);
+      const scale = 1 + (Math.random() - 0.5) * 0.3;
+      posAttr.setXYZ(j, vx * scale, vy * scale, vz * scale);
+    }
+    geo.computeVertexNormals();
+    const isOrganic = Math.random() > 0.45;
+    const color = isOrganic ? 65416 : 440020;
+    const mat = new MeshStandardMaterial({
+      color,
+      roughness: 0.9,
+      metalness: 0.8,
+      emissive: isOrganic ? 13073 : 8755
+    });
+    if (sourceObj.mesh) {
+      scene.remove(sourceObj.mesh);
+      sourceObj.mesh.geometry.dispose();
+      sourceObj.mesh.material.dispose();
+    }
+    const mesh = new Mesh(geo, mat);
+    mesh.position.set(x, 0, z);
+    scene.add(mesh);
     sourceObj.position.set(x, 0, z);
+    sourceObj.mesh = mesh;
+    sourceObj.name = isOrganic ? "Organische Biosphäre" : "Silizium-Komet";
+    sourceObj.resourceType = isOrganic ? "bio" : "silicon";
     sourceObj.mass = size * 4;
     sourceObj.radius = size;
     sourceObj.gravityRange = size * 3;
     sourceObj.isAbsorbed = false;
-    if (sourceObj.mesh) {
-      sourceObj.mesh.position.set(x, 0, z);
-      sourceObj.mesh.scale.set(1, 1, 1);
-    }
     if (sourceObj.ringMesh) {
       sourceObj.ringMesh.position.set(x, 0, z);
+      sourceObj.ringMesh.scale.set(sourceObj.gravityRange / (size * 3), 1, sourceObj.gravityRange / (size * 3));
+      sourceObj.ringMesh.material.color.setHex(color);
     }
   }, 15000);
 }
