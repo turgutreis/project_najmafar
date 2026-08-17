@@ -1,11 +1,22 @@
 import * as THREE from 'three';
-import { STATE, activePlanets } from '../core/state';
+import { STATE } from '../core/state';
 import { scene } from '../engine/scene';
+import { PlanetEntry, StarSystem } from '../types/game';
 import { createGravityRing } from '../procedural/meshes';
 import { createHabitableTextures, createGasGiantTextures, createRockyTextures, createIceMoonTextures, createVolcanicMoonTextures, createStarTexture, createCloudTexture } from '../procedural/textures';
 import { generatePlanetAttributes, generateFallbackMoons, updateScannerUI } from './scanner';
 import { initPlanetDefenseFleets, clearFleet } from './fleet';
 import { addLogEntry } from '../ui/hud';
+import { createSunCoronaMesh } from '../procedural/sun-shader';
+import { createAtmosphereMesh } from '../procedural/atmosphere-shader';
+
+export const activePlanets: PlanetEntry[] = [];
+export const activeCoronaMeshes: THREE.Mesh[] = [];
+export const activeCoronaUpdaters: ((dt: number) => void)[] = [];
+
+export function updateUniverseShaders(dt: number) {
+    activeCoronaUpdaters.forEach(fn => fn(dt));
+}
 
 export async function checkUniverseData() {
     try {
@@ -76,6 +87,11 @@ export function clearActiveSystem() {
             scene.remove(source.ringMesh);
         }
     });
+
+    activeCoronaMeshes.forEach(m => scene.remove(m));
+    activeCoronaMeshes.length = 0;
+    activeCoronaUpdaters.length = 0;
+
     STATE.gravitySources = [];
     STATE.asteroids = [];
     activePlanets.length = 0;
@@ -119,7 +135,7 @@ export function spawnPlanetsAndAsteroids() {
         const starMat = new THREE.MeshStandardMaterial({
             map: starTex.map,
             emissive: parseInt(starData.color),
-            emissiveIntensity: 0.85,
+            emissiveIntensity: 0.9,
             roughness: 0.2,
             metalness: 0.1
         });
@@ -127,7 +143,13 @@ export function spawnPlanetsAndAsteroids() {
         starMesh.position.set(0, 0, 0);
         scene.add(starMesh);
 
-        const starLight = new THREE.PointLight(parseInt(starData.color), 3, 300, 0.4);
+        // Animated Procedural Solar Corona Plasma Layer
+        const corona = createSunCoronaMesh(starData.size, parseInt(starData.color));
+        scene.add(corona.mesh);
+        activeCoronaMeshes.push(corona.mesh);
+        activeCoronaUpdaters.push(corona.update);
+
+        const starLight = new THREE.PointLight(parseInt(starData.color), 3.2, 400, 0.4);
         starLight.position.set(0, 0, 0);
         scene.add(starLight);
 
@@ -182,6 +204,13 @@ export function spawnPlanetsAndAsteroids() {
         const planetGroup = new THREE.Group();
         planetGroup.position.set(px, 0, pz);
         planetGroup.add(mesh);
+
+        // Rayleigh Atmospheric Scattering Halo
+        if (isHab || isGas) {
+            const atmoHex = isHab ? 0x38bdf8 : parseInt(p.color);
+            const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.5 : 1.15);
+            planetGroup.add(atmoMesh);
+        }
 
         let cloudMesh: THREE.Mesh | null = null;
         if (cloudTexture && isHab) {

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { resizePostProcessing } from './postprocessing';
 
 export let scene: THREE.Scene;
 export let camera: THREE.PerspectiveCamera;
@@ -90,4 +91,5 @@ export function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    resizePostProcessing(window.innerWidth, window.innerHeight);
 }
