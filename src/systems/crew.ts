@@ -142,10 +142,10 @@ export function updateCrewSimulation(dt: number) {
         }
 
         // Panic Sabotage at extreme stress
-        if (c.stress >= 85) {
-            STATE.health = Math.max(0, STATE.health - 1.8 * dt);
-            if (Math.random() < 0.004) {
-                addLogEntry("CREW", `MATRIX-ALARM: ${c.name} greift in Panik die organische Zellwand an! (Zellschaden)`);
+        if (c.stress >= 80) {
+            STATE.health = Math.max(0, STATE.health - 3.2 * dt);
+            if (Math.random() < 0.008) {
+                addLogEntry("CREW", `MATRIX-ALARM: ${c.name} randaliert in Panik und beschädigt Zellwände! Beruhige mit [LEERTASTE]!`);
             }
         }
     });

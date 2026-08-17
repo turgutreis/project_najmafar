@@ -284,25 +284,25 @@ export function updateCollisions(dt: number) {
 
                 // Elastic Repulsion Reflex
                 const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-                const bounceForce = Math.max(20, Math.abs(currentOutwardSpeed) * 0.8 + 14);
+                const bounceForce = Math.max(22, Math.abs(currentOutwardSpeed) * 0.8 + 16);
                 STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
 
                 if (STATE.collisionCooldown === 0) {
                     STATE.collisionCooldown = 1.2;
 
-                    const damage = STATE.mutations.armor.purchased ? 10 : 20;
+                    const damage = STATE.mutations.armor.purchased ? 15 : 30;
                     STATE.health = Math.max(0, STATE.health - damage);
 
                     playCrashSound();
 
                     const stressMult = (STATE.crewBuffs ? STATE.crewBuffs.stressDampening : 1.0);
-                    const stressAmount = (STATE.mutations.o2.purchased ? 7.5 : 15) * stressMult;
+                    const stressAmount = (STATE.mutations.o2.purchased ? 10 : 22) * stressMult;
                     STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + stressAmount));
 
                     if (STATE.mutations.armor.purchased) {
-                        addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall & stößt Schiff elastisch ab.`);
+                        addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall (-15 HP).`);
                     } else {
-                        addLogEntry("SYSTEM", `WARNUNG: Kollision mit ${source.name}! Organischer Abstoß-Reflex schleudert Schiff in den Orbit.`);
+                        addLogEntry("SYSTEM", `WARNUNG: Harter Aufprall auf ${source.name}! Zellhülle schwer beschädigt (-30 HP).`);
                     }
                 }
             }

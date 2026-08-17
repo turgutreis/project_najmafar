@@ -28207,10 +28207,10 @@ function updateCrewSimulation(dt) {
         STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 1.5 * dt);
       }
     }
-    if (c.stress >= 85) {
-      STATE.health = Math.max(0, STATE.health - 1.8 * dt);
-      if (Math.random() < 0.004) {
-        addLogEntry("CREW", `MATRIX-ALARM: ${c.name} greift in Panik die organische Zellwand an! (Zellschaden)`);
+    if (c.stress >= 80) {
+      STATE.health = Math.max(0, STATE.health - 3.2 * dt);
+      if (Math.random() < 0.008) {
+        addLogEntry("CREW", `MATRIX-ALARM: ${c.name} randaliert in Panik und beschädigt Zellwände! Beruhige mit [LEERTASTE]!`);
       }
     }
   });
@@ -28698,14 +28698,14 @@ function initPlanetDefenseFleets() {
       return;
     const spec = p.attributes.species;
     if (spec.techLevel === "Spacefaring" || spec.techLevel === "Hyper-Advanced") {
-      const shipCount = spec.techLevel === "Hyper-Advanced" ? 4 : 2;
+      const shipCount = spec.techLevel === "Hyper-Advanced" ? 6 : 4;
       const planetPos = p.mesh.position;
       for (let i = 0;i < shipCount; i++) {
-        const orbitRadius = p.size * 2.2 + 3 + i * 2.5;
+        const orbitRadius = p.size * 2.2 + 3 + i * 2.2;
         const orbitAngle = i / shipCount * Math.PI * 2;
-        const isCorvette = i === 0 && spec.techLevel === "Hyper-Advanced";
+        const isCorvette = i < (spec.techLevel === "Hyper-Advanced" ? 2 : 1);
         const shipGroup = new Group;
-        const hullGeo = isCorvette ? new ConeGeometry(0.9, 2.2, 5) : new ConeGeometry(0.5, 1.4, 4);
+        const hullGeo = isCorvette ? new ConeGeometry(1, 2.4, 5) : new ConeGeometry(0.55, 1.5, 4);
         hullGeo.rotateX(Math.PI / 2);
         const hullMat = new MeshStandardMaterial({
           color: spec.techLevel === "Hyper-Advanced" ? 6514417 : 14739455,
@@ -28715,14 +28715,14 @@ function initPlanetDefenseFleets() {
         });
         const hullMesh = new Mesh(hullGeo, hullMat);
         shipGroup.add(hullMesh);
-        const engineGeo = new SphereGeometry(isCorvette ? 0.35 : 0.2, 8, 8);
+        const engineGeo = new SphereGeometry(isCorvette ? 0.38 : 0.22, 8, 8);
         const engineMat = new MeshBasicMaterial({
           color: spec.techLevel === "Hyper-Advanced" ? 8490232 : 3718648
         });
         const engineMesh = new Mesh(engineGeo, engineMat);
-        engineMesh.position.set(0, 0, isCorvette ? -1 : -0.7);
+        engineMesh.position.set(0, 0, isCorvette ? -1.1 : -0.75);
         shipGroup.add(engineMesh);
-        const wingGeo = new BoxGeometry(isCorvette ? 2.4 : 1.5, 0.08, 0.6);
+        const wingGeo = new BoxGeometry(isCorvette ? 2.6 : 1.6, 0.08, 0.6);
         const wingMat = new MeshStandardMaterial({
           color: 3359061,
           metalness: 0.8,
@@ -28740,17 +28740,17 @@ function initPlanetDefenseFleets() {
           mesh: shipGroup,
           bodyMesh: hullMesh,
           type: isCorvette ? "corvette" : "interceptor",
-          name: `${spec.name} ${isCorvette ? "Korvette" : "Abfangjäger"} #${i + 1}`,
+          name: `${spec.name} ${isCorvette ? "Schwere Korvette" : "Abfangjäger"} #${i + 1}`,
           position: shipGroup.position,
           velocity: new Vector3(0, 0, 0),
           homePlanet: p,
           orbitRadius,
           orbitAngle,
-          orbitSpeed: 0.35 / Math.sqrt(orbitRadius) * (i % 2 === 0 ? 1 : -1),
-          health: isCorvette ? 60 : 25,
-          maxHealth: isCorvette ? 60 : 25,
+          orbitSpeed: 0.45 / Math.sqrt(orbitRadius) * (i % 2 === 0 ? 1 : -1),
+          health: isCorvette ? 80 : 35,
+          maxHealth: isCorvette ? 80 : 35,
           state: "patrol",
-          attackCooldown: Math.random() * 2,
+          attackCooldown: 0.5 + Math.random() * 1.5,
           alertTimer: 0
         };
         STATE.fleetShips.push(fleetShip);
@@ -28815,19 +28815,19 @@ function updateFleet(dt) {
       const distDiff = dist - desiredDist;
       const tangent = new Vector3(-toPlayer.z, 0, toPlayer.x);
       const accel = new Vector3;
-      accel.addScaledVector(toPlayer, Math.min(20, distDiff * 2.5));
-      accel.addScaledVector(tangent, 15);
+      accel.addScaledVector(toPlayer, Math.min(28, distDiff * 3.5));
+      accel.addScaledVector(tangent, 18);
       ship.velocity.addScaledVector(accel, dt);
-      ship.velocity.clampLength(0, ship.type === "corvette" ? 18 : 26);
-      ship.velocity.multiplyScalar(Math.exp(-0.4 * dt));
+      ship.velocity.clampLength(0, ship.type === "corvette" ? 24 : 34);
+      ship.velocity.multiplyScalar(Math.exp(-0.35 * dt));
       ship.position.addScaledVector(ship.velocity, dt);
       if (ship.velocity.lengthSq() > 0.1) {
         const angle = Math.atan2(ship.velocity.x, ship.velocity.z);
         ship.mesh.rotation.y = angle;
       }
       ship.attackCooldown -= dt;
-      if (ship.attackCooldown <= 0 && dist < 25) {
-        ship.attackCooldown = ship.type === "corvette" ? 1.8 : 2.5;
+      if (ship.attackCooldown <= 0 && dist < 30) {
+        ship.attackCooldown = ship.type === "corvette" ? 1.4 : 1.8;
         fireFleetProjectile(ship, playerPos);
       }
     } else {
@@ -28851,8 +28851,8 @@ function updateFleet(dt) {
       const damage = STATE.mutations.armor.purchased ? proj.damage * 0.5 : proj.damage;
       STATE.health = Math.max(0, STATE.health - damage);
       STATE.crew.forEach((c) => {
-        c.stress = Math.min(100, c.stress + 8.5);
-        c.illusionStability = Math.max(0, c.illusionStability - 12);
+        c.stress = Math.min(100, c.stress + 14);
+        c.illusionStability = Math.max(0, c.illusionStability - 18);
       });
       if (STATE.health <= 0 && !STATE.isGameOver) {
         triggerGameOver("Biologischer Zellkern zerstört durch planetare Abfanggeschwader.");
@@ -28875,7 +28875,7 @@ function updateFleet(dt) {
 }
 function fireFleetProjectile(ship, targetPos) {
   const isCorvette = ship.type === "corvette";
-  const projGeo = new CylinderGeometry(0.12, 0.12, 1.2, 6);
+  const projGeo = new CylinderGeometry(0.14, 0.14, 1.4, 6);
   projGeo.rotateX(Math.PI / 2);
   const projMat = new MeshBasicMaterial({
     color: isCorvette ? 8490232 : 3718648
@@ -28884,18 +28884,18 @@ function fireFleetProjectile(ship, targetPos) {
   projMesh.position.copy(ship.position);
   scene.add(projMesh);
   const dir = new Vector3().subVectors(targetPos, ship.position).normalize();
-  dir.x += (Math.random() - 0.5) * 0.1;
-  dir.z += (Math.random() - 0.5) * 0.1;
+  dir.x += (Math.random() - 0.5) * 0.08;
+  dir.z += (Math.random() - 0.5) * 0.08;
   dir.normalize();
-  const speed = 36;
+  const speed = 44;
   const velocity = dir.clone().multiplyScalar(speed);
   projMesh.rotation.y = Math.atan2(dir.x, dir.z);
   const projectile = {
     mesh: projMesh,
     position: projMesh.position,
     velocity,
-    life: 2.2,
-    damage: isCorvette ? 8 : 4,
+    life: 2.5,
+    damage: isCorvette ? 14 : 7,
     type: isCorvette ? "emp" : "laser"
   };
   STATE.fleetProjectiles.push(projectile);
@@ -30659,20 +30659,20 @@ function updateCollisions(dt) {
         if (STATE.playerGroup)
           STATE.playerGroup.position.copy(STATE.playerPosition);
         const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-        const bounceForce = Math.max(20, Math.abs(currentOutwardSpeed) * 0.8 + 14);
+        const bounceForce = Math.max(22, Math.abs(currentOutwardSpeed) * 0.8 + 16);
         STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
         if (STATE.collisionCooldown === 0) {
           STATE.collisionCooldown = 1.2;
-          const damage = STATE.mutations.armor.purchased ? 10 : 20;
+          const damage = STATE.mutations.armor.purchased ? 15 : 30;
           STATE.health = Math.max(0, STATE.health - damage);
           playCrashSound();
           const stressMult = STATE.crewBuffs ? STATE.crewBuffs.stressDampening : 1;
-          const stressAmount = (STATE.mutations.o2.purchased ? 7.5 : 15) * stressMult;
+          const stressAmount = (STATE.mutations.o2.purchased ? 10 : 22) * stressMult;
           STATE.crew.forEach((c) => c.stress = Math.min(100, c.stress + stressAmount));
           if (STATE.mutations.armor.purchased) {
-            addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall & stößt Schiff elastisch ab.`);
+            addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall (-15 HP).`);
           } else {
-            addLogEntry("SYSTEM", `WARNUNG: Kollision mit ${source.name}! Organischer Abstoß-Reflex schleudert Schiff in den Orbit.`);
+            addLogEntry("SYSTEM", `WARNUNG: Harter Aufprall auf ${source.name}! Zellhülle schwer beschädigt (-30 HP).`);
           }
         }
       }

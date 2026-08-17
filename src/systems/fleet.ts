@@ -19,20 +19,20 @@ export function initPlanetDefenseFleets() {
         const spec = p.attributes.species;
 
         if (spec.techLevel === 'Spacefaring' || spec.techLevel === 'Hyper-Advanced') {
-            const shipCount = spec.techLevel === 'Hyper-Advanced' ? 4 : 2;
+            const shipCount = spec.techLevel === 'Hyper-Advanced' ? 6 : 4;
             const planetPos = p.mesh.position;
 
             for (let i = 0; i < shipCount; i++) {
-                const orbitRadius = p.size * 2.2 + 3.0 + i * 2.5;
+                const orbitRadius = p.size * 2.2 + 3.0 + i * 2.2;
                 const orbitAngle = (i / shipCount) * Math.PI * 2;
-                const isCorvette = (i === 0 && spec.techLevel === 'Hyper-Advanced');
+                const isCorvette = (i < (spec.techLevel === 'Hyper-Advanced' ? 2 : 1));
 
                 const shipGroup = new THREE.Group();
 
                 // 1. Procedural Fighter Hull
                 const hullGeo = isCorvette
-                    ? new THREE.ConeGeometry(0.9, 2.2, 5)
-                    : new THREE.ConeGeometry(0.5, 1.4, 4);
+                    ? new THREE.ConeGeometry(1.0, 2.4, 5)
+                    : new THREE.ConeGeometry(0.55, 1.5, 4);
                 hullGeo.rotateX(Math.PI / 2);
 
                 const hullMat = new THREE.MeshStandardMaterial({
@@ -45,16 +45,16 @@ export function initPlanetDefenseFleets() {
                 shipGroup.add(hullMesh);
 
                 // 2. Glowing Engine Thrusters
-                const engineGeo = new THREE.SphereGeometry(isCorvette ? 0.35 : 0.2, 8, 8);
+                const engineGeo = new THREE.SphereGeometry(isCorvette ? 0.38 : 0.22, 8, 8);
                 const engineMat = new THREE.MeshBasicMaterial({
                     color: spec.techLevel === 'Hyper-Advanced' ? 0x818cf8 : 0x38bdf8
                 });
                 const engineMesh = new THREE.Mesh(engineGeo, engineMat);
-                engineMesh.position.set(0, 0, isCorvette ? -1.0 : -0.7);
+                engineMesh.position.set(0, 0, isCorvette ? -1.1 : -0.75);
                 shipGroup.add(engineMesh);
 
                 // 3. Wing / Antenna Hardpoints
-                const wingGeo = new THREE.BoxGeometry(isCorvette ? 2.4 : 1.5, 0.08, 0.6);
+                const wingGeo = new THREE.BoxGeometry(isCorvette ? 2.6 : 1.6, 0.08, 0.6);
                 const wingMat = new THREE.MeshStandardMaterial({
                     color: 0x334155,
                     metalness: 0.8,
@@ -75,17 +75,17 @@ export function initPlanetDefenseFleets() {
                     mesh: shipGroup,
                     bodyMesh: hullMesh,
                     type: isCorvette ? 'corvette' : 'interceptor',
-                    name: `${spec.name} ${isCorvette ? 'Korvette' : 'Abfangjäger'} #${i + 1}`,
+                    name: `${spec.name} ${isCorvette ? 'Schwere Korvette' : 'Abfangjäger'} #${i + 1}`,
                     position: shipGroup.position,
                     velocity: new THREE.Vector3(0, 0, 0),
                     homePlanet: p,
                     orbitRadius: orbitRadius,
                     orbitAngle: orbitAngle,
-                    orbitSpeed: (0.35 / Math.sqrt(orbitRadius)) * (i % 2 === 0 ? 1 : -1),
-                    health: isCorvette ? 60 : 25,
-                    maxHealth: isCorvette ? 60 : 25,
+                    orbitSpeed: (0.45 / Math.sqrt(orbitRadius)) * (i % 2 === 0 ? 1 : -1),
+                    health: isCorvette ? 80 : 35,
+                    maxHealth: isCorvette ? 80 : 35,
                     state: 'patrol',
-                    attackCooldown: Math.random() * 2,
+                    attackCooldown: 0.5 + Math.random() * 1.5,
                     alertTimer: 0
                 };
 
@@ -177,12 +177,12 @@ export function updateFleet(dt: number) {
             const tangent = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
             const accel = new THREE.Vector3();
 
-            accel.addScaledVector(toPlayer, Math.min(20, distDiff * 2.5));
-            accel.addScaledVector(tangent, 15.0);
+            accel.addScaledVector(toPlayer, Math.min(28, distDiff * 3.5));
+            accel.addScaledVector(tangent, 18.0);
 
             ship.velocity.addScaledVector(accel, dt);
-            ship.velocity.clampLength(0, ship.type === 'corvette' ? 18.0 : 26.0);
-            ship.velocity.multiplyScalar(Math.exp(-0.4 * dt));
+            ship.velocity.clampLength(0, ship.type === 'corvette' ? 24.0 : 34.0);
+            ship.velocity.multiplyScalar(Math.exp(-0.35 * dt));
 
             ship.position.addScaledVector(ship.velocity, dt);
 
@@ -194,8 +194,8 @@ export function updateFleet(dt: number) {
 
             // Weapon Attack Loop
             ship.attackCooldown -= dt;
-            if (ship.attackCooldown <= 0 && dist < 25.0) {
-                ship.attackCooldown = ship.type === 'corvette' ? 1.8 : 2.5;
+            if (ship.attackCooldown <= 0 && dist < 30.0) {
+                ship.attackCooldown = ship.type === 'corvette' ? 1.4 : 1.8;
                 fireFleetProjectile(ship, playerPos);
             }
         } else {
@@ -230,8 +230,8 @@ export function updateFleet(dt: number) {
 
             // EMP Disruption to Dream Matrix
             STATE.crew.forEach(c => {
-                c.stress = Math.min(100, c.stress + 8.5);
-                c.illusionStability = Math.max(0, c.illusionStability - 12.0);
+                c.stress = Math.min(100, c.stress + 14.0);
+                c.illusionStability = Math.max(0, c.illusionStability - 18.0);
             });
 
             if (STATE.health <= 0 && !STATE.isGameOver) {
@@ -259,7 +259,7 @@ export function updateFleet(dt: number) {
 
 function fireFleetProjectile(ship: FleetShip, targetPos: THREE.Vector3) {
     const isCorvette = ship.type === 'corvette';
-    const projGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.2, 6);
+    const projGeo = new THREE.CylinderGeometry(0.14, 0.14, 1.4, 6);
     projGeo.rotateX(Math.PI / 2);
 
     const projMat = new THREE.MeshBasicMaterial({
@@ -271,11 +271,11 @@ function fireFleetProjectile(ship: FleetShip, targetPos: THREE.Vector3) {
 
     const dir = new THREE.Vector3().subVectors(targetPos, ship.position).normalize();
     // Add slight aim imperfection
-    dir.x += (Math.random() - 0.5) * 0.1;
-    dir.z += (Math.random() - 0.5) * 0.1;
+    dir.x += (Math.random() - 0.5) * 0.08;
+    dir.z += (Math.random() - 0.5) * 0.08;
     dir.normalize();
 
-    const speed = 36.0;
+    const speed = 44.0;
     const velocity = dir.clone().multiplyScalar(speed);
 
     projMesh.rotation.y = Math.atan2(dir.x, dir.z);
@@ -284,8 +284,8 @@ function fireFleetProjectile(ship: FleetShip, targetPos: THREE.Vector3) {
         mesh: projMesh,
         position: projMesh.position,
         velocity: velocity,
-        life: 2.2,
-        damage: isCorvette ? 8 : 4,
+        life: 2.5,
+        damage: isCorvette ? 14 : 7,
         type: isCorvette ? 'emp' : 'laser'
     };
 
