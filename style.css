@@ -1177,8 +1177,16 @@ body.game-started .hud-left {
     flex-direction: column;
     text-align: left;
     overflow-y: auto;
+    overflow-x: hidden;
     min-width: 0;
     min-height: 0;
+}
+
+#detail-system-stats {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 2px;
 }
 
 .system-details-panel h3 {
@@ -1190,15 +1198,20 @@ body.game-started .hud-left {
     letter-spacing: 0.05rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     padding-bottom: 6px;
+    word-break: break-word;
 }
 
 .detail-row {
     display: flex;
     justify-content: space-between;
+    align-items: center;
     font-size: 0.78rem;
     margin-bottom: 0.45rem;
     border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
     padding-bottom: 3px;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .detail-row .label {
@@ -1206,11 +1219,14 @@ body.game-started .hud-left {
     text-transform: uppercase;
     letter-spacing: 0.04rem;
     font-size: 0.72rem;
+    flex-shrink: 0;
 }
 
 .detail-row .val {
     color: #f1f5f9;
     font-weight: 600;
+    text-align: right;
+    word-break: break-word;
 }
 
 .planets-list-header {
