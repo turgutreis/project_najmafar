@@ -16,12 +16,17 @@ let mapPanY = 0;
 let isDraggingMap = false;
 let dragStartX = 0;
 let dragStartY = 0;
+let mapMouseX = -1;
+let mapMouseY = -1;
+let mapAnimFrameId: number | null = null;
 
 export function isMapOpen(): boolean {
     return mapOpen;
 }
 
 export function toggleGalaxyMap() {
+    if (!STATE.gameStarted) return;
+
     const overlay = document.getElementById('galaxy-map-overlay');
     if (!overlay) return;
 
@@ -29,94 +34,59 @@ export function toggleGalaxyMap() {
     if (mapOpen) {
         overlay.style.display = 'flex';
         renderGalaxyMap();
-        populateQuickBeaconsList();
+        startGalaxyMapLoop();
     } else {
         overlay.style.display = 'none';
+        stopGalaxyMapLoop();
     }
 }
+
+export function startGalaxyMapLoop() {
+    stopGalaxyMapLoop();
+    function mapLoop() {
+        if (!mapOpen) return;
+        drawGalaxyMap(mapMouseX, mapMouseY);
+        mapAnimFrameId = requestAnimationFrame(mapLoop);
+    }
+    mapAnimFrameId = requestAnimationFrame(mapLoop);
+}
+
+export function stopGalaxyMapLoop() {
+    if (mapAnimFrameId) {
+        cancelAnimationFrame(mapAnimFrameId);
+        mapAnimFrameId = null;
+    }
+}
+
+let drawGalaxyMap: (mouseX: number, mouseY: number) => void = () => {};
 
 export function renderGalaxyMap() {
     const canvas = document.getElementById('galaxy-map-canvas') as HTMLCanvasElement;
     if (!canvas || !STATE.universe) return;
 
-    // Sync pixel resolution with CSS layout size
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) {
-        canvas.width = rect.width * (window.devicePixelRatio || 1);
-        canvas.height = rect.height * (window.devicePixelRatio || 1);
-    }
-
     const ctx = canvas.getContext('2d')!;
+    const rect = canvas.parentNode ? (canvas.parentNode as HTMLElement).getBoundingClientRect() : canvas.getBoundingClientRect();
+    canvas.width = rect.width || 800;
+    canvas.height = rect.height || 600;
+
     const width = canvas.width;
     const height = canvas.height;
+
     const systems = STATE.universe.systems;
-
-    let maxCoord = 10;
-    systems.forEach(s => {
-        if (Math.abs(s.x) > maxCoord) maxCoord = Math.abs(s.x);
-        if (Math.abs(s.z) > maxCoord) maxCoord = Math.abs(s.z);
+    let maxDist = 0;
+    systems.forEach(sys => {
+        const dist = Math.sqrt(sys.x * sys.x + sys.z * sys.z);
+        if (dist > maxDist) maxDist = dist;
     });
+    const baseScale = Math.min(width, height) / (maxDist * 2.3 || 1);
 
-    const baseScale = (Math.min(width, height) / 2 - 40) / maxCoord;
+    if (!selectedSystem) {
+        selectedSystem = systems.find(s => s.id === STATE.currentSystemId) || systems[0];
+    }
+    updateSystemDetails(selectedSystem);
+    populateQuickBeaconsList();
 
-    let mouseX = -9999;
-    let mouseY = -9999;
-
-    canvas.onwheel = (e) => {
-        e.preventDefault();
-        const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-        const newZoom = Math.min(5.0, Math.max(0.6, mapZoom * zoomFactor));
-
-        const rect = canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
-
-        mapPanX = mx - (mx - mapPanX) * (newZoom / mapZoom);
-        mapPanY = my - (my - mapPanY) * (newZoom / mapZoom);
-        mapZoom = newZoom;
-    };
-
-    canvas.onmousedown = (e) => {
-        if (e.button === 0) {
-            isDraggingMap = true;
-            dragStartX = e.clientX - mapPanX;
-            dragStartY = e.clientY - mapPanY;
-        }
-    };
-
-    window.addEventListener('mouseup', () => {
-        isDraggingMap = false;
-    });
-
-    canvas.ondblclick = () => {
-        mapZoom = 1.0;
-        mapPanX = 0;
-        mapPanY = 0;
-    };
-
-    canvas.onmousemove = (e) => {
-        const rect = canvas.getBoundingClientRect();
-        mouseX = e.clientX - rect.left;
-        mouseY = e.clientY - rect.top;
-
-        if (isDraggingMap) {
-            mapPanX = e.clientX - dragStartX;
-            mapPanY = e.clientY - dragStartY;
-        }
-    };
-
-    canvas.onclick = () => {
-        if (hoverSystem) {
-            selectedSystem = hoverSystem;
-            updateSystemDetails(selectedSystem);
-            populateQuickBeaconsList();
-            playSiliconCollectSound();
-        }
-    };
-
-    function drawMap() {
-        if (!mapOpen) return;
-
+    drawGalaxyMap = function(mouseX = -1, mouseY = -1) {
         ctx.fillStyle = '#030712';
         ctx.fillRect(0, 0, width, height);
 
@@ -124,7 +94,7 @@ export function renderGalaxyMap() {
         const centerX = width / 2 + mapPanX;
         const centerY = height / 2 + mapPanY;
 
-        // Grid lines
+        // Grid lines with pan/zoom
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.025)';
         ctx.lineWidth = 1;
         const gridSize = 40 * mapZoom;
@@ -140,6 +110,13 @@ export function renderGalaxyMap() {
             ctx.moveTo(0, y); ctx.lineTo(width, y);
             ctx.stroke();
         }
+
+        // Center Axis
+        ctx.strokeStyle = 'rgba(168, 85, 247, 0.08)';
+        ctx.beginPath();
+        ctx.moveTo(centerX, 0); ctx.lineTo(centerX, height);
+        ctx.moveTo(0, centerY); ctx.lineTo(width, centerY);
+        ctx.stroke();
 
         // Galactic Center Core Glow
         const coreGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 50 * currentScale);
@@ -175,7 +152,7 @@ export function renderGalaxyMap() {
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Pulsing ship halo
+            // Pulsing current ship beacon
             ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -208,12 +185,13 @@ export function renderGalaxyMap() {
             const isActive = STATE.currentSystemId === sys.id;
             const hasSentient = sys.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
 
+            // Only show thought beacon if sentient life exists AND is within the Psionic Sensor Range!
             const showLifeBeacon = hasSentient && inPsionicRange;
 
             if (filterLifeOnly && !showLifeBeacon && !isActive && !isSelected) {
                 ctx.globalAlpha = 0.08;
             } else if (!inWarpRange && !isActive && !isSelected) {
-                ctx.globalAlpha = 0.45;
+                ctx.globalAlpha = 0.45; // Dim out-of-range stars
             } else {
                 ctx.globalAlpha = 1.0;
             }
@@ -227,6 +205,7 @@ export function renderGalaxyMap() {
                 baseSize += 2.5;
             }
 
+            // --- PSIONIC THOUGHT BEACON (Only if within Psionic Range!) ---
             if (showLifeBeacon) {
                 const glowR = (baseSize + 14) * Math.min(1.4, Math.max(0.8, mapZoom));
                 const glowGrad = ctx.createRadialGradient(screenX, screenY, baseSize, screenX, screenY, glowR);
@@ -285,6 +264,7 @@ export function renderGalaxyMap() {
             ctx.arc(screenX, screenY, baseSize, 0, Math.PI * 2);
             ctx.fill();
 
+            // Smart LOD Labeling: Only show labels if selected, active, hovered, or when zoomed in!
             const shouldShowLabel = isSelected || isActive || dist < 10 || (mapZoom > 2.0) || (showLifeBeacon && mapZoom > 1.2);
             if (shouldShowLabel) {
                 ctx.fillStyle = isSelected ? (inWarpRange ? '#e879f9' : '#f87171') : (isActive ? '#38bdf8' : (showLifeBeacon ? '#f8fafc' : '#94a3b8'));
@@ -294,12 +274,111 @@ export function renderGalaxyMap() {
             }
         });
 
-        if (mapOpen) {
-            requestAnimationFrame(drawMap);
+        ctx.globalAlpha = 1.0;
+
+        // Hover tooltip
+        if (hoverSystem) {
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
+            ctx.strokeStyle = 'rgba(217, 70, 239, 0.6)';
+            ctx.lineWidth = 1.5;
+
+            const tooltipX = mouseX + 15;
+            const tooltipY = mouseY - 15;
+            const hasSentient = hoverSystem.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
+            const text = `${hoverSystem.name} (${hoverSystem.star.type}) ${hasSentient ? '🧠 Leben' : ''}`;
+
+            ctx.font = '9.5px Orbitron, sans-serif';
+            const textWidth = ctx.measureText(text).width;
+
+            ctx.beginPath();
+            if (ctx.roundRect) {
+                ctx.roundRect(tooltipX, tooltipY - 18, textWidth + 20, 24, 5);
+            } else {
+                ctx.rect(tooltipX, tooltipY - 18, textWidth + 20, 24);
+            }
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.textAlign = 'left';
+            ctx.fillText(text, tooltipX + 10, tooltipY - 2);
         }
+    };
+
+    // --- INTERACTIVE ZOOM & PAN CONTROLS ---
+    canvas.onwheel = (e) => {
+        e.preventDefault();
+        const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+        const newZoom = Math.min(5.0, Math.max(0.6, mapZoom * zoomFactor));
+        mapZoom = newZoom;
+    };
+
+    canvas.onmousedown = (e) => {
+        isDraggingMap = true;
+        dragStartX = e.clientX - mapPanX;
+        dragStartY = e.clientY - mapPanY;
+    };
+
+    window.addEventListener('mouseup', () => {
+        isDraggingMap = false;
+    });
+
+    canvas.onmousemove = (e) => {
+        const mRect = canvas.getBoundingClientRect();
+        mapMouseX = e.clientX - mRect.left;
+        mapMouseY = e.clientY - mRect.top;
+
+        if (isDraggingMap) {
+            mapPanX = e.clientX - dragStartX;
+            mapPanY = e.clientY - dragStartY;
+        }
+    };
+
+    canvas.ondblclick = () => {
+        mapZoom = 1.0;
+        mapPanX = 0;
+        mapPanY = 0;
+    };
+
+    canvas.onmouseleave = () => {
+        mapMouseX = -1;
+        mapMouseY = -1;
+    };
+
+    canvas.onclick = () => {
+        if (hoverSystem) {
+            selectedSystem = hoverSystem;
+            updateSystemDetails(selectedSystem);
+            populateQuickBeaconsList();
+            playSiliconCollectSound();
+        }
+    };
+
+    // Attach Warp Button & Life Filter listeners once
+    const warpBtn = document.getElementById('warp-btn');
+    if (warpBtn && !warpBtn.dataset.listenerAttached) {
+        warpBtn.dataset.listenerAttached = 'true';
+        warpBtn.addEventListener('click', () => {
+            if (selectedSystem) {
+                warpToSystem(selectedSystem.id);
+            }
+        });
     }
 
-    drawMap();
+    const lifeFilterBtn = document.getElementById('life-filter-toggle-btn');
+    if (lifeFilterBtn && !lifeFilterBtn.dataset.listenerAttached) {
+        lifeFilterBtn.dataset.listenerAttached = 'true';
+        lifeFilterBtn.addEventListener('click', () => {
+            filterLifeOnly = !filterLifeOnly;
+            if (filterLifeOnly) {
+                lifeFilterBtn.classList.add('filter-active');
+                lifeFilterBtn.innerText = "🧠 Gedanken-Echo Filter: AN";
+            } else {
+                lifeFilterBtn.classList.remove('filter-active');
+                lifeFilterBtn.innerText = "🧠 Gedanken-Echo Filter: AUS";
+            }
+        });
+    }
 }
 
 export function populateQuickBeaconsList() {
@@ -352,7 +431,7 @@ export function populateQuickBeaconsList() {
     listEl.querySelectorAll('.beacon-quick-item').forEach(item => {
         item.addEventListener('click', () => {
             const sysId = parseInt(item.getAttribute('data-sys-id') || '0');
-            const target = STATE.universe!.systems.find(s => s.id === sysId);
+            const target = STATE.universe?.systems.find(s => s.id === sysId);
             if (target) {
                 selectedSystem = target;
                 updateSystemDetails(selectedSystem);
@@ -367,7 +446,7 @@ export function updateSystemDetails(sys: StarSystem | null) {
     const placeholder = document.getElementById('detail-system-placeholder');
     const statsPanel = document.getElementById('detail-system-stats');
 
-    if (!sys) {
+    if (!sys || !STATE.universe) {
         if (placeholder) placeholder.style.display = 'flex';
         if (statsPanel) statsPanel.style.display = 'none';
         return;
@@ -376,7 +455,7 @@ export function updateSystemDetails(sys: StarSystem | null) {
     if (placeholder) placeholder.style.display = 'none';
     if (statsPanel) statsPanel.style.display = 'flex';
 
-    const currentSys = STATE.universe!.systems.find(s => s.id === STATE.currentSystemId) || STATE.universe!.systems[0];
+    const currentSys = STATE.universe.systems.find(s => s.id === STATE.currentSystemId) || STATE.universe.systems[0];
     const dx = sys.x - currentSys.x;
     const dz = sys.z - currentSys.z;
     const distFromCur = Math.sqrt(dx * dx + dz * dz);
@@ -384,19 +463,20 @@ export function updateSystemDetails(sys: StarSystem | null) {
     const inPsionicRange = distFromCur <= STATE.psionicRange;
 
     const nameEl = document.getElementById('detail-system-name');
-    const xEl = document.getElementById('val-coord-x');
-    const zEl = document.getElementById('val-coord-z');
-    const typeEl = document.getElementById('val-star-type');
-    const massEl = document.getElementById('val-star-mass');
-    const countEl = document.getElementById('val-planet-count');
+    const coordXEl = document.getElementById('val-coord-x');
+    const coordZEl = document.getElementById('val-coord-z');
+    const starTypeEl = document.getElementById('val-star-type');
+    const starMassEl = document.getElementById('val-star-mass');
+    const planetCountEl = document.getElementById('val-planet-count');
 
     if (nameEl) nameEl.innerText = sys.name;
-    if (xEl) xEl.innerText = String(sys.x);
-    if (zEl) zEl.innerText = String(sys.z);
-    if (typeEl) typeEl.innerText = sys.star.type;
-    if (massEl) massEl.innerText = sys.star.mass + " SM";
-    if (countEl) countEl.innerText = String(sys.planets.length);
+    if (coordXEl) coordXEl.innerText = String(sys.x);
+    if (coordZEl) coordZEl.innerText = String(sys.z);
+    if (starTypeEl) starTypeEl.innerText = sys.star.type;
+    if (starMassEl) starMassEl.innerText = sys.star.mass + " SM";
+    if (planetCountEl) planetCountEl.innerText = String(sys.planets.length);
 
+    // Update Psionic Resonance details
     const hasSentient = sys.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
     const resRow = document.getElementById('detail-psionic-resonance');
     if (resRow) {
@@ -482,6 +562,7 @@ export function warpToSystem(systemId: number) {
         return;
     }
 
+    // Deduct calculated Warp Bio-Energy cost
     STATE.bioEnergy = Math.max(0, STATE.bioEnergy - warpCost);
 
     const warpOverlay = document.getElementById('warp-overlay');
@@ -490,16 +571,21 @@ export function warpToSystem(systemId: number) {
         warpOverlay.style.opacity = '1';
     }
 
+    // Stop engine rumble during warp
     setThrusterSound(false);
+    // Play heavy warp crash/rumble audio feedback
     playCrashSound();
 
+    // Fast 600ms hyperspace jump
     setTimeout(() => {
         STATE.currentSystemId = systemId;
         const activeSystem = STATE.universe!.systems[systemId];
 
+        // Clear current and spawn new
         clearActiveSystem();
         spawnPlanetsAndAsteroids();
 
+        // Reset player
         STATE.playerPosition.set(0, 0, 50);
         STATE.playerVelocity.set(0, 0, 0);
         if (STATE.playerGroup) {
@@ -508,6 +594,7 @@ export function warpToSystem(systemId: number) {
 
         addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} (${dist.toFixed(0)} LJ, -${warpCost}% Energie) stabilisiert.`);
 
+        // Close panels
         if (warpOverlay) {
             warpOverlay.style.display = 'none';
         }

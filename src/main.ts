@@ -4,7 +4,7 @@ import { initScene, starfield, renderer, scene, camera } from './engine/scene';
 import { initTrajectory, updateTrajectory } from './engine/trajectory';
 import { createPlayerMesh, playerMesh, playerGlowMesh, gravityCircles } from './procedural/meshes';
 import { setupControls, processInput } from './input/controls';
-import { checkUniverseData } from './systems/universe';
+import { checkUniverseData, clearActiveSystem, spawnPlanetsAndAsteroids } from './systems/universe';
 import { updatePhysics } from './engine/physics';
 import { updateScanning, triggerScanStart } from './systems/scanner';
 import { updateHarvesting, triggerHarvestStart } from './systems/harvesting';
@@ -12,7 +12,7 @@ import { updateAbduction, triggerAbductStart } from './systems/abduction';
 import { updateCrewSimulation, renderCrewUI } from './systems/crew';
 import { updateMinimap, updateSonarWave, initHUD, addLogEntry } from './ui/hud';
 import { initDeckUI, updateMutationUI } from './ui/deck';
-import { toggleGalaxyMap, warpToSystem } from './systems/galaxy-map';
+import { toggleGalaxyMap, warpToSystem, isMapOpen } from './systems/galaxy-map';
 import { toggleMusic, isMusicPlaying, isMusicUserMuted } from './engine/audio';
 
 let lastTime = 0;
@@ -128,7 +128,18 @@ function setupMenuListeners() {
         startBtn.addEventListener('click', () => {
             mainMenu.classList.add('menu-hidden');
             STATE.gameStarted = true;
+            document.body.classList.add('game-started');
             if (resumeBtn) resumeBtn.style.display = 'block';
+
+            if (STATE.universe) {
+                clearActiveSystem();
+                spawnPlanetsAndAsteroids();
+                STATE.playerPosition.set(0, 0, 50);
+                STATE.playerVelocity.set(0, 0, 0);
+                if (STATE.playerGroup) {
+                    STATE.playerGroup.position.set(0, 0, 50);
+                }
+            }
 
             if (!isMusicPlaying() && !isMusicUserMuted()) {
                 toggleMusic(true);
@@ -147,6 +158,17 @@ function setupMenuListeners() {
 
     window.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
+            const howToModal = document.getElementById('how-to-play-modal');
+            if (howToModal && howToModal.style.display === 'flex') {
+                howToModal.style.display = 'none';
+                return;
+            }
+
+            if (isMapOpen()) {
+                toggleGalaxyMap();
+                return;
+            }
+
             if (!mainMenu) return;
             const runningInElectron = typeof (window as any).api !== 'undefined';
             if (STATE.gameStarted) {

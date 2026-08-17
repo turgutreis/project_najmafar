@@ -27939,10 +27939,15 @@ var mapPanY = 0;
 var isDraggingMap = false;
 var dragStartX = 0;
 var dragStartY = 0;
+var mapMouseX = -1;
+var mapMouseY = -1;
+var mapAnimFrameId = null;
 function isMapOpen() {
   return mapOpen;
 }
 function toggleGalaxyMap() {
+  if (!STATE.gameStarted)
+    return;
   const overlay = document.getElementById("galaxy-map-overlay");
   if (!overlay)
     return;
@@ -27950,80 +27955,53 @@ function toggleGalaxyMap() {
   if (mapOpen) {
     overlay.style.display = "flex";
     renderGalaxyMap();
-    populateQuickBeaconsList();
+    startGalaxyMapLoop();
   } else {
     overlay.style.display = "none";
+    stopGalaxyMapLoop();
   }
 }
+function startGalaxyMapLoop() {
+  stopGalaxyMapLoop();
+  function mapLoop() {
+    if (!mapOpen)
+      return;
+    drawGalaxyMap(mapMouseX, mapMouseY);
+    mapAnimFrameId = requestAnimationFrame(mapLoop);
+  }
+  mapAnimFrameId = requestAnimationFrame(mapLoop);
+}
+function stopGalaxyMapLoop() {
+  if (mapAnimFrameId) {
+    cancelAnimationFrame(mapAnimFrameId);
+    mapAnimFrameId = null;
+  }
+}
+var drawGalaxyMap = () => {};
 function renderGalaxyMap() {
   const canvas = document.getElementById("galaxy-map-canvas");
   if (!canvas || !STATE.universe)
     return;
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width > 0 && rect.height > 0) {
-    canvas.width = rect.width * (window.devicePixelRatio || 1);
-    canvas.height = rect.height * (window.devicePixelRatio || 1);
-  }
   const ctx = canvas.getContext("2d");
+  const rect = canvas.parentNode ? canvas.parentNode.getBoundingClientRect() : canvas.getBoundingClientRect();
+  canvas.width = rect.width || 800;
+  canvas.height = rect.height || 600;
   const width = canvas.width;
   const height = canvas.height;
   const systems = STATE.universe.systems;
-  let maxCoord = 10;
-  systems.forEach((s) => {
-    if (Math.abs(s.x) > maxCoord)
-      maxCoord = Math.abs(s.x);
-    if (Math.abs(s.z) > maxCoord)
-      maxCoord = Math.abs(s.z);
+  let maxDist = 0;
+  systems.forEach((sys) => {
+    const dist = Math.sqrt(sys.x * sys.x + sys.z * sys.z);
+    if (dist > maxDist)
+      maxDist = dist;
   });
-  const baseScale = (Math.min(width, height) / 2 - 40) / maxCoord;
-  let mouseX = -9999;
-  let mouseY = -9999;
-  canvas.onwheel = (e) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
-    const newZoom = Math.min(5, Math.max(0.6, mapZoom * zoomFactor));
-    const rect2 = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect2.left;
-    const my = e.clientY - rect2.top;
-    mapPanX = mx - (mx - mapPanX) * (newZoom / mapZoom);
-    mapPanY = my - (my - mapPanY) * (newZoom / mapZoom);
-    mapZoom = newZoom;
-  };
-  canvas.onmousedown = (e) => {
-    if (e.button === 0) {
-      isDraggingMap = true;
-      dragStartX = e.clientX - mapPanX;
-      dragStartY = e.clientY - mapPanY;
-    }
-  };
-  window.addEventListener("mouseup", () => {
-    isDraggingMap = false;
-  });
-  canvas.ondblclick = () => {
-    mapZoom = 1;
-    mapPanX = 0;
-    mapPanY = 0;
-  };
-  canvas.onmousemove = (e) => {
-    const rect2 = canvas.getBoundingClientRect();
-    mouseX = e.clientX - rect2.left;
-    mouseY = e.clientY - rect2.top;
-    if (isDraggingMap) {
-      mapPanX = e.clientX - dragStartX;
-      mapPanY = e.clientY - dragStartY;
-    }
-  };
-  canvas.onclick = () => {
-    if (hoverSystem) {
-      selectedSystem = hoverSystem;
-      updateSystemDetails(selectedSystem);
-      populateQuickBeaconsList();
-      playSiliconCollectSound();
-    }
-  };
-  function drawMap() {
-    if (!mapOpen)
-      return;
+  const baseScale = Math.min(width, height) / (maxDist * 2.3 || 1);
+  if (!selectedSystem) {
+    selectedSystem = systems.find((s) => s.id === STATE.currentSystemId) || systems[0];
+  }
+  updateSystemDetails(selectedSystem);
+  populateQuickBeaconsList();
+  drawGalaxyMap = function(mouseX = -1, mouseY = -1) {
     ctx.fillStyle = "#030712";
     ctx.fillRect(0, 0, width, height);
     const currentScale = baseScale * mapZoom;
@@ -28046,6 +28024,13 @@ function renderGalaxyMap() {
       ctx.lineTo(width, y);
       ctx.stroke();
     }
+    ctx.strokeStyle = "rgba(168, 85, 247, 0.08)";
+    ctx.beginPath();
+    ctx.moveTo(centerX, 0);
+    ctx.lineTo(centerX, height);
+    ctx.moveTo(0, centerY);
+    ctx.lineTo(width, centerY);
+    ctx.stroke();
     const coreGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 50 * currentScale);
     coreGrad.addColorStop(0, "rgba(168, 85, 247, 0.15)");
     coreGrad.addColorStop(1, "rgba(168, 85, 247, 0)");
@@ -28176,11 +28161,93 @@ function renderGalaxyMap() {
         ctx.fillText(sys.name, screenX, screenY - baseSize - 4);
       }
     });
-    if (mapOpen) {
-      requestAnimationFrame(drawMap);
+    ctx.globalAlpha = 1;
+    if (hoverSystem) {
+      ctx.fillStyle = "rgba(15, 23, 42, 0.96)";
+      ctx.strokeStyle = "rgba(217, 70, 239, 0.6)";
+      ctx.lineWidth = 1.5;
+      const tooltipX = mouseX + 15;
+      const tooltipY = mouseY - 15;
+      const hasSentient = hoverSystem.planets.some((p) => p.type === "Habitable" || p.species && p.species.hasSentient);
+      const text = `${hoverSystem.name} (${hoverSystem.star.type}) ${hasSentient ? "\uD83E\uDDE0 Leben" : ""}`;
+      ctx.font = "9.5px Orbitron, sans-serif";
+      const textWidth = ctx.measureText(text).width;
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(tooltipX, tooltipY - 18, textWidth + 20, 24, 5);
+      } else {
+        ctx.rect(tooltipX, tooltipY - 18, textWidth + 20, 24);
+      }
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "left";
+      ctx.fillText(text, tooltipX + 10, tooltipY - 2);
     }
+  };
+  canvas.onwheel = (e) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+    const newZoom = Math.min(5, Math.max(0.6, mapZoom * zoomFactor));
+    mapZoom = newZoom;
+  };
+  canvas.onmousedown = (e) => {
+    isDraggingMap = true;
+    dragStartX = e.clientX - mapPanX;
+    dragStartY = e.clientY - mapPanY;
+  };
+  window.addEventListener("mouseup", () => {
+    isDraggingMap = false;
+  });
+  canvas.onmousemove = (e) => {
+    const mRect = canvas.getBoundingClientRect();
+    mapMouseX = e.clientX - mRect.left;
+    mapMouseY = e.clientY - mRect.top;
+    if (isDraggingMap) {
+      mapPanX = e.clientX - dragStartX;
+      mapPanY = e.clientY - dragStartY;
+    }
+  };
+  canvas.ondblclick = () => {
+    mapZoom = 1;
+    mapPanX = 0;
+    mapPanY = 0;
+  };
+  canvas.onmouseleave = () => {
+    mapMouseX = -1;
+    mapMouseY = -1;
+  };
+  canvas.onclick = () => {
+    if (hoverSystem) {
+      selectedSystem = hoverSystem;
+      updateSystemDetails(selectedSystem);
+      populateQuickBeaconsList();
+      playSiliconCollectSound();
+    }
+  };
+  const warpBtn = document.getElementById("warp-btn");
+  if (warpBtn && !warpBtn.dataset.listenerAttached) {
+    warpBtn.dataset.listenerAttached = "true";
+    warpBtn.addEventListener("click", () => {
+      if (selectedSystem) {
+        warpToSystem(selectedSystem.id);
+      }
+    });
   }
-  drawMap();
+  const lifeFilterBtn = document.getElementById("life-filter-toggle-btn");
+  if (lifeFilterBtn && !lifeFilterBtn.dataset.listenerAttached) {
+    lifeFilterBtn.dataset.listenerAttached = "true";
+    lifeFilterBtn.addEventListener("click", () => {
+      filterLifeOnly = !filterLifeOnly;
+      if (filterLifeOnly) {
+        lifeFilterBtn.classList.add("filter-active");
+        lifeFilterBtn.innerText = "\uD83E\uDDE0 Gedanken-Echo Filter: AN";
+      } else {
+        lifeFilterBtn.classList.remove("filter-active");
+        lifeFilterBtn.innerText = "\uD83E\uDDE0 Gedanken-Echo Filter: AUS";
+      }
+    });
+  }
 }
 function populateQuickBeaconsList() {
   const listEl = document.getElementById("psionic-beacons-quick-list");
@@ -28224,7 +28291,7 @@ function populateQuickBeaconsList() {
   listEl.querySelectorAll(".beacon-quick-item").forEach((item) => {
     item.addEventListener("click", () => {
       const sysId = parseInt(item.getAttribute("data-sys-id") || "0");
-      const target = STATE.universe.systems.find((s) => s.id === sysId);
+      const target = STATE.universe?.systems.find((s) => s.id === sysId);
       if (target) {
         selectedSystem = target;
         updateSystemDetails(selectedSystem);
@@ -28237,7 +28304,7 @@ function populateQuickBeaconsList() {
 function updateSystemDetails(sys) {
   const placeholder = document.getElementById("detail-system-placeholder");
   const statsPanel = document.getElementById("detail-system-stats");
-  if (!sys) {
+  if (!sys || !STATE.universe) {
     if (placeholder)
       placeholder.style.display = "flex";
     if (statsPanel)
@@ -28255,23 +28322,23 @@ function updateSystemDetails(sys) {
   const inWarpRange = distFromCur <= STATE.warpRange;
   const inPsionicRange = distFromCur <= STATE.psionicRange;
   const nameEl = document.getElementById("detail-system-name");
-  const xEl = document.getElementById("val-coord-x");
-  const zEl = document.getElementById("val-coord-z");
-  const typeEl = document.getElementById("val-star-type");
-  const massEl = document.getElementById("val-star-mass");
-  const countEl = document.getElementById("val-planet-count");
+  const coordXEl = document.getElementById("val-coord-x");
+  const coordZEl = document.getElementById("val-coord-z");
+  const starTypeEl = document.getElementById("val-star-type");
+  const starMassEl = document.getElementById("val-star-mass");
+  const planetCountEl = document.getElementById("val-planet-count");
   if (nameEl)
     nameEl.innerText = sys.name;
-  if (xEl)
-    xEl.innerText = String(sys.x);
-  if (zEl)
-    zEl.innerText = String(sys.z);
-  if (typeEl)
-    typeEl.innerText = sys.star.type;
-  if (massEl)
-    massEl.innerText = sys.star.mass + " SM";
-  if (countEl)
-    countEl.innerText = String(sys.planets.length);
+  if (coordXEl)
+    coordXEl.innerText = String(sys.x);
+  if (coordZEl)
+    coordZEl.innerText = String(sys.z);
+  if (starTypeEl)
+    starTypeEl.innerText = sys.star.type;
+  if (starMassEl)
+    starMassEl.innerText = sys.star.mass + " SM";
+  if (planetCountEl)
+    planetCountEl.innerText = String(sys.planets.length);
   const hasSentient = sys.planets.some((p) => p.type === "Habitable" || p.species && p.species.hasSentient);
   const resRow = document.getElementById("detail-psionic-resonance");
   if (resRow) {
@@ -28329,6 +28396,51 @@ function updateSystemDetails(sys) {
       warpBtn.style.pointerEvents = "auto";
     }
   }
+}
+function warpToSystem(systemId) {
+  if (!STATE.universe)
+    return;
+  const currentSys = STATE.universe.systems.find((s) => s.id === STATE.currentSystemId) || STATE.universe.systems[0];
+  const targetSys = STATE.universe.systems.find((s) => s.id === systemId);
+  if (!targetSys)
+    return;
+  const dx = targetSys.x - currentSys.x;
+  const dz = targetSys.z - currentSys.z;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  if (dist > STATE.warpRange) {
+    addLogEntry("SYSTEM", `Hypersprung abgebrochen: Distanz zu ${targetSys.name} (${dist.toFixed(0)} LJ) überschreitet maximale Faltungsreichweite (${STATE.warpRange} LJ)!`);
+    return;
+  }
+  const costMult = STATE.mutations.folddrive && STATE.mutations.folddrive.purchased ? 0.7 : 1;
+  const warpCost = Math.round((15 + dist * 0.15) * costMult);
+  if (STATE.bioEnergy < warpCost) {
+    addLogEntry("SYSTEM", `Hypersprung abgebrochen: Nicht genügend Bio-Energie (${warpCost}% benötigt, aktuell ${Math.round(STATE.bioEnergy)}%)!`);
+    return;
+  }
+  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - warpCost);
+  const warpOverlay = document.getElementById("warp-overlay");
+  if (warpOverlay) {
+    warpOverlay.style.display = "flex";
+    warpOverlay.style.opacity = "1";
+  }
+  setThrusterSound(false);
+  playCrashSound();
+  setTimeout(() => {
+    STATE.currentSystemId = systemId;
+    const activeSystem = STATE.universe.systems[systemId];
+    clearActiveSystem();
+    spawnPlanetsAndAsteroids();
+    STATE.playerPosition.set(0, 0, 50);
+    STATE.playerVelocity.set(0, 0, 0);
+    if (STATE.playerGroup) {
+      STATE.playerGroup.position.set(0, 0, 50);
+    }
+    addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} (${dist.toFixed(0)} LJ, -${warpCost}% Energie) stabilisiert.`);
+    if (warpOverlay) {
+      warpOverlay.style.display = "none";
+    }
+    toggleGalaxyMap();
+  }, 600);
 }
 
 // src/systems/crew.ts
@@ -29609,8 +29721,18 @@ function setupMenuListeners() {
     startBtn.addEventListener("click", () => {
       mainMenu.classList.add("menu-hidden");
       STATE.gameStarted = true;
+      document.body.classList.add("game-started");
       if (resumeBtn)
         resumeBtn.style.display = "block";
+      if (STATE.universe) {
+        clearActiveSystem();
+        spawnPlanetsAndAsteroids();
+        STATE.playerPosition.set(0, 0, 50);
+        STATE.playerVelocity.set(0, 0, 0);
+        if (STATE.playerGroup) {
+          STATE.playerGroup.position.set(0, 0, 50);
+        }
+      }
       if (!isMusicPlaying() && !isMusicUserMuted()) {
         toggleMusic(true);
       }
@@ -29625,6 +29747,15 @@ function setupMenuListeners() {
   }
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
+      const howToModal2 = document.getElementById("how-to-play-modal");
+      if (howToModal2 && howToModal2.style.display === "flex") {
+        howToModal2.style.display = "none";
+        return;
+      }
+      if (isMapOpen()) {
+        toggleGalaxyMap();
+        return;
+      }
       if (!mainMenu)
         return;
       const runningInElectron2 = typeof window.api !== "undefined";
