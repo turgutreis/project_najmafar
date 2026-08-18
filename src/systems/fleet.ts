@@ -1,82 +1,74 @@
 import * as THREE from 'three';
-import { STATE, activePlanets } from '../core/state';
+import { STATE } from '../core/state';
 import { scene } from '../engine/scene';
-import { FleetShip, FleetProjectile, PlanetEntry } from '../types/game';
 import { addLogEntry } from '../ui/hud';
-import { playCrashSound, playSiliconCollectSound } from '../engine/audio';
-import { triggerGameOver } from '../engine/game-over';
+import { playCrashSound, playSiliconCollectSound, playEmpChargeSound } from '../engine/audio';
 import { empLight } from '../procedural/meshes';
+import { FleetShip, FleetProjectile, PlanetEntry } from '../types/game';
 
 let shockwaveMesh: THREE.Mesh | null = null;
 let shockwaveTimer = 0;
 
-export function initPlanetDefenseFleets() {
+export const initPlanetDefenseFleets = spawnSystemFleet;
+
+export function spawnSystemFleet(systemInput?: any) {
     clearFleet();
 
-    let shipIdCounter = 1;
+    const system = systemInput || (STATE.universe && STATE.universe.systems ? STATE.universe.systems[STATE.currentSystemId] : null);
+    if (!system || !system.planets) return;
 
-    activePlanets.forEach(p => {
-        if (!p.attributes || !p.attributes.species) return;
-        const spec = p.attributes.species;
+    system.planets.forEach((p: PlanetEntry) => {
+        const hasPop = p.attributes && p.attributes.species && p.attributes.species.population > 0;
+        const tech = p.attributes && p.attributes.species ? p.attributes.species.techLevel : 'Primitive';
 
-        if (spec.techLevel === 'Spacefaring' || spec.techLevel === 'Hyper-Advanced') {
-            const shipCount = spec.techLevel === 'Hyper-Advanced' ? 6 : 4;
-            const planetPos = p.mesh.position;
+        if (hasPop && (tech === 'Spacefaring' || tech === 'Hyper-Advanced' || tech === 'Industrial')) {
+            const shipCount = tech === 'Hyper-Advanced' ? 3 : (tech === 'Spacefaring' ? 2 : 1);
 
             for (let i = 0; i < shipCount; i++) {
-                const orbitRadius = p.size * 2.2 + 3.0 + i * 2.2;
-                const orbitAngle = (i / shipCount) * Math.PI * 2;
-                const isCorvette = (i < (spec.techLevel === 'Hyper-Advanced' ? 2 : 1));
-
+                const isCorvette = i === 0 && tech !== 'Industrial';
                 const shipGroup = new THREE.Group();
 
-                // 1. Procedural Fighter Hull
-                const hullGeo = isCorvette
-                    ? new THREE.ConeGeometry(1.0, 2.4, 5)
-                    : new THREE.ConeGeometry(0.55, 1.5, 4);
-                hullGeo.rotateX(Math.PI / 2);
+                // Geometry & Aesthetics
+                const length = isCorvette ? 2.4 : 1.6;
+                const width = isCorvette ? 1.4 : 1.0;
+                const height = isCorvette ? 0.8 : 0.5;
 
-                const hullMat = new THREE.MeshStandardMaterial({
-                    color: spec.techLevel === 'Hyper-Advanced' ? 0x6366f1 : 0xe0e7ff,
-                    metalness: 0.9,
-                    roughness: 0.2,
-                    flatShading: true
+                const geo = new THREE.ConeGeometry(width, length, 5);
+                geo.rotateZ(-Math.PI / 2); // Point forward (+X)
+                geo.scale(1.0, height / width, 1.0);
+
+                const origColor = isCorvette ? 0xe11d48 : 0x38bdf8;
+                const origEmissive = isCorvette ? 0x881337 : 0x0369a1;
+
+                const mat = new THREE.MeshStandardMaterial({
+                    color: origColor,
+                    emissive: origEmissive,
+                    emissiveIntensity: 0.8,
+                    roughness: 0.25,
+                    metalness: 0.85
                 });
-                const hullMesh = new THREE.Mesh(hullGeo, hullMat);
-                shipGroup.add(hullMesh);
 
-                // 2. Glowing Engine Thrusters
-                const engineGeo = new THREE.SphereGeometry(isCorvette ? 0.38 : 0.22, 8, 8);
-                const engineMat = new THREE.MeshBasicMaterial({
-                    color: spec.techLevel === 'Hyper-Advanced' ? 0x818cf8 : 0x38bdf8
-                });
-                const engineMesh = new THREE.Mesh(engineGeo, engineMat);
-                engineMesh.position.set(0, 0, isCorvette ? -1.1 : -0.75);
-                shipGroup.add(engineMesh);
+                const bodyMesh = new THREE.Mesh(geo, mat);
+                shipGroup.add(bodyMesh);
 
-                // 3. Wing / Antenna Hardpoints
-                const wingGeo = new THREE.BoxGeometry(isCorvette ? 2.6 : 1.6, 0.08, 0.6);
-                const wingMat = new THREE.MeshStandardMaterial({
-                    color: 0x334155,
-                    metalness: 0.8,
-                    roughness: 0.4
-                });
-                const wingMesh = new THREE.Mesh(wingGeo, wingMat);
-                wingMesh.position.set(0, 0, -0.2);
-                shipGroup.add(wingMesh);
+                // Initial Orbital Placement around Planet
+                const orbitRadius = p.size + 4.0 + i * 2.5;
+                const orbitAngle = (i * (Math.PI * 2 / shipCount)) + Math.random() * 0.5;
 
-                const sx = planetPos.x + Math.cos(orbitAngle) * orbitRadius;
-                const sz = planetPos.z + Math.sin(orbitAngle) * orbitRadius;
-                shipGroup.position.set(sx, 0, sz);
+                shipGroup.position.set(
+                    p.mesh.position.x + Math.cos(orbitAngle) * orbitRadius,
+                    0,
+                    p.mesh.position.z + Math.sin(orbitAngle) * orbitRadius
+                );
 
                 scene.add(shipGroup);
 
                 const fleetShip: FleetShip = {
-                    id: shipIdCounter++,
+                    id: Date.now() + Math.random(),
                     mesh: shipGroup,
-                    bodyMesh: hullMesh,
+                    bodyMesh: bodyMesh,
                     type: isCorvette ? 'corvette' : 'interceptor',
-                    name: `${spec.name} ${isCorvette ? 'Schwere Korvette' : 'Abfangjäger'} #${i + 1}`,
+                    name: `${isCorvette ? 'Schwere Korvette' : 'Abfangjäger'} ${p.name.substring(0, 4)}-${i + 1}`,
                     position: shipGroup.position,
                     velocity: new THREE.Vector3(0, 0, 0),
                     homePlanet: p,
@@ -86,6 +78,7 @@ export function initPlanetDefenseFleets() {
                     health: isCorvette ? 80 : 35,
                     maxHealth: isCorvette ? 80 : 35,
                     state: 'patrol',
+                    originalColor: origColor,
                     attackCooldown: 0.5 + Math.random() * 1.5,
                     alertTimer: 0
                 };
@@ -101,48 +94,65 @@ export function initPlanetDefenseFleets() {
 }
 
 export function updateFleet(dt: number) {
-    // 1. Update Bio-Discharge Cooldown & Continuous Expanding Visual Shockwave
+    // 1. Update Bio-Discharge Cooldown & Charging Phase
     if (STATE.bioDischargeCooldown > 0) {
         STATE.bioDischargeCooldown = Math.max(0, STATE.bioDischargeCooldown - dt);
     }
+
+    if (STATE.empCharging) {
+        STATE.empChargeTimer = (STATE.empChargeTimer || 0) - dt;
+        if (empLight) {
+            empLight.intensity = Math.sin(Date.now() * 0.04) * 3.5 + 2.0;
+        }
+        if (STATE.empChargeTimer <= 0) {
+            STATE.empCharging = false;
+            dischargeEmpShockwave();
+        }
+    }
+
     updateEmpHUD();
 
+    // 2. Continuous Shockwave Expansion & Hit Detection
     if (shockwaveMesh && shockwaveTimer > 0) {
         shockwaveTimer -= dt;
         const totalDuration = 0.6;
         const progress = Math.min(1.0, 1.0 - (shockwaveTimer / totalDuration));
-        const maxRadius = 30.0;
+        const maxRadius = 28.0;
         const currentRadius = 2.0 + progress * maxRadius;
 
         shockwaveMesh.scale.set(currentRadius, 1, currentRadius);
-        (shockwaveMesh.material as THREE.Material).opacity = (1.0 - progress) * 0.85;
+        (shockwaveMesh.material as THREE.Material).opacity = (1.0 - progress) * 0.9;
 
-        // CONTINUOUS SHOCKWAVE HIT DETECTION: Any active ship caught in the expanding ring gets disabled!
         const shockOrigin = shockwaveMesh.position;
-        let newlyDisabled = 0;
+        let newlyStunned = 0;
 
         STATE.fleetShips.forEach(ship => {
-            if (ship.state !== 'disabled') {
+            if (ship.state !== 'disabled' && ship.state !== 'stunned') {
                 const distToShock = ship.position.distanceTo(shockOrigin);
                 if (distToShock <= currentRadius + 3.0) {
-                    ship.state = 'disabled';
+                    const isCoreHit = distToShock <= 13.0;
+                    ship.state = 'stunned';
+                    ship.stunMaxDuration = isCoreHit ? 5.5 : 2.5;
+                    ship.stunTimer = ship.stunMaxDuration;
+                    ship.health = Math.max(1, ship.health - (isCoreHit ? 25 : 10));
+
                     const pushDir = new THREE.Vector3().subVectors(ship.position, shockOrigin).normalize();
-                    ship.velocity.copy(pushDir.multiplyScalar(16));
-                    (ship.bodyMesh.material as THREE.MeshStandardMaterial).color.setHex(0x475569);
-                    (ship.bodyMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
-                    newlyDisabled++;
+                    ship.velocity.copy(pushDir.multiplyScalar(isCoreHit ? 15 : 9));
+
+                    (ship.bodyMesh.material as THREE.MeshStandardMaterial).color.setHex(0x334155);
+                    (ship.bodyMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x06b6d4);
+
+                    newlyStunned++;
                 }
             }
         });
 
-        if (newlyDisabled > 0) {
+        if (newlyStunned > 0) {
             playCrashSound();
-            playSiliconCollectSound();
-            addLogEntry("CREW", `Capt. Miller: 'EMP-Welle hat ${newlyDisabled} Abfangjäger erfasst! Systeme lahmgelegt!'`);
-            addLogEntry("SYSTEM", `${newlyDisabled} Abfangjäger deaktiviert. Wrackteile können assimiliert werden [E].`);
+            addLogEntry("CREW", `Capt. Miller: 'EMP hat ${newlyStunned} Schiffe erfasst! Systeme für 5s überlastet – jetzt assimilieren [E]!'`);
         }
 
-        // DESTROY ENEMY PROJECTILES IN SHOCKWAVE RADIUS
+        // Destroy hostile projectiles caught in shockwave
         for (let i = STATE.fleetProjectiles.length - 1; i >= 0; i--) {
             const proj = STATE.fleetProjectiles[i];
             if (proj.position.distanceTo(shockOrigin) <= currentRadius + 2.5) {
@@ -163,22 +173,35 @@ export function updateFleet(dt: number) {
 
     const playerPos = STATE.playerPosition;
 
-    // 2. Update Fleet Ships AI & Movement
+    // 3. Update Fleet Ships AI & Stun Timers
     STATE.fleetShips.forEach(ship => {
         if (ship.state === 'disabled') {
-            // Drifting inert wreckage
             ship.position.addScaledVector(ship.velocity, dt);
             ship.velocity.multiplyScalar(Math.exp(-0.8 * dt));
             ship.mesh.rotation.y += 0.8 * dt;
             ship.mesh.rotation.z += 0.5 * dt;
+            return;
+        }
 
-            // Check if player is near to salvage (Assimilate)
-            const dPlayer = ship.position.distanceTo(playerPos);
-            if (dPlayer < 6.0) {
-                // Salvageable prompt
-                if (Math.random() < 0.02) {
-                    addLogEntry("SYSTEM", `Deaktiviertes Wrack von ${ship.name} in Reichweite. Drücke [E] zum Absorbieren!`);
-                }
+        if (ship.state === 'stunned') {
+            ship.stunTimer = (ship.stunTimer || 0) - dt;
+            ship.position.addScaledVector(ship.velocity, dt);
+            ship.velocity.multiplyScalar(Math.exp(-1.4 * dt));
+            ship.mesh.rotation.y += 1.2 * dt;
+            ship.mesh.rotation.z += 0.6 * dt;
+
+            // Sparkle / electrical discharge flicker
+            const flicker = Math.sin(Date.now() * 0.04) > 0 ? 0x06b6d4 : 0x000000;
+            (ship.bodyMesh.material as THREE.MeshStandardMaterial).emissive.setHex(flicker);
+
+            if (ship.stunTimer <= 0) {
+                // Systems reboot!
+                ship.state = 'intercept';
+                const origCol = ship.originalColor || (ship.type === 'corvette' ? 0xe11d48 : 0x38bdf8);
+                const origEm = ship.type === 'corvette' ? 0x881337 : 0x0369a1;
+                (ship.bodyMesh.material as THREE.MeshStandardMaterial).color.setHex(origCol);
+                (ship.bodyMesh.material as THREE.MeshStandardMaterial).emissive.setHex(origEm);
+                addLogEntry("SYSTEM", `⚠️ SYSTEM-NEUSTART: ${ship.name} hat Triebwerke reaktiviert!`);
             }
             return;
         }
@@ -195,26 +218,23 @@ export function updateFleet(dt: number) {
 
         if (isPlayerThreatening && ship.state === 'patrol') {
             ship.state = 'intercept';
-            ship.alertTimer = 15.0; // Stay alert for 15s
-            addLogEntry("CREW", `Capt. Miller: 'Militärische Abfangjäger von ${ship.homePlanet.name} lösen sich aus dem Orbit! Sie formieren Abfangkurs!'`);
+            ship.alertTimer = 15.0;
+            addLogEntry("CREW", `Capt. Miller: 'Militärische Abfangjäger von ${ship.homePlanet.name} formieren Abfangkurs!'`);
         }
 
         if (ship.state === 'intercept') {
             ship.alertTimer -= dt;
             if (ship.alertTimer <= 0 && distToPlayer > 40.0) {
                 ship.state = 'patrol';
-                addLogEntry("SYSTEM", `${ship.name} bricht Verfolgung ab und kehrt in planetaren Patrouillen-Orbit zurück.`);
+                addLogEntry("SYSTEM", `${ship.name} kehrt in planetaren Patrouillen-Orbit zurück.`);
             }
 
-            // Lead Pursuit & Orbit Circle AI
             const toPlayer = new THREE.Vector3().subVectors(playerPos, ship.position);
             const dist = toPlayer.length();
             toPlayer.normalize();
 
-            // Target hover distance between 10 and 16 units
             const desiredDist = 12.0;
             const distDiff = dist - desiredDist;
-
             const tangent = new THREE.Vector3(-toPlayer.z, 0, toPlayer.x);
             const accel = new THREE.Vector3();
 
@@ -227,65 +247,48 @@ export function updateFleet(dt: number) {
 
             ship.position.addScaledVector(ship.velocity, dt);
 
-            // Orient ship towards movement velocity
             if (ship.velocity.lengthSq() > 0.1) {
                 const angle = Math.atan2(ship.velocity.x, ship.velocity.z);
                 ship.mesh.rotation.y = angle;
             }
 
-            // Weapon Attack Loop
             ship.attackCooldown -= dt;
             if (ship.attackCooldown <= 0 && dist < 30.0) {
                 ship.attackCooldown = ship.type === 'corvette' ? 1.4 : 1.8;
                 fireFleetProjectile(ship, playerPos);
             }
         } else {
-            // Patrol Orbit around Home Planet
+            // Patrol Orbit
             ship.orbitAngle += ship.orbitSpeed * dt;
             const targetX = planetPos.x + Math.cos(ship.orbitAngle) * ship.orbitRadius;
             const targetZ = planetPos.z + Math.sin(ship.orbitAngle) * ship.orbitRadius;
 
-            ship.position.x = THREE.MathUtils.lerp(ship.position.x, targetX, 0.1);
-            ship.position.z = THREE.MathUtils.lerp(ship.position.z, targetZ, 0.1);
-            ship.position.y = 0;
+            ship.position.x = THREE.MathUtils.lerp(ship.position.x, targetX, 0.05);
+            ship.position.z = THREE.MathUtils.lerp(ship.position.z, targetZ, 0.05);
 
-            const forwardAngle = ship.orbitAngle + (ship.orbitSpeed > 0 ? Math.PI / 2 : -Math.PI / 2);
-            ship.mesh.rotation.y = forwardAngle;
+            const tangentX = -Math.sin(ship.orbitAngle);
+            const tangentZ = Math.cos(ship.orbitAngle);
+            ship.mesh.rotation.y = Math.atan2(tangentX, tangentZ);
         }
     });
 
-    // 3. Update Projectiles Simulation
-    for (let pIdx = STATE.fleetProjectiles.length - 1; pIdx >= 0; pIdx--) {
-        const proj = STATE.fleetProjectiles[pIdx];
+    // 4. Update Projectiles
+    for (let i = STATE.fleetProjectiles.length - 1; i >= 0; i--) {
+        const proj = STATE.fleetProjectiles[i];
         proj.life -= dt;
         proj.position.addScaledVector(proj.velocity, dt);
 
-        // Check collision with Player Bioship
-        const dToPlayer = proj.position.distanceTo(playerPos);
-        if (dToPlayer < 2.5) {
-            // Hit Player Bioship!
+        const distToPlayer = proj.position.distanceTo(playerPos);
+        if (distToPlayer < 2.8) {
+            STATE.health = Math.max(0, STATE.health - proj.damage);
+            STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + 3.0));
             playCrashSound();
+            addLogEntry("CREW", `⚠️ TREFFER! Hüllenschaden erlitten (-${proj.damage} HP)!`);
 
-            const damage = STATE.mutations.armor.purchased ? proj.damage * 0.5 : proj.damage;
-            STATE.health = Math.max(0, STATE.health - damage);
-
-            // EMP Disruption to Dream Matrix
-            STATE.crew.forEach(c => {
-                c.stress = Math.min(100, c.stress + 14.0);
-                c.illusionStability = Math.max(0, c.illusionStability - 18.0);
-            });
-
-            if (STATE.health <= 0 && !STATE.isGameOver) {
-                triggerGameOver("Biologischer Zellkern zerstört durch planetare Abfanggeschwader.");
-            } else {
-                addLogEntry("CREW", `ALARM: EMP-Geschoss durchschlägt Hülle! Die Illusion flackert (+Stress). Stabilisiere mit [LEERTASTE]!`);
-            }
-
-            // Dispose projectile
             scene.remove(proj.mesh);
             proj.mesh.geometry.dispose();
             (proj.mesh.material as THREE.Material).dispose();
-            STATE.fleetProjectiles.splice(pIdx, 1);
+            STATE.fleetProjectiles.splice(i, 1);
             continue;
         }
 
@@ -293,30 +296,24 @@ export function updateFleet(dt: number) {
             scene.remove(proj.mesh);
             proj.mesh.geometry.dispose();
             (proj.mesh.material as THREE.Material).dispose();
-            STATE.fleetProjectiles.splice(pIdx, 1);
+            STATE.fleetProjectiles.splice(i, 1);
         }
     }
 }
 
 function fireFleetProjectile(ship: FleetShip, targetPos: THREE.Vector3) {
     const isCorvette = ship.type === 'corvette';
-    const projGeo = new THREE.CylinderGeometry(0.14, 0.14, 1.4, 6);
-    projGeo.rotateX(Math.PI / 2);
-
+    const projGeo = new THREE.SphereGeometry(isCorvette ? 0.35 : 0.2, 8, 8);
     const projMat = new THREE.MeshBasicMaterial({
-        color: isCorvette ? 0x818cf8 : 0x38bdf8
+        color: isCorvette ? 0xf43f5e : 0x38bdf8
     });
+
     const projMesh = new THREE.Mesh(projGeo, projMat);
     projMesh.position.copy(ship.position);
     scene.add(projMesh);
 
     const dir = new THREE.Vector3().subVectors(targetPos, ship.position).normalize();
-    // Add slight aim imperfection
-    dir.x += (Math.random() - 0.5) * 0.08;
-    dir.z += (Math.random() - 0.5) * 0.08;
-    dir.normalize();
-
-    const speed = 44.0;
+    const speed = isCorvette ? 42.0 : 54.0;
     const velocity = dir.clone().multiplyScalar(speed);
 
     projMesh.rotation.y = Math.atan2(dir.x, dir.z);
@@ -340,8 +337,13 @@ export function updateEmpHUD() {
     const bar = document.getElementById('emp-bar-fill');
     if (!btn || !badge || !bar) return;
 
-    if (STATE.bioDischargeCooldown > 0) {
-        const totalCd = 3.5;
+    if (STATE.empCharging) {
+        bar.style.width = `${Math.round(((0.45 - (STATE.empChargeTimer || 0)) / 0.45) * 100)}%`;
+        badge.innerText = '⚡ LÄDT...';
+        badge.className = 'emp-status-badge cooling';
+        btn.className = 'emp-action-btn ready';
+    } else if (STATE.bioDischargeCooldown > 0) {
+        const totalCd = 4.0;
         const progress = Math.max(0, Math.min(1.0, 1.0 - (STATE.bioDischargeCooldown / totalCd)));
         bar.style.width = `${Math.round(progress * 100)}%`;
         badge.innerText = `${STATE.bioDischargeCooldown.toFixed(1)}s`;
@@ -358,7 +360,7 @@ export function updateEmpHUD() {
 
 // Player Action: Bio-Electric EMP Discharge (Key X / Gamepad X)
 export function triggerBioDischarge() {
-    if (!STATE.gameStarted) return;
+    if (!STATE.gameStarted || STATE.empCharging) return;
 
     if (STATE.bioDischargeCooldown > 0) {
         addLogEntry("SYSTEM", `Bio-Elektrische Entladung noch in Kalibrierung (${STATE.bioDischargeCooldown.toFixed(1)}s Cooldown).`);
@@ -370,17 +372,23 @@ export function triggerBioDischarge() {
         return;
     }
 
-    // Deduct Costs & Trigger Cooldown
+    // Deduct Costs & Start 0.45s Charge Phase
     STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 15);
     STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 10);
-    STATE.bioDischargeCooldown = 3.5; // 3.5s responsive cooldown
+    STATE.empCharging = true;
+    STATE.empChargeTimer = 0.45;
 
-    // Trigger Dynamic EMP Sector Flash Light
+    playEmpChargeSound();
+    addLogEntry("SYSTEM", `⚡ Bio-EMP Vorladung initiiert (0.4s Vorladung)...`);
+}
+
+function dischargeEmpShockwave() {
+    STATE.bioDischargeCooldown = 4.0; // 4.0s balanced cooldown
+
     if (empLight) {
-        empLight.intensity = 8.0;
+        empLight.intensity = 9.0;
     }
 
-    // Spawn Visual Shockwave Ring
     if (shockwaveMesh) {
         scene.remove(shockwaveMesh);
         shockwaveMesh.geometry.dispose();
@@ -402,23 +410,23 @@ export function triggerBioDischarge() {
     shockwaveTimer = 0.6;
 
     playCrashSound();
-    addLogEntry("SYSTEM", `⚡ BIO-ELEKTRISCHE EMP-ENTLADUNG GEZÜNDET! Elektromagnetische Schockwelle expandiert (Radius 30).`);
+    addLogEntry("SYSTEM", `💥 BIO-ELEKTRISCHE SCHOCKWELLE ENTLADEN! Nahbereich lähmt Schiffe für 5s.`);
 }
 
-// Salvage disabled fleet wreck
+// Salvage disabled or stunned fleet wreck
 export function salvageNearestWreck(): boolean {
     const playerPos = STATE.playerPosition;
-    const disabledShips = STATE.fleetShips.filter(s => s.state === 'disabled');
+    const targets = STATE.fleetShips.filter(s => s.state === 'disabled' || s.state === 'stunned');
 
-    for (let i = 0; i < disabledShips.length; i++) {
-        const ship = disabledShips[i];
-        if (ship.position.distanceTo(playerPos) <= 7.0) {
+    for (let i = 0; i < targets.length; i++) {
+        const ship = targets[i];
+        if (ship.position.distanceTo(playerPos) <= 7.5) {
             // Salvage successful!
             scene.remove(ship.mesh);
 
             STATE.siliconRes += 35;
             STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 30);
-            addLogEntry("SYSTEM", `Schiffswrack von ${ship.name} assimiliert: +35 Silizium & +30 Bio-Energie gewonnen!`);
+            addLogEntry("SYSTEM", `Schiff von ${ship.name} assimiliert: +35 Silizium & +30 Bio-Energie gewonnen!`);
             playSiliconCollectSound();
 
             const idx = STATE.fleetShips.findIndex(s => s.id === ship.id);

@@ -176,7 +176,11 @@ export interface FleetShip {
     orbitSpeed: number;
     health: number;
     maxHealth: number;
-    state: 'patrol' | 'intercept' | 'disabled';
+    state: 'patrol' | 'intercept' | 'disabled' | 'stunned';
+    stunTimer?: number;
+    stunMaxDuration?: number;
+    sparkTimer?: number;
+    originalColor?: number;
     attackCooldown: number;
     alertTimer: number;
 }
@@ -293,6 +297,8 @@ export interface GameState {
     fleetShips: FleetShip[];
     fleetProjectiles: FleetProjectile[];
     bioDischargeCooldown: number;
+    empCharging?: boolean;
+    empChargeTimer?: number;
 
     // Faction Reputation & Diplomacy (Phase C/D)
     reputation: Record<FactionId, number>;

@@ -96,6 +96,8 @@ export const STATE: GameState = {
     fleetShips: [],
     fleetProjectiles: [],
     bioDischargeCooldown: 0,
+    empCharging: false,
+    empChargeTimer: 0,
 
     // Faction Reputation & Diplomacy
     reputation: {
