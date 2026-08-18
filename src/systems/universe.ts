@@ -206,7 +206,10 @@ export function spawnPlanetsAndAsteroids() {
             bumpMap: texData.bumpMap || null,
             bumpScale: isGas ? 0 : 0.08,
             roughness: isGas ? 0.35 : 0.72,
-            metalness: isGas ? 0.1 : 0.15
+            metalness: isGas ? 0.1 : 0.15,
+            transparent: false,
+            depthWrite: true,
+            depthTest: true
         });
 
         // Dynamic Night-Side City Lights Shader
@@ -266,12 +269,15 @@ export function spawnPlanetsAndAsteroids() {
 
         let cloudMesh: THREE.Mesh | null = null;
         if (cloudTexture && isHab) {
-            const cloudGeo = new THREE.SphereGeometry(p.size * 1.025, 32, 32);
+            const cloudGeo = new THREE.SphereGeometry(p.size * 1.018, 32, 32);
             const cloudMat = new THREE.MeshStandardMaterial({
                 map: cloudTexture,
                 transparent: true,
-                opacity: 0.5,
-                blending: THREE.AdditiveBlending
+                opacity: 0.85,
+                blending: THREE.NormalBlending,
+                depthWrite: false,
+                roughness: 0.9,
+                metalness: 0.0
             });
             cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
             cloudMesh.rotation.z = axialTilt;

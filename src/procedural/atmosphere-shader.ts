@@ -20,15 +20,15 @@ varying vec3 vViewDir;
 
 void main() {
     float fresnel = 1.0 - max(dot(vViewDir, vNormal), 0.0);
-    float glow = pow(fresnel, 4.2) * intensityMultiplier;
-    gl_FragColor = vec4(glowColor, glow);
+    float glow = pow(fresnel, 5.0) * intensityMultiplier;
+    gl_FragColor = vec4(glowColor, glow * 0.8);
 }
 `;
 
-export function createAtmosphereMesh(planetRadius: number, hexColor: number, intensity = 1.2): THREE.Mesh {
+export function createAtmosphereMesh(planetRadius: number, hexColor: number, intensity = 1.1): THREE.Mesh {
     const color = new THREE.Color(hexColor);
 
-    const atmosphereGeo = new THREE.SphereGeometry(planetRadius * 1.045, 32, 32);
+    const atmosphereGeo = new THREE.SphereGeometry(planetRadius * 1.025, 32, 32);
     const atmosphereMat = new THREE.ShaderMaterial({
         vertexShader: atmosphereVertexShader,
         fragmentShader: atmosphereFragmentShader,

@@ -30573,13 +30573,13 @@ varying vec3 vViewDir;
 
 void main() {
     float fresnel = 1.0 - max(dot(vViewDir, vNormal), 0.0);
-    float glow = pow(fresnel, 4.2) * intensityMultiplier;
-    gl_FragColor = vec4(glowColor, glow);
+    float glow = pow(fresnel, 5.0) * intensityMultiplier;
+    gl_FragColor = vec4(glowColor, glow * 0.8);
 }
 `;
-function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.2) {
+function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.1) {
   const color = new Color(hexColor);
-  const atmosphereGeo = new SphereGeometry(planetRadius * 1.045, 32, 32);
+  const atmosphereGeo = new SphereGeometry(planetRadius * 1.025, 32, 32);
   const atmosphereMat = new ShaderMaterial({
     vertexShader: atmosphereVertexShader,
     fragmentShader: atmosphereFragmentShader,
@@ -30764,7 +30764,10 @@ function spawnPlanetsAndAsteroids() {
       bumpMap: texData.bumpMap || null,
       bumpScale: isGas ? 0 : 0.08,
       roughness: isGas ? 0.35 : 0.72,
-      metalness: isGas ? 0.1 : 0.15
+      metalness: isGas ? 0.1 : 0.15,
+      transparent: false,
+      depthWrite: true,
+      depthTest: true
     });
     if (cityLightsTexture) {
       mat.onBeforeCompile = (shader) => {
@@ -30807,12 +30810,15 @@ function spawnPlanetsAndAsteroids() {
     }
     let cloudMesh = null;
     if (cloudTexture && isHab) {
-      const cloudGeo = new SphereGeometry(p.size * 1.025, 32, 32);
+      const cloudGeo = new SphereGeometry(p.size * 1.018, 32, 32);
       const cloudMat = new MeshStandardMaterial({
         map: cloudTexture,
         transparent: true,
-        opacity: 0.5,
-        blending: AdditiveBlending
+        opacity: 0.85,
+        blending: NormalBlending,
+        depthWrite: false,
+        roughness: 0.9,
+        metalness: 0
       });
       cloudMesh = new Mesh(cloudGeo, cloudMat);
       cloudMesh.rotation.z = axialTilt;
