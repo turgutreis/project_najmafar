@@ -226,49 +226,15 @@ export function spawnPlanetsAndAsteroids() {
             map: texData.map,
             bumpMap: texData.bumpMap || null,
             bumpScale: isGas ? 0 : 0.08,
-            roughness: isGas ? 0.35 : 0.72,
-            metalness: isGas ? 0.1 : 0.15,
+            roughness: isGas ? 0.35 : 0.68,
+            metalness: isGas ? 0.1 : 0.12,
+            emissive: cityLightsTexture ? new THREE.Color(0xffffff) : new THREE.Color(0x000000),
+            emissiveMap: cityLightsTexture || null,
+            emissiveIntensity: cityLightsTexture ? 0.85 : 0.0,
             transparent: false,
             depthWrite: true,
             depthTest: true
         });
-
-        // Dynamic Night-Side City Lights Shader
-        if (cityLightsTexture) {
-            mat.onBeforeCompile = (shader) => {
-                shader.uniforms.nightMap = { value: cityLightsTexture };
-                shader.uniforms.sunPosition = { value: new THREE.Vector3(0, 0, 0) };
-
-                shader.vertexShader = `
-                    varying vec3 vWorldPosition;
-                    varying vec3 vWorldNormal;
-                    ${shader.vertexShader}
-                `.replace(
-                    `#include <worldpos_vertex>`,
-                    `#include <worldpos_vertex>
-                    vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;
-                    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
-                    `
-                );
-
-                shader.fragmentShader = `
-                    uniform sampler2D nightMap;
-                    uniform vec3 sunPosition;
-                    varying vec3 vWorldPosition;
-                    varying vec3 vWorldNormal;
-                    ${shader.fragmentShader}
-                `.replace(
-                    `#include <emissivemap_fragment>`,
-                    `#include <emissivemap_fragment>
-                    vec3 toSun = normalize(sunPosition - vWorldPosition);
-                    float sunDot = dot(vWorldNormal, toSun);
-                    float nightFactor = smoothstep(0.15, -0.3, sunDot);
-                    vec4 nightLights = texture2D(nightMap, vUv);
-                    totalEmissiveRadiance += nightLights.rgb * nightFactor * 2.2;
-                    `
-                );
-            };
-        }
 
         const mesh = new THREE.Mesh(geo, mat);
 
@@ -284,7 +250,7 @@ export function spawnPlanetsAndAsteroids() {
         // Rayleigh Atmospheric Scattering Halo
         if (isHab || isGas) {
             const atmoHex = isHab ? 0x38bdf8 : parseInt(p.color);
-            const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.4 : 1.1);
+            const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.2 : 1.0);
             planetGroup.add(atmoMesh);
         }
 
@@ -306,19 +272,6 @@ export function spawnPlanetsAndAsteroids() {
         }
 
         let psioAuraMesh: THREE.Mesh | null = null;
-        if (isHab) {
-            const auraGeo = new THREE.RingGeometry(p.size * 1.4, p.size * 1.6, 32);
-            auraGeo.rotateX(Math.PI / 2);
-            const auraMat = new THREE.MeshBasicMaterial({
-                color: 0xd946ef,
-                transparent: true,
-                opacity: 0.5,
-                side: THREE.DoubleSide,
-                blending: THREE.AdditiveBlending
-            });
-            psioAuraMesh = new THREE.Mesh(auraGeo, auraMat);
-            planetGroup.add(psioAuraMesh);
-        }
 
         scene.add(planetGroup);
 

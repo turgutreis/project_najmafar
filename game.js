@@ -30853,39 +30853,15 @@ function spawnPlanetsAndAsteroids() {
       map: texData.map,
       bumpMap: texData.bumpMap || null,
       bumpScale: isGas ? 0 : 0.08,
-      roughness: isGas ? 0.35 : 0.72,
-      metalness: isGas ? 0.1 : 0.15,
+      roughness: isGas ? 0.35 : 0.68,
+      metalness: isGas ? 0.1 : 0.12,
+      emissive: cityLightsTexture ? new Color(16777215) : new Color(0),
+      emissiveMap: cityLightsTexture || null,
+      emissiveIntensity: cityLightsTexture ? 0.85 : 0,
       transparent: false,
       depthWrite: true,
       depthTest: true
     });
-    if (cityLightsTexture) {
-      mat.onBeforeCompile = (shader) => {
-        shader.uniforms.nightMap = { value: cityLightsTexture };
-        shader.uniforms.sunPosition = { value: new Vector3(0, 0, 0) };
-        shader.vertexShader = `
-                    varying vec3 vWorldPosition;
-                    varying vec3 vWorldNormal;
-                    ${shader.vertexShader}
-                `.replace(`#include <worldpos_vertex>`, `#include <worldpos_vertex>
-                    vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;
-                    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
-                    `);
-        shader.fragmentShader = `
-                    uniform sampler2D nightMap;
-                    uniform vec3 sunPosition;
-                    varying vec3 vWorldPosition;
-                    varying vec3 vWorldNormal;
-                    ${shader.fragmentShader}
-                `.replace(`#include <emissivemap_fragment>`, `#include <emissivemap_fragment>
-                    vec3 toSun = normalize(sunPosition - vWorldPosition);
-                    float sunDot = dot(vWorldNormal, toSun);
-                    float nightFactor = smoothstep(0.15, -0.3, sunDot);
-                    vec4 nightLights = texture2D(nightMap, vUv);
-                    totalEmissiveRadiance += nightLights.rgb * nightFactor * 2.2;
-                    `);
-      };
-    }
     const mesh = new Mesh(geo, mat);
     const axialTilt = (seed % 17 + 12) * Math.PI / 180;
     mesh.rotation.z = axialTilt;
@@ -30895,7 +30871,7 @@ function spawnPlanetsAndAsteroids() {
     planetGroup.add(mesh);
     if (isHab || isGas) {
       const atmoHex = isHab ? 3718648 : parseInt(p.color);
-      const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.4 : 1.1);
+      const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.2 : 1);
       planetGroup.add(atmoMesh);
     }
     let cloudMesh = null;
@@ -30915,19 +30891,6 @@ function spawnPlanetsAndAsteroids() {
       planetGroup.add(cloudMesh);
     }
     let psioAuraMesh = null;
-    if (isHab) {
-      const auraGeo = new RingGeometry(p.size * 1.4, p.size * 1.6, 32);
-      auraGeo.rotateX(Math.PI / 2);
-      const auraMat = new MeshBasicMaterial({
-        color: 14239471,
-        transparent: true,
-        opacity: 0.5,
-        side: DoubleSide,
-        blending: AdditiveBlending
-      });
-      psioAuraMesh = new Mesh(auraGeo, auraMat);
-      planetGroup.add(psioAuraMesh);
-    }
     scene.add(planetGroup);
     const pMass = p.size * p.size * 4;
     const pRange = p.size * 4.5;
