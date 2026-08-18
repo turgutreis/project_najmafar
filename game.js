@@ -30862,6 +30862,22 @@ function getAudioContext() {
   }
   return audioCtx;
 }
+function playBioHarvestSound() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(220, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3);
+  gain.gain.setValueAtTime(0.15, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start();
+  osc.stop(ctx.currentTime + 0.3);
+}
 function playEmpChargeSound() {
   const ctx = getAudioContext();
   if (!ctx)
@@ -31875,10 +31891,58 @@ function generatePlanetAttributes(p) {
     bio = hash % 3 === 0 ? "Biolumineszierende Flora" : hash % 3 === 1 ? "Mikrobielle Kolonien" : "Komplexes Ökosystem";
     res = "Reich an Biomasse, Kohlenstoff & O2";
     const candidatePool = [
-      { name: "Navigator Elian", species: "Menschlicher Kolonist", role: "pilot", roleName: "\uD83D\uDEF8 Astral-Pilot", buffDesc: "+30% Schubkraft & Manövrierbarkeit", baseStressRate: 0.18 },
-      { name: "Dr. Vaelen", species: "Xeno-Botaniker", role: "biologist", roleName: "\uD83C\uDF31 Bio-Architekt", buffDesc: "+40% Biomasse-Ertrag beim Ernten", baseStressRate: 0.15 },
-      { name: "Cyber-Adept Rex", species: "Cyborg-Pionier", role: "engineer", roleName: "\uD83D\uDD27 Naniten-Meister", buffDesc: "+0.6 HP/s Naniten-Reparatur", baseStressRate: 0.2 },
-      { name: "Gesandte Maya", species: "Empathin", role: "psychologist", roleName: "\uD83E\uDDD8 Gedanken-Diplomatin", buffDesc: "-40% Crew-Stressaufbau", baseStressRate: 0.12 }
+      {
+        name: "Navigator Elian",
+        species: "Menschlicher Kolonist",
+        speciesType: "mortal",
+        role: "pilot",
+        roleName: "\uD83D\uDEF8 Astral-Pilot",
+        buffDesc: "+30% Schubkraft & Manövrierbarkeit",
+        baseStressRate: 0.18,
+        age: 60,
+        maxLifespan: 540,
+        ageCategory: "vital",
+        rejuvenationCount: 0
+      },
+      {
+        name: "Dr. Vaelen",
+        species: "Myzel-Botaniker",
+        speciesType: "ephemeral",
+        role: "biologist",
+        roleName: "\uD83C\uDF31 Bio-Architekt",
+        buffDesc: "+45% Biomasse-Ertrag beim Ernten",
+        baseStressRate: 0.15,
+        age: 30,
+        maxLifespan: 260,
+        ageCategory: "vital",
+        rejuvenationCount: 0
+      },
+      {
+        name: "Cyber-Adept Rex",
+        species: "Cyborg-Synthet",
+        speciesType: "longlived",
+        role: "engineer",
+        roleName: "\uD83D\uDD27 Naniten-Meister",
+        buffDesc: "+0.6 HP/s Naniten-Reparatur",
+        baseStressRate: 0.2,
+        age: 100,
+        maxLifespan: 900,
+        ageCategory: "vital",
+        rejuvenationCount: 0
+      },
+      {
+        name: "Gesandte Maya",
+        species: "Olyndar-Empathin",
+        speciesType: "ancient",
+        role: "psychologist",
+        roleName: "\uD83E\uDDD8 Gedanken-Diplomatin",
+        buffDesc: "-40% Crew-Stressaufbau & Psi-Fokus",
+        baseStressRate: 0.12,
+        age: 120,
+        maxLifespan: 1200,
+        ageCategory: "vital",
+        rejuvenationCount: 0
+      }
     ];
     const c1 = candidatePool[hash % candidatePool.length];
     const c2 = candidatePool[(hash + 3) % candidatePool.length];
@@ -33699,18 +33763,19 @@ function calculateCrewBuffs() {
   let psioBonus = 0;
   const hiveBonus = STATE.mutations.hivemind && STATE.mutations.hivemind.purchased ? 1.2 : 1;
   STATE.crew.forEach((c) => {
+    const agePenalty = c.ageCategory === "critical" ? 0.6 : c.ageCategory === "senescent" ? 0.85 : 1;
     if (c.role === "pilot")
-      thrustMult += 0.15 * hiveBonus;
+      thrustMult += 0.15 * hiveBonus * agePenalty;
     if (c.role === "biologist") {
-      bioMult += 0.3 * hiveBonus;
-      scanMult += 0.25 * hiveBonus;
+      bioMult += 0.3 * hiveBonus * agePenalty;
+      scanMult += 0.25 * hiveBonus * agePenalty;
     }
     if (c.role === "engineer")
-      repair += 0.6 * hiveBonus;
+      repair += 0.6 * hiveBonus * agePenalty;
     if (c.role === "psychologist")
-      stressDamp *= 1 - 0.4 * hiveBonus;
+      stressDamp *= 1 - 0.4 * hiveBonus * agePenalty;
     if (c.role === "cryptologist")
-      psioBonus += 30 * hiveBonus;
+      psioBonus += 30 * hiveBonus * agePenalty;
   });
   STATE.crewBuffs = {
     thrust: thrustMult,
@@ -33781,7 +33846,37 @@ function updateCrewSimulation(dt) {
   }
   let speed = STATE.playerVelocity.length();
   let speedStressModifier = speed > 10 ? 0.6 : 0;
-  STATE.crew.forEach((c) => {
+  for (let i = STATE.crew.length - 1;i >= 0; i--) {
+    const c = STATE.crew[i];
+    c.age = (c.age || 0) + dt;
+    const maxLife = c.maxLifespan || 540;
+    const lifeRatio = Math.min(1, c.age / maxLife);
+    if (lifeRatio < 0.55) {
+      c.ageCategory = "vital";
+    } else if (lifeRatio < 0.85) {
+      c.ageCategory = "mature";
+      c.stress = Math.min(100, c.stress + 0.35 * dt);
+    } else if (lifeRatio < 0.95) {
+      c.ageCategory = "senescent";
+      c.stress = Math.min(100, c.stress + 0.9 * dt);
+    } else {
+      c.ageCategory = "critical";
+      c.stress = Math.min(100, c.stress + 1.8 * dt);
+    }
+    if (c.age >= maxLife) {
+      addLogEntry("SYSTEM", `⚰️ BIOLOGISCHER ZELLTOD: ${c.name} (${c.species}) ist an Altersschwäche gestorben. Biomasse resorbiert (+45 Bio-Energie).`);
+      STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 45);
+      STATE.loneliness = Math.min(100, STATE.loneliness + 20);
+      STATE.crew.forEach((other) => {
+        if (other !== c) {
+          other.stress = Math.min(100, other.stress + 20);
+          other.illusionStability = Math.max(0, other.illusionStability - 15);
+        }
+      });
+      STATE.crew.splice(i, 1);
+      calculateCrewBuffs();
+      continue;
+    }
     const decayRate = (0.35 + c.stress * 0.006) * dt;
     c.illusionStability = Math.max(0, c.illusionStability - decayRate);
     if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
@@ -33801,7 +33896,11 @@ function updateCrewSimulation(dt) {
       } else {
         c.stress = Math.max(0, c.stress - 2 * dt);
         c.status = "Arbeitet";
-        c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
+        if (c.ageCategory === "senescent") {
+          c.thought = "Erschöpft: 'Die Jahre vergehen... aber die Sterne bleiben ewig.'";
+        } else {
+          c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
+        }
       }
     }
     if (c.illusionStability >= 50) {
@@ -33819,7 +33918,7 @@ function updateCrewSimulation(dt) {
         addLogEntry("CREW", `MATRIX-ALARM: ${c.name} randaliert in Panik und beschädigt Zellwände! Beruhige mit [LEERTASTE]!`);
       }
     }
-  });
+  }
   if (STATE.telepathyActive) {
     STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 8.5 * dt);
     if (STATE.mentalEnergy === 0) {
@@ -33835,6 +33934,39 @@ function updateCrewSimulation(dt) {
     STATE.crewDialogueTimer = 20 + Math.random() * 8;
     triggerMultiCrewDialogue();
   }
+  renderCrewUI();
+}
+function rejuvenateCrewMember(id) {
+  const member = STATE.crew.find((c) => c.id === id);
+  if (!member)
+    return;
+  if (STATE.bioEnergy < 20 || STATE.bioRes < 10) {
+    addLogEntry("SYSTEM", `Zu wenig Bio-Energie oder Biomasse für Zell-Verjüngung (benötigt 20 Bio / 10 Biomasse)!`);
+    return;
+  }
+  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 20);
+  STATE.bioRes = Math.max(0, STATE.bioRes - 10);
+  const maxLife = member.maxLifespan || 540;
+  member.age = Math.max(0, member.age - maxLife * 0.35);
+  member.stress = Math.max(0, member.stress - 25);
+  member.rejuvenationCount = (member.rejuvenationCount || 0) + 1;
+  playBioHarvestSound();
+  addLogEntry("SYSTEM", `\uD83D\uDC89 ZELL-REGENERATION: Telomere von ${member.name} erneuert (-35% Alter)! Lebenszeit verlängert.`);
+  calculateCrewBuffs();
+  renderCrewUI();
+}
+function assimilateCrewMember(id) {
+  const idx = STATE.crew.findIndex((c) => c.id === id);
+  if (idx === -1)
+    return;
+  const member = STATE.crew[idx];
+  STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 50);
+  STATE.bioRes += 35;
+  STATE.siliconRes += 20;
+  addLogEntry("SYSTEM", `\uD83E\uDDEC GENOM-ASSIMILATION: ${member.name} (${member.species}) aufgelöst: +50 Bio-Energie, +35 Biomasse & +20 Silizium.`);
+  playCrashSound();
+  STATE.crew.splice(idx, 1);
+  calculateCrewBuffs();
   renderCrewUI();
 }
 function renderCrewUI() {
@@ -33894,13 +34026,52 @@ function renderCrewUI() {
       cardClass += " panic";
     else if (c.illusionStability < 65 || c.stress > 45)
       cardClass += " suspicious";
+    const maxLife = c.maxLifespan || 540;
+    const currentAge = Math.min(maxLife, Math.floor(c.age || 0));
+    const lifePercent = Math.max(0, Math.min(100, Math.round((1 - currentAge / maxLife) * 100)));
+    let speciesTag = "\uD83D\uDC68‍\uD83D\uDE80 Mortal";
+    if (c.speciesType === "ephemeral")
+      speciesTag = "\uD83E\uDEB2 Ephemeral";
+    else if (c.speciesType === "longlived")
+      speciesTag = "\uD83E\uDD16 Synthet";
+    else if (c.speciesType === "ancient")
+      speciesTag = "\uD83D\uDC8E Uralt";
+    let ageLabel = "\uD83D\uDFE2 Vital";
+    let ageColor = "#00ff88";
+    if (c.ageCategory === "mature") {
+      ageLabel = "\uD83D\uDFE1 Reife";
+      ageColor = "#facc15";
+    } else if (c.ageCategory === "senescent") {
+      ageLabel = "\uD83D\uDFE0 Seneszenz";
+      ageColor = "#fb923c";
+    } else if (c.ageCategory === "critical") {
+      ageLabel = "\uD83D\uDD34 Altersschwäche";
+      ageColor = "#f43f5e";
+    }
+    const ageMin = Math.floor(currentAge / 60);
+    const ageSec = String(currentAge % 60).padStart(2, "0");
+    const maxMin = Math.floor(maxLife / 60);
     html += `
             <div class="${cardClass}">
                 <div class="crew-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
+                    <div>
+                        <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
+                        <span style="font-size: 0.65rem; color: #94a3b8; margin-left: 4px;">(${speciesTag})</span>
+                    </div>
                     <span class="crew-role-badge">${c.roleIcon || "\uD83D\uDC64"} ${c.roleName || c.role}</span>
                 </div>
                 <div class="crew-buff-tag">⚡ ${c.buffDesc || c.perk}</div>
+
+                <!-- Lifespan & Biological Age Bar -->
+                <div class="lifespan-container" style="margin: 4px 0; background: rgba(15,23,42,0.6); padding: 4px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: #cbd5e1; margin-bottom: 2px;">
+                        <span>⏳ Alter: ${ageMin}:${ageSec} / ${maxMin}:00 Min.</span>
+                        <span style="color: ${ageColor}; font-weight: 700;">${ageLabel} (${lifePercent}% übrig)</span>
+                    </div>
+                    <div class="lifespan-bar-bg" style="height: 4px; background: rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden;">
+                        <div class="lifespan-bar" style="width: ${lifePercent}%; height: 100%; background: ${ageColor}; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
                 
                 <div class="stability-container">
                     <span class="stability-label">Traum-Stabilität:</span>
@@ -33921,10 +34092,24 @@ function renderCrewUI() {
                 <div class="thought-whisper ${c.illusionStability < 35 ? "terrified" : ""}">
                     \uD83D\uDCAD "${c.thought}"
                 </div>
+
+                <!-- Interactive Crew Care & Action Buttons -->
+                <div class="crew-actions" style="display: flex; gap: 6px; margin-top: 6px;">
+                    <button class="crew-action-btn rejuv-btn" onclick="window.rejuvenateCrew(${c.id})" title="Zell-Verjüngung: -35% Alter (Kosten: 20 Bio / 10 Biomasse)">
+                        \uD83D\uDC89 Verjüngen
+                    </button>
+                    <button class="crew-action-btn assimilate-btn" onclick="window.assimilateCrew(${c.id})" title="Genom-Assimilation: Löst das Wesen in +50 Bio-Energie, +35 Biomasse & +20 Silizium auf">
+                        \uD83E\uDDEC Assimilieren
+                    </button>
+                </div>
             </div>
         `;
   });
   container.innerHTML = html;
+}
+if (typeof window !== "undefined") {
+  window.rejuvenateCrew = (id) => rejuvenateCrewMember(id);
+  window.assimilateCrew = (id) => assimilateCrewMember(id);
 }
 var crewDialogueBank = {
   pilot_engineer: [

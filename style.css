@@ -2101,6 +2101,40 @@ body.game-started .hud-left {
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
 }
 
+.crew-action-btn {
+    flex: 1;
+    padding: 4px 6px;
+    font-size: 0.65rem;
+    font-family: inherit;
+    font-weight: 700;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.crew-action-btn.rejuv-btn {
+    background: rgba(0, 255, 136, 0.12);
+    border-color: rgba(0, 255, 136, 0.4);
+    color: #00ff88;
+}
+
+.crew-action-btn.rejuv-btn:hover {
+    background: rgba(0, 255, 136, 0.25);
+    box-shadow: 0 0 8px rgba(0, 255, 136, 0.35);
+}
+
+.crew-action-btn.assimilate-btn {
+    background: rgba(244, 63, 94, 0.12);
+    border-color: rgba(244, 63, 94, 0.4);
+    color: #f43f5e;
+}
+
+.crew-action-btn.assimilate-btn:hover {
+    background: rgba(244, 63, 94, 0.25);
+    box-shadow: 0 0 8px rgba(244, 63, 94, 0.35);
+}
+
 .crew-meta-panel {
     background: rgba(15, 23, 42, 0.7);
     border: 1px solid rgba(168, 85, 247, 0.3);

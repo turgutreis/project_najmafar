@@ -21,10 +21,58 @@ export function generatePlanetAttributes(p: any) {
         res = "Reich an Biomasse, Kohlenstoff & O2";
 
         const candidatePool = [
-            { name: "Navigator Elian", species: "Menschlicher Kolonist", role: "pilot", roleName: "🛸 Astral-Pilot", buffDesc: "+30% Schubkraft & Manövrierbarkeit", baseStressRate: 0.18 },
-            { name: "Dr. Vaelen", species: "Xeno-Botaniker", role: "biologist", roleName: "🌱 Bio-Architekt", buffDesc: "+40% Biomasse-Ertrag beim Ernten", baseStressRate: 0.15 },
-            { name: "Cyber-Adept Rex", species: "Cyborg-Pionier", role: "engineer", roleName: "🔧 Naniten-Meister", buffDesc: "+0.6 HP/s Naniten-Reparatur", baseStressRate: 0.20 },
-            { name: "Gesandte Maya", species: "Empathin", role: "psychologist", roleName: "🧘 Gedanken-Diplomatin", buffDesc: "-40% Crew-Stressaufbau", baseStressRate: 0.12 }
+            {
+                name: "Navigator Elian",
+                species: "Menschlicher Kolonist",
+                speciesType: 'mortal' as const,
+                role: "pilot",
+                roleName: "🛸 Astral-Pilot",
+                buffDesc: "+30% Schubkraft & Manövrierbarkeit",
+                baseStressRate: 0.18,
+                age: 60,
+                maxLifespan: 540, // 9 Min.
+                ageCategory: 'vital' as const,
+                rejuvenationCount: 0
+            },
+            {
+                name: "Dr. Vaelen",
+                species: "Myzel-Botaniker",
+                speciesType: 'ephemeral' as const,
+                role: "biologist",
+                roleName: "🌱 Bio-Architekt",
+                buffDesc: "+45% Biomasse-Ertrag beim Ernten",
+                baseStressRate: 0.15,
+                age: 30,
+                maxLifespan: 260, // 4.3 Min. (Kurzlebig / Stark)
+                ageCategory: 'vital' as const,
+                rejuvenationCount: 0
+            },
+            {
+                name: "Cyber-Adept Rex",
+                species: "Cyborg-Synthet",
+                speciesType: 'longlived' as const,
+                role: "engineer",
+                roleName: "🔧 Naniten-Meister",
+                buffDesc: "+0.6 HP/s Naniten-Reparatur",
+                baseStressRate: 0.20,
+                age: 100,
+                maxLifespan: 900, // 15 Min.
+                ageCategory: 'vital' as const,
+                rejuvenationCount: 0
+            },
+            {
+                name: "Gesandte Maya",
+                species: "Olyndar-Empathin",
+                speciesType: 'ancient' as const,
+                role: "psychologist",
+                roleName: "🧘 Gedanken-Diplomatin",
+                buffDesc: "-40% Crew-Stressaufbau & Psi-Fokus",
+                baseStressRate: 0.12,
+                age: 120,
+                maxLifespan: 1200, // 20 Min.
+                ageCategory: 'vital' as const,
+                rejuvenationCount: 0
+            }
         ];
 
         const c1 = candidatePool[hash % candidatePool.length];

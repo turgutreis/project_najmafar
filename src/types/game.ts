@@ -47,10 +47,13 @@ export interface StarData {
     colorCss?: string;
 }
 
+export type SpeciesLifespanCategory = 'ephemeral' | 'mortal' | 'longlived' | 'ancient';
+
 export interface CrewMember {
     id: number;
     name: string;
     species: string;
+    speciesType?: SpeciesLifespanCategory;
     role: 'pilot' | 'biologist' | 'engineer' | 'psychologist' | 'cryptologist' | string;
     roleName: string;
     roleIcon?: string;
@@ -61,6 +64,12 @@ export interface CrewMember {
     illusionStability: number;
     status: string;
     thought: string;
+
+    // Lifespan & Biological Aging System
+    age: number; // Elapsed lifespan in seconds
+    maxLifespan: number; // Max lifespan in seconds
+    ageCategory?: 'vital' | 'mature' | 'senescent' | 'critical';
+    rejuvenationCount?: number;
 }
 
 export interface SpeciesData {

@@ -1,6 +1,8 @@
 import { STATE } from '../core/state';
 import { addLogEntry } from '../ui/hud';
 import { toggleTelepathy } from '../input/controls';
+import { playBioHarvestSound, playCrashSound } from '../engine/audio';
+import { CrewMember } from '../types/game';
 
 export function calculateCrewBuffs() {
     let thrustMult = 1.0;
@@ -13,14 +15,17 @@ export function calculateCrewBuffs() {
     const hiveBonus = STATE.mutations.hivemind && STATE.mutations.hivemind.purchased ? 1.2 : 1.0;
 
     STATE.crew.forEach(c => {
-        if (c.role === 'pilot') thrustMult += 0.15 * hiveBonus;
+        // Vital or mature minds give full bonus, critical minds suffer a small penalty
+        const agePenalty = c.ageCategory === 'critical' ? 0.6 : (c.ageCategory === 'senescent' ? 0.85 : 1.0);
+
+        if (c.role === 'pilot') thrustMult += 0.15 * hiveBonus * agePenalty;
         if (c.role === 'biologist') {
-            bioMult += 0.30 * hiveBonus;
-            scanMult += 0.25 * hiveBonus;
+            bioMult += 0.30 * hiveBonus * agePenalty;
+            scanMult += 0.25 * hiveBonus * agePenalty;
         }
-        if (c.role === 'engineer') repair += 0.6 * hiveBonus;
-        if (c.role === 'psychologist') stressDamp *= (1.0 - 0.40 * hiveBonus);
-        if (c.role === 'cryptologist') psioBonus += 30 * hiveBonus;
+        if (c.role === 'engineer') repair += 0.6 * hiveBonus * agePenalty;
+        if (c.role === 'psychologist') stressDamp *= (1.0 - 0.40 * hiveBonus * agePenalty);
+        if (c.role === 'cryptologist') psioBonus += 30 * hiveBonus * agePenalty;
     });
 
     STATE.crewBuffs = {
@@ -101,11 +106,50 @@ export function updateCrewSimulation(dt: number) {
         STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
     }
 
-    // 2. Individual Dream Matrix & Stress Loop
+    // 2. Individual Dream Matrix, Aging & Stress Loop
     let speed = STATE.playerVelocity.length();
     let speedStressModifier = speed > 10.0 ? 0.6 : 0;
 
-    STATE.crew.forEach(c => {
+    for (let i = STATE.crew.length - 1; i >= 0; i--) {
+        const c = STATE.crew[i];
+
+        // Aging Process
+        c.age = (c.age || 0) + dt;
+        const maxLife = c.maxLifespan || 540;
+        const lifeRatio = Math.min(1.0, c.age / maxLife);
+
+        if (lifeRatio < 0.55) {
+            c.ageCategory = 'vital';
+        } else if (lifeRatio < 0.85) {
+            c.ageCategory = 'mature';
+            c.stress = Math.min(100, c.stress + 0.35 * dt);
+        } else if (lifeRatio < 0.95) {
+            c.ageCategory = 'senescent';
+            c.stress = Math.min(100, c.stress + 0.9 * dt);
+        } else {
+            c.ageCategory = 'critical';
+            c.stress = Math.min(100, c.stress + 1.8 * dt);
+        }
+
+        // Biological Death from Old Age
+        if (c.age >= maxLife) {
+            addLogEntry("SYSTEM", `⚰️ BIOLOGISCHER ZELLTOD: ${c.name} (${c.species}) ist an Altersschwäche gestorben. Biomasse resorbiert (+45 Bio-Energie).`);
+            STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 45);
+            STATE.loneliness = Math.min(100, STATE.loneliness + 20);
+
+            STATE.crew.forEach(other => {
+                if (other !== c) {
+                    other.stress = Math.min(100, other.stress + 20);
+                    other.illusionStability = Math.max(0, other.illusionStability - 15);
+                }
+            });
+
+            STATE.crew.splice(i, 1);
+            calculateCrewBuffs();
+            continue;
+        }
+
+        // Dream Stability & Mental Stress
         const decayRate = (0.35 + c.stress * 0.006) * dt;
         c.illusionStability = Math.max(0, c.illusionStability - decayRate);
 
@@ -126,7 +170,11 @@ export function updateCrewSimulation(dt: number) {
             } else {
                 c.stress = Math.max(0, c.stress - 2.0 * dt);
                 c.status = "Arbeitet";
-                c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
+                if (c.ageCategory === 'senescent') {
+                    c.thought = "Erschöpft: 'Die Jahre vergehen... aber die Sterne bleiben ewig.'";
+                } else {
+                    c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
+                }
             }
         }
 
@@ -148,7 +196,7 @@ export function updateCrewSimulation(dt: number) {
                 addLogEntry("CREW", `MATRIX-ALARM: ${c.name} randaliert in Panik und beschädigt Zellwände! Beruhige mit [LEERTASTE]!`);
             }
         }
-    });
+    }
 
     // 3. Mental Energy Drain / Regen
     if (STATE.telepathyActive) {
@@ -170,6 +218,48 @@ export function updateCrewSimulation(dt: number) {
     }
 
     // Update Crew DOM cards periodically
+    renderCrewUI();
+}
+
+// User Action: Bio-Rejuvenation (Extends Lifespan & Reduces Age)
+export function rejuvenateCrewMember(id: number) {
+    const member = STATE.crew.find(c => c.id === id);
+    if (!member) return;
+
+    if (STATE.bioEnergy < 20 || STATE.bioRes < 10) {
+        addLogEntry("SYSTEM", `Zu wenig Bio-Energie oder Biomasse für Zell-Verjüngung (benötigt 20 Bio / 10 Biomasse)!`);
+        return;
+    }
+
+    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 20);
+    STATE.bioRes = Math.max(0, STATE.bioRes - 10);
+
+    const maxLife = member.maxLifespan || 540;
+    member.age = Math.max(0, member.age - maxLife * 0.35);
+    member.stress = Math.max(0, member.stress - 25);
+    member.rejuvenationCount = (member.rejuvenationCount || 0) + 1;
+
+    playBioHarvestSound();
+    addLogEntry("SYSTEM", `💉 ZELL-REGENERATION: Telomere von ${member.name} erneuert (-35% Alter)! Lebenszeit verlängert.`);
+    calculateCrewBuffs();
+    renderCrewUI();
+}
+
+// User Action: Genome Assimilation (Sacrifice crew for permanent resources)
+export function assimilateCrewMember(id: number) {
+    const idx = STATE.crew.findIndex(c => c.id === id);
+    if (idx === -1) return;
+    const member = STATE.crew[idx];
+
+    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 50);
+    STATE.bioRes += 35;
+    STATE.siliconRes += 20;
+
+    addLogEntry("SYSTEM", `🧬 GENOM-ASSIMILATION: ${member.name} (${member.species}) aufgelöst: +50 Bio-Energie, +35 Biomasse & +20 Silizium.`);
+    playCrashSound();
+
+    STATE.crew.splice(idx, 1);
+    calculateCrewBuffs();
     renderCrewUI();
 }
 
@@ -232,13 +322,53 @@ export function renderCrewUI() {
         if (c.illusionStability < 35 || c.stress > 70) cardClass += ' panic';
         else if (c.illusionStability < 65 || c.stress > 45) cardClass += ' suspicious';
 
+        const maxLife = c.maxLifespan || 540;
+        const currentAge = Math.min(maxLife, Math.floor(c.age || 0));
+        const lifePercent = Math.max(0, Math.min(100, Math.round((1.0 - (currentAge / maxLife)) * 100)));
+
+        let speciesTag = '👨‍🚀 Mortal';
+        if (c.speciesType === 'ephemeral') speciesTag = '🪲 Ephemeral';
+        else if (c.speciesType === 'longlived') speciesTag = '🤖 Synthet';
+        else if (c.speciesType === 'ancient') speciesTag = '💎 Uralt';
+
+        let ageLabel = '🟢 Vital';
+        let ageColor = '#00ff88';
+        if (c.ageCategory === 'mature') {
+            ageLabel = '🟡 Reife';
+            ageColor = '#facc15';
+        } else if (c.ageCategory === 'senescent') {
+            ageLabel = '🟠 Seneszenz';
+            ageColor = '#fb923c';
+        } else if (c.ageCategory === 'critical') {
+            ageLabel = '🔴 Altersschwäche';
+            ageColor = '#f43f5e';
+        }
+
+        const ageMin = Math.floor(currentAge / 60);
+        const ageSec = String(currentAge % 60).padStart(2, '0');
+        const maxMin = Math.floor(maxLife / 60);
+
         html += `
             <div class="${cardClass}">
                 <div class="crew-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
+                    <div>
+                        <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
+                        <span style="font-size: 0.65rem; color: #94a3b8; margin-left: 4px;">(${speciesTag})</span>
+                    </div>
                     <span class="crew-role-badge">${c.roleIcon || '👤'} ${c.roleName || c.role}</span>
                 </div>
                 <div class="crew-buff-tag">⚡ ${c.buffDesc || c.perk}</div>
+
+                <!-- Lifespan & Biological Age Bar -->
+                <div class="lifespan-container" style="margin: 4px 0; background: rgba(15,23,42,0.6); padding: 4px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: #cbd5e1; margin-bottom: 2px;">
+                        <span>⏳ Alter: ${ageMin}:${ageSec} / ${maxMin}:00 Min.</span>
+                        <span style="color: ${ageColor}; font-weight: 700;">${ageLabel} (${lifePercent}% übrig)</span>
+                    </div>
+                    <div class="lifespan-bar-bg" style="height: 4px; background: rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden;">
+                        <div class="lifespan-bar" style="width: ${lifePercent}%; height: 100%; background: ${ageColor}; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
                 
                 <div class="stability-container">
                     <span class="stability-label">Traum-Stabilität:</span>
@@ -259,10 +389,26 @@ export function renderCrewUI() {
                 <div class="thought-whisper ${c.illusionStability < 35 ? 'terrified' : ''}">
                     💭 "${c.thought}"
                 </div>
+
+                <!-- Interactive Crew Care & Action Buttons -->
+                <div class="crew-actions" style="display: flex; gap: 6px; margin-top: 6px;">
+                    <button class="crew-action-btn rejuv-btn" onclick="window.rejuvenateCrew(${c.id})" title="Zell-Verjüngung: -35% Alter (Kosten: 20 Bio / 10 Biomasse)">
+                        💉 Verjüngen
+                    </button>
+                    <button class="crew-action-btn assimilate-btn" onclick="window.assimilateCrew(${c.id})" title="Genom-Assimilation: Löst das Wesen in +50 Bio-Energie, +35 Biomasse & +20 Silizium auf">
+                        🧬 Assimilieren
+                    </button>
+                </div>
             </div>
         `;
     });
     container.innerHTML = html;
+}
+
+// Expose handlers to window for inline onclick execution
+if (typeof window !== 'undefined') {
+    (window as any).rejuvenateCrew = (id: number) => rejuvenateCrewMember(id);
+    (window as any).assimilateCrew = (id: number) => assimilateCrewMember(id);
 }
 
 const crewDialogueBank: Record<string, { lineA: string; lineB: string }[]> = {
