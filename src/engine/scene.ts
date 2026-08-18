@@ -25,17 +25,9 @@ export function initScene(container?: HTMLElement) {
     renderer.toneMappingExposure = 1.05;
     target.appendChild(renderer.domElement);
 
-    // Dynamic Deep Space Lighting (High contrast)
-    const ambientLight = new THREE.AmbientLight(0x0a1020, 0.35);
+    // Ambient Light (Subtle, atmospheric deep-space base illumination)
+    const ambientLight = new THREE.AmbientLight(0x060c18, 0.18);
     scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0x38bdf8, 0.6);
-    dirLight.position.set(20, 40, 20);
-    scene.add(dirLight);
-
-    const pointLight = new THREE.PointLight(0xa855f7, 1.5, 50);
-    pointLight.position.set(0, 0, 0);
-    scene.add(pointLight);
 
     // Create World Starfield
     createStarfield();

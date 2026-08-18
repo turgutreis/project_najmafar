@@ -10543,42 +10543,6 @@ class OrthographicCamera extends Camera {
     return data;
   }
 }
-
-class DirectionalLightShadow extends LightShadow {
-  constructor() {
-    super(new OrthographicCamera(-5, 5, 5, -5, 0.5, 500));
-    this.isDirectionalLightShadow = true;
-  }
-}
-
-class DirectionalLight extends Light {
-  constructor(color, intensity) {
-    super(color, intensity);
-    this.isDirectionalLight = true;
-    this.type = "DirectionalLight";
-    this.position.copy(Object3D.DEFAULT_UP);
-    this.updateMatrix();
-    this.target = new Object3D;
-    this.shadow = new DirectionalLightShadow;
-  }
-  dispose() {
-    super.dispose();
-    this.shadow.dispose();
-  }
-  copy(source) {
-    super.copy(source);
-    this.target = source.target.clone();
-    this.shadow = source.shadow.clone();
-    return this;
-  }
-  toJSON(meta) {
-    const data = super.toJSON(meta);
-    data.object.shadow = this.shadow.toJSON();
-    data.object.target = this.target.uuid;
-    return data;
-  }
-}
-
 class AmbientLight extends Light {
   constructor(color, intensity) {
     super(color, intensity);
@@ -27454,14 +27418,8 @@ function initScene(container) {
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   target.appendChild(renderer.domElement);
-  const ambientLight = new AmbientLight(659488, 0.35);
+  const ambientLight = new AmbientLight(396312, 0.18);
   scene.add(ambientLight);
-  const dirLight = new DirectionalLight(3718648, 0.6);
-  dirLight.position.set(20, 40, 20);
-  scene.add(dirLight);
-  const pointLight = new PointLight(11032055, 1.5, 50);
-  pointLight.position.set(0, 0, 0);
-  scene.add(pointLight);
   createStarfield();
   window.addEventListener("resize", onWindowResize);
 }
@@ -30715,6 +30673,7 @@ function createSunRays(starRadius, hexColor) {
 // src/systems/universe.ts
 var activeCoronaMeshes = [];
 var activeCoronaUpdaters = [];
+var activeStarLights = [];
 var activeSunRays = null;
 function updateUniverseShaders(dt, cam) {
   activeCoronaUpdaters.forEach((fn) => fn(dt));
@@ -30788,6 +30747,8 @@ function clearActiveSystem() {
   activeCoronaMeshes.forEach((m) => scene.remove(m));
   activeCoronaMeshes.length = 0;
   activeCoronaUpdaters.length = 0;
+  activeStarLights.forEach((l) => scene.remove(l));
+  activeStarLights.length = 0;
   if (activeSunRays) {
     scene.remove(activeSunRays.group);
     activeSunRays.dispose();
@@ -30842,9 +30803,10 @@ function spawnPlanetsAndAsteroids() {
     activeCoronaUpdaters.push(corona.update);
     activeSunRays = createSunRays(starData.size, parseInt(starData.color));
     scene.add(activeSunRays.group);
-    const starLight = new PointLight(parseInt(starData.color), 3.5, 600, 2);
+    const starLight = new PointLight(parseInt(starData.color), 3.2, 0, 0);
     starLight.position.set(0, 0, 0);
     scene.add(starLight);
+    activeStarLights.push(starLight);
     starData.colorCss = starData.color.replace("0x", "#");
     const starRange = 24;
     const starSource = {

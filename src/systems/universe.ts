@@ -13,6 +13,7 @@ import { createSunRays, SunRaysController } from '../procedural/sun-rays';
 
 export const activeCoronaMeshes: THREE.Mesh[] = [];
 export const activeCoronaUpdaters: ((dt: number) => void)[] = [];
+export const activeStarLights: THREE.PointLight[] = [];
 export let activeSunRays: SunRaysController | null = null;
 
 export function updateUniverseShaders(dt: number, cam?: THREE.Camera) {
@@ -96,6 +97,9 @@ export function clearActiveSystem() {
     activeCoronaMeshes.length = 0;
     activeCoronaUpdaters.length = 0;
 
+    activeStarLights.forEach(l => scene.remove(l));
+    activeStarLights.length = 0;
+
     if (activeSunRays) {
         scene.remove(activeSunRays.group);
         activeSunRays.dispose();
@@ -163,9 +167,11 @@ export function spawnPlanetsAndAsteroids() {
         activeSunRays = createSunRays(starData.size, parseInt(starData.color));
         scene.add(activeSunRays.group);
 
-        const starLight = new THREE.PointLight(parseInt(starData.color), 3.5, 600, 2.0);
+        // Radiant Stellar Light Source (Illuminates all planets directly from star center)
+        const starLight = new THREE.PointLight(parseInt(starData.color), 3.2, 0, 0.0);
         starLight.position.set(0, 0, 0);
         scene.add(starLight);
+        activeStarLights.push(starLight);
 
         starData.colorCss = starData.color.replace("0x", "#");
 
