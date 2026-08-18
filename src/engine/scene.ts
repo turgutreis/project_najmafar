@@ -9,30 +9,31 @@ export let starfield: THREE.Points;
 export function initScene(container?: HTMLElement) {
     const target = container || document.getElementById('canvas-container') || document.body;
 
-    // Scene
+    // Scene (Clear, deep cosmic void - no milky fog)
     scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x030712, 0.003);
 
     // Camera (Top-down view with offset height)
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 80, 0);
     camera.lookAt(0, 0, 0);
 
-    // Renderer
+    // Renderer with ACES Filmic Tone Mapping for crisp contrast
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x030712);
+    renderer.setClearColor(0x020409, 1.0);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     target.appendChild(renderer.domElement);
 
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0x0f172a, 1.5);
+    // Dynamic Deep Space Lighting (High contrast)
+    const ambientLight = new THREE.AmbientLight(0x0a1020, 0.35);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0x38bdf8, 1);
+    const dirLight = new THREE.DirectionalLight(0x38bdf8, 0.6);
     dirLight.position.set(20, 40, 20);
     scene.add(dirLight);
 
-    const pointLight = new THREE.PointLight(0xa855f7, 2, 50);
+    const pointLight = new THREE.PointLight(0xa855f7, 1.5, 50);
     pointLight.position.set(0, 0, 0);
     scene.add(pointLight);
 

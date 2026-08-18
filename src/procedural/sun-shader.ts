@@ -39,16 +39,16 @@ float noise(vec2 p) {
 
 void main() {
     // Dynamic swirling noise coordinates
-    vec2 uvCoord = vUv * 6.0;
-    float n1 = noise(uvCoord + vec2(time * 0.25, time * 0.15));
-    float n2 = noise(uvCoord * 2.0 - vec2(time * 0.35, time * 0.2));
+    vec2 uvCoord = vUv * 5.0;
+    float n1 = noise(uvCoord + vec2(time * 0.2, time * 0.1));
+    float n2 = noise(uvCoord * 2.0 - vec2(time * 0.3, time * 0.15));
     float plasma = (n1 + n2 * 0.5) / 1.5;
 
-    // Outer rim glow with Fresnel
-    float fresnel = pow(1.0 - max(dot(vViewDir, vNormal), 0.0), 2.2);
-    float alpha = fresnel * (0.6 + plasma * 0.65);
+    // Outer rim glow with sharp Fresnel
+    float fresnel = pow(1.0 - max(dot(vViewDir, vNormal), 0.0), 3.4);
+    float alpha = fresnel * (0.4 + plasma * 0.6);
 
-    vec3 finalGlow = starColor * (1.2 + plasma * 0.8);
+    vec3 finalGlow = starColor * (1.1 + plasma * 0.7);
     gl_FragColor = vec4(finalGlow, alpha);
 }
 `;
@@ -56,7 +56,7 @@ void main() {
 export function createSunCoronaMesh(starRadius: number, hexColor: number): { mesh: THREE.Mesh; update: (dt: number) => void } {
     const color = new THREE.Color(hexColor);
 
-    const coronaGeo = new THREE.SphereGeometry(starRadius * 1.35, 32, 32);
+    const coronaGeo = new THREE.SphereGeometry(starRadius * 1.12, 32, 32);
     const coronaMat = new THREE.ShaderMaterial({
         vertexShader: coronaVertexShader,
         fragmentShader: coronaFragmentShader,
@@ -65,7 +65,7 @@ export function createSunCoronaMesh(starRadius: number, hexColor: number): { mes
             time: { value: 0.0 }
         },
         blending: THREE.AdditiveBlending,
-        side: THREE.BackSide,
+        side: THREE.FrontSide,
         transparent: true,
         depthWrite: false
     });

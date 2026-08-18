@@ -4944,26 +4944,6 @@ class Color {
 }
 var _color = /* @__PURE__ */ new Color;
 Color.NAMES = _colorKeywords;
-
-class FogExp2 {
-  constructor(color, density = 0.00025) {
-    this.isFogExp2 = true;
-    this.name = "";
-    this.color = new Color(color);
-    this.density = density;
-  }
-  clone() {
-    return new FogExp2(this.color, this.density);
-  }
-  toJSON() {
-    return {
-      type: "FogExp2",
-      name: this.name,
-      color: this.color.getHex(),
-      density: this.density
-    };
-  }
-}
 class Scene extends Object3D {
   constructor() {
     super();
@@ -27436,7 +27416,7 @@ function initPostProcessing() {
   const renderPass = new RenderPass(scene, camera);
   composer.addPass(renderPass);
   const bloomResolution = new Vector2(window.innerWidth, window.innerHeight);
-  bloomPass = new UnrealBloomPass(bloomResolution, 0.85, 0.45, 0.65);
+  bloomPass = new UnrealBloomPass(bloomResolution, 0.55, 0.28, 0.88);
   composer.addPass(bloomPass);
   const outputPass = new OutputPass;
   composer.addPass(outputPass);
@@ -27465,20 +27445,21 @@ var starfield;
 function initScene(container) {
   const target = container || document.getElementById("canvas-container") || document.body;
   scene = new Scene;
-  scene.fog = new FogExp2(198418, 0.003);
   camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.set(0, 80, 0);
   camera.lookAt(0, 0, 0);
   renderer = new WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(198418);
+  renderer.setClearColor(132105, 1);
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
   target.appendChild(renderer.domElement);
-  const ambientLight = new AmbientLight(988970, 1.5);
+  const ambientLight = new AmbientLight(659488, 0.35);
   scene.add(ambientLight);
-  const dirLight = new DirectionalLight(3718648, 1);
+  const dirLight = new DirectionalLight(3718648, 0.6);
   dirLight.position.set(20, 40, 20);
   scene.add(dirLight);
-  const pointLight = new PointLight(11032055, 2, 50);
+  const pointLight = new PointLight(11032055, 1.5, 50);
   pointLight.position.set(0, 0, 0);
   scene.add(pointLight);
   createStarfield();
@@ -30469,22 +30450,22 @@ float noise(vec2 p) {
 
 void main() {
     // Dynamic swirling noise coordinates
-    vec2 uvCoord = vUv * 6.0;
-    float n1 = noise(uvCoord + vec2(time * 0.25, time * 0.15));
-    float n2 = noise(uvCoord * 2.0 - vec2(time * 0.35, time * 0.2));
+    vec2 uvCoord = vUv * 5.0;
+    float n1 = noise(uvCoord + vec2(time * 0.2, time * 0.1));
+    float n2 = noise(uvCoord * 2.0 - vec2(time * 0.3, time * 0.15));
     float plasma = (n1 + n2 * 0.5) / 1.5;
 
-    // Outer rim glow with Fresnel
-    float fresnel = pow(1.0 - max(dot(vViewDir, vNormal), 0.0), 2.2);
-    float alpha = fresnel * (0.6 + plasma * 0.65);
+    // Outer rim glow with sharp Fresnel
+    float fresnel = pow(1.0 - max(dot(vViewDir, vNormal), 0.0), 3.4);
+    float alpha = fresnel * (0.4 + plasma * 0.6);
 
-    vec3 finalGlow = starColor * (1.2 + plasma * 0.8);
+    vec3 finalGlow = starColor * (1.1 + plasma * 0.7);
     gl_FragColor = vec4(finalGlow, alpha);
 }
 `;
 function createSunCoronaMesh(starRadius, hexColor) {
   const color = new Color(hexColor);
-  const coronaGeo = new SphereGeometry(starRadius * 1.35, 32, 32);
+  const coronaGeo = new SphereGeometry(starRadius * 1.12, 32, 32);
   const coronaMat = new ShaderMaterial({
     vertexShader: coronaVertexShader,
     fragmentShader: coronaFragmentShader,
@@ -30493,7 +30474,7 @@ function createSunCoronaMesh(starRadius, hexColor) {
       time: { value: 0 }
     },
     blending: AdditiveBlending,
-    side: BackSide,
+    side: FrontSide,
     transparent: true,
     depthWrite: false
   });
@@ -30526,13 +30507,13 @@ varying vec3 vViewDir;
 
 void main() {
     float fresnel = 1.0 - max(dot(vViewDir, vNormal), 0.0);
-    float glow = pow(fresnel, 2.8) * intensityMultiplier;
+    float glow = pow(fresnel, 4.2) * intensityMultiplier;
     gl_FragColor = vec4(glowColor, glow);
 }
 `;
-function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.4) {
+function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.2) {
   const color = new Color(hexColor);
-  const atmosphereGeo = new SphereGeometry(planetRadius * 1.14, 32, 32);
+  const atmosphereGeo = new SphereGeometry(planetRadius * 1.045, 32, 32);
   const atmosphereMat = new ShaderMaterial({
     vertexShader: atmosphereVertexShader,
     fragmentShader: atmosphereFragmentShader,
@@ -30541,7 +30522,7 @@ function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.4) {
       intensityMultiplier: { value: intensity }
     },
     blending: AdditiveBlending,
-    side: BackSide,
+    side: FrontSide,
     transparent: true,
     depthWrite: false
   });

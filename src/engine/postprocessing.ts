@@ -18,14 +18,14 @@ export function initPostProcessing() {
     const renderPass = new RenderPass(scene, camera);
     composer.addPass(renderPass);
 
-    // 3. Cinematic Unreal Bloom Pass
+    // 3. Cinematic Selective Unreal Bloom Pass
     // Resolution, Strength, Radius, Threshold
     const bloomResolution = new THREE.Vector2(window.innerWidth, window.innerHeight);
     bloomPass = new UnrealBloomPass(
         bloomResolution,
-        0.85,  // Bloom strength (subtle, lush sci-fi glow)
-        0.45,  // Bloom radius
-        0.65   // Luminance threshold (only stars, bio-glows, shields, and lasers glow!)
+        0.55,  // Bloom strength (crisp, elegant sci-fi glow)
+        0.28,  // Bloom radius (tight boundaries, no milky bleeding)
+        0.88   // Luminance threshold (only pure emissive stars, lasers, and bio-cores glow!)
     );
     composer.addPass(bloomPass);
 
