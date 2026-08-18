@@ -5,6 +5,7 @@ import { FleetShip, FleetProjectile, PlanetEntry } from '../types/game';
 import { addLogEntry } from '../ui/hud';
 import { playCrashSound, playSiliconCollectSound } from '../engine/audio';
 import { triggerGameOver } from '../engine/game-over';
+import { empLight } from '../procedural/meshes';
 
 let shockwaveMesh: THREE.Mesh | null = null;
 let shockwaveTimer = 0;
@@ -310,6 +311,11 @@ export function triggerBioDischarge() {
     STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 15);
     STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 10);
     STATE.bioDischargeCooldown = 4.5; // 4.5s cooldown
+
+    // Trigger Dynamic EMP Sector Flash Light
+    if (empLight) {
+        empLight.intensity = 7.5;
+    }
 
     // Spawn Visual Shockwave Ring
     if (shockwaveMesh) {

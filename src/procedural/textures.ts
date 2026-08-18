@@ -128,6 +128,75 @@ export function createHabitableTextures(colorHex: string | number, seed = 42) {
     return { map, bumpMap };
 }
 
+// 1.1 City Lights Texture Generator for Night-Side Civilizations
+export function createCityLightsTexture(seed = 42, techLevel = 'Spacefaring'): THREE.CanvasTexture {
+    const w = 256, h = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    const img = ctx.createImageData(w, h);
+    const data = img.data;
+
+    const isPrimitive = techLevel === 'Primitive';
+    const isIndustrial = techLevel === 'Industrial';
+    const isHyper = techLevel === 'Hyper-Advanced';
+
+    for (let y = 0; y < h; y++) {
+        const lat = Math.abs(y - h / 2) / (h / 2);
+        for (let x = 0; x < w; x++) {
+            const idx = (y * w + x) * 4;
+            const nx = (x / w) * 5.0;
+            const ny = (y / h) * 3.0;
+
+            const n = fbm(nx, ny, 4, seed);
+            // Continents where cities can form
+            const isLand = lat <= 0.80 && n >= 0.52 && n <= 0.74;
+
+            if (isLand) {
+                // High frequency noise for urban clusters & arterial roads
+                const cityNoise = smoothNoise(nx * 14.0, ny * 14.0, seed + 777);
+                const roadNoise = smoothNoise(nx * 28.0, ny * 28.0, seed + 999);
+
+                if (cityNoise > 0.68) {
+                    const intensity = (cityNoise - 0.68) / 0.32;
+                    if (isPrimitive) {
+                        // Dim warm firelight
+                        data[idx] = Math.floor(180 * intensity);
+                        data[idx + 1] = Math.floor(90 * intensity);
+                        data[idx + 2] = 20;
+                    } else if (isIndustrial) {
+                        // Golden sodium-vapor urban lights
+                        data[idx] = Math.floor(255 * intensity);
+                        data[idx + 1] = Math.floor(190 * intensity);
+                        data[idx + 2] = Math.floor(70 * intensity);
+                    } else if (isHyper) {
+                        // Quantum cyan/violet megastructure nodes
+                        data[idx] = Math.floor(160 * intensity);
+                        data[idx + 1] = Math.floor(220 * intensity);
+                        data[idx + 2] = 255;
+                    } else {
+                        // Spacefaring: Golden core with cyan outskirts
+                        data[idx] = Math.floor(255 * intensity);
+                        data[idx + 1] = Math.floor(210 * intensity);
+                        data[idx + 2] = Math.floor(140 * intensity);
+                    }
+                    data[idx + 3] = 255;
+                } else if (!isPrimitive && roadNoise > 0.82) {
+                    // Arterial highway grids
+                    data[idx] = 240;
+                    data[idx + 1] = 160;
+                    data[idx + 2] = 80;
+                    data[idx + 3] = 200;
+                }
+            }
+        }
+    }
+
+    ctx.putImageData(img, 0, 0);
+    const texture = new THREE.CanvasTexture(canvas);
+    return texture;
+}
+
 // 2. Gas Giant Textures (Atmospheric Bands, Storm Swirls, Great Oval Spot)
 export function createGasGiantTextures(colorHex: string | number, seed = 77) {
     const w = 256, h = 128;

@@ -3,7 +3,7 @@ import { STATE } from './core/state';
 import { initScene, starfield, renderer, scene, camera } from './engine/scene';
 import { initPostProcessing, renderPostProcessing } from './engine/postprocessing';
 import { initTrajectory, updateTrajectory } from './engine/trajectory';
-import { createPlayerMesh, playerMesh, playerGlowMesh, gravityCircles } from './procedural/meshes';
+import { createPlayerMesh, playerMesh, playerGlowMesh, playerLight, thrustLight, empLight, gravityCircles } from './procedural/meshes';
 import { setupControls, processInput } from './input/controls';
 import { checkUniverseData, clearActiveSystem, spawnPlanetsAndAsteroids, updateUniverseShaders } from './systems/universe';
 import { updatePhysics } from './engine/physics';
@@ -98,6 +98,25 @@ function animate(time: number) {
                 (playerGlowMesh.material as THREE.MeshBasicMaterial).color.setHex(0xa855f7); // Purple psionic trance
             } else {
                 (playerGlowMesh.material as THREE.MeshBasicMaterial).color.setHex(0x00ff88); // Bio green nominal
+            }
+        }
+
+        // Dynamic Ship, Thrust, and EMP PointLights
+        if (thrustLight) {
+            const isThrusting = STATE.keys.w;
+            const targetThrust = isThrusting ? (2.6 + Math.random() * 0.5) : 0.0;
+            thrustLight.intensity += (targetThrust - thrustLight.intensity) * Math.min(1.0, dt * 12.0);
+        }
+        if (empLight && empLight.intensity > 0.0) {
+            empLight.intensity = Math.max(0.0, empLight.intensity - dt * 20.0);
+        }
+        if (playerLight) {
+            if (STATE.health < 30) {
+                playerLight.color.setHex(0xf43f5e);
+            } else if (STATE.telepathyActive) {
+                playerLight.color.setHex(0xa855f7);
+            } else {
+                playerLight.color.setHex(0x00ff88);
             }
         }
     }

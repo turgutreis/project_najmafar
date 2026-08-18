@@ -3,7 +3,7 @@ import { STATE, activePlanets } from '../core/state';
 import { scene } from '../engine/scene';
 import { PlanetEntry, StarSystem } from '../types/game';
 import { createGravityRing } from '../procedural/meshes';
-import { createHabitableTextures, createGasGiantTextures, createRockyTextures, createIceMoonTextures, createVolcanicMoonTextures, createStarTexture, createCloudTexture } from '../procedural/textures';
+import { createHabitableTextures, createGasGiantTextures, createRockyTextures, createIceMoonTextures, createVolcanicMoonTextures, createStarTexture, createCloudTexture, createCityLightsTexture } from '../procedural/textures';
 import { generatePlanetAttributes, generateFallbackMoons, updateScannerUI } from './scanner';
 import { initPlanetDefenseFleets, clearFleet } from './fleet';
 import { addLogEntry } from '../ui/hud';
@@ -148,7 +148,7 @@ export function spawnPlanetsAndAsteroids() {
         activeCoronaMeshes.push(corona.mesh);
         activeCoronaUpdaters.push(corona.update);
 
-        const starLight = new THREE.PointLight(parseInt(starData.color), 3.2, 400, 0.4);
+        const starLight = new THREE.PointLight(parseInt(starData.color), 3.5, 600, 2.0);
         starLight.position.set(0, 0, 0);
         scene.add(starLight);
 
@@ -178,12 +178,22 @@ export function spawnPlanetsAndAsteroids() {
         const seed = p.name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) + idx * 77;
         const isGas = p.type === 'Gas Giant';
         const isHab = p.type === 'Habitable';
+        const generated = generatePlanetAttributes(p);
+        let finalSpecies = p.species || generated.species;
+        if (p.type === 'Habitable' && (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0)) {
+            finalSpecies = generated.species;
+        }
 
         let texData: any;
         let cloudTexture: THREE.CanvasTexture | null = null;
+        let cityLightsTexture: THREE.CanvasTexture | null = null;
+
         if (isHab) {
             texData = createHabitableTextures(p.color, seed);
             cloudTexture = createCloudTexture(seed + 999);
+            if (finalSpecies && finalSpecies.population > 0) {
+                cityLightsTexture = createCityLightsTexture(seed, finalSpecies.techLevel || 'Spacefaring');
+            }
         } else if (isGas) {
             texData = createGasGiantTextures(p.color, seed);
         } else {
@@ -195,9 +205,46 @@ export function spawnPlanetsAndAsteroids() {
             map: texData.map,
             bumpMap: texData.bumpMap || null,
             bumpScale: isGas ? 0 : 0.08,
-            roughness: isGas ? 0.35 : 0.75,
+            roughness: isGas ? 0.35 : 0.72,
             metalness: isGas ? 0.1 : 0.15
         });
+
+        // Dynamic Night-Side City Lights Shader
+        if (cityLightsTexture) {
+            mat.onBeforeCompile = (shader) => {
+                shader.uniforms.nightMap = { value: cityLightsTexture };
+                shader.uniforms.sunPosition = { value: new THREE.Vector3(0, 0, 0) };
+
+                shader.vertexShader = `
+                    varying vec3 vWorldPosition;
+                    varying vec3 vWorldNormal;
+                    ${shader.vertexShader}
+                `.replace(
+                    `#include <worldpos_vertex>`,
+                    `#include <worldpos_vertex>
+                    vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;
+                    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+                    `
+                );
+
+                shader.fragmentShader = `
+                    uniform sampler2D nightMap;
+                    uniform vec3 sunPosition;
+                    varying vec3 vWorldPosition;
+                    varying vec3 vWorldNormal;
+                    ${shader.fragmentShader}
+                `.replace(
+                    `#include <emissivemap_fragment>`,
+                    `#include <emissivemap_fragment>
+                    vec3 toSun = normalize(sunPosition - vWorldPosition);
+                    float sunDot = dot(vWorldNormal, toSun);
+                    float nightFactor = smoothstep(0.15, -0.3, sunDot);
+                    vec4 nightLights = texture2D(nightMap, vUv);
+                    totalEmissiveRadiance += nightLights.rgb * nightFactor * 2.2;
+                    `
+                );
+            };
+        }
 
         const mesh = new THREE.Mesh(geo, mat);
         const planetGroup = new THREE.Group();
@@ -207,7 +254,7 @@ export function spawnPlanetsAndAsteroids() {
         // Rayleigh Atmospheric Scattering Halo
         if (isHab || isGas) {
             const atmoHex = isHab ? 0x38bdf8 : parseInt(p.color);
-            const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.5 : 1.15);
+            const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.4 : 1.1);
             planetGroup.add(atmoMesh);
         }
 
@@ -259,14 +306,6 @@ export function spawnPlanetsAndAsteroids() {
 
         const orbitSpeed = 0.055 / Math.sqrt(scaledDist);
         const pColorCss = p.color.replace("0x", "#");
-        const generated = generatePlanetAttributes(p);
-
-        let finalSpecies = p.species || generated.species;
-        if (p.type === 'Habitable') {
-            if (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0) {
-                finalSpecies = generated.species;
-            }
-        }
 
         const planetEntry: any = {
             mesh: planetGroup,

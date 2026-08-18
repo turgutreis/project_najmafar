@@ -27612,6 +27612,9 @@ function updateTrajectory() {
 // src/procedural/meshes.ts
 var playerMesh;
 var playerGlowMesh;
+var playerLight;
+var thrustLight;
+var empLight;
 var targetReticleGroup = null;
 var abductBeamMesh = null;
 var harvestBeamMesh = null;
@@ -27640,8 +27643,13 @@ function createPlayerMesh() {
   });
   playerGlowMesh = new Mesh(glowGeo, glowMat);
   playerGroup.add(playerGlowMesh);
-  const coreLight = new PointLight(65416, 3, 15);
-  playerGroup.add(coreLight);
+  playerLight = new PointLight(65416, 1.2, 30, 1.8);
+  playerGroup.add(playerLight);
+  thrustLight = new PointLight(3718648, 0, 35, 1.5);
+  thrustLight.position.set(-2.4, 0, 0);
+  playerGroup.add(thrustLight);
+  empLight = new PointLight(14239471, 0, 180, 1);
+  playerGroup.add(empLight);
   const tentacleCount = 4;
   for (let i = 0;i < tentacleCount; i++) {
     const tentacleGroup = new Group;
@@ -28411,6 +28419,61 @@ function createHabitableTextures(colorHex, seed = 42) {
   const map = new CanvasTexture(colCanvas);
   const bumpMap = new CanvasTexture(bumpCanvas);
   return { map, bumpMap };
+}
+function createCityLightsTexture(seed = 42, techLevel = "Spacefaring") {
+  const w = 256, h = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  const img = ctx.createImageData(w, h);
+  const data = img.data;
+  const isPrimitive = techLevel === "Primitive";
+  const isIndustrial = techLevel === "Industrial";
+  const isHyper = techLevel === "Hyper-Advanced";
+  for (let y = 0;y < h; y++) {
+    const lat = Math.abs(y - h / 2) / (h / 2);
+    for (let x = 0;x < w; x++) {
+      const idx = (y * w + x) * 4;
+      const nx = x / w * 5;
+      const ny = y / h * 3;
+      const n = fbm(nx, ny, 4, seed);
+      const isLand = lat <= 0.8 && n >= 0.52 && n <= 0.74;
+      if (isLand) {
+        const cityNoise = smoothNoise(nx * 14, ny * 14, seed + 777);
+        const roadNoise = smoothNoise(nx * 28, ny * 28, seed + 999);
+        if (cityNoise > 0.68) {
+          const intensity = (cityNoise - 0.68) / 0.32;
+          if (isPrimitive) {
+            data[idx] = Math.floor(180 * intensity);
+            data[idx + 1] = Math.floor(90 * intensity);
+            data[idx + 2] = 20;
+          } else if (isIndustrial) {
+            data[idx] = Math.floor(255 * intensity);
+            data[idx + 1] = Math.floor(190 * intensity);
+            data[idx + 2] = Math.floor(70 * intensity);
+          } else if (isHyper) {
+            data[idx] = Math.floor(160 * intensity);
+            data[idx + 1] = Math.floor(220 * intensity);
+            data[idx + 2] = 255;
+          } else {
+            data[idx] = Math.floor(255 * intensity);
+            data[idx + 1] = Math.floor(210 * intensity);
+            data[idx + 2] = Math.floor(140 * intensity);
+          }
+          data[idx + 3] = 255;
+        } else if (!isPrimitive && roadNoise > 0.82) {
+          data[idx] = 240;
+          data[idx + 1] = 160;
+          data[idx + 2] = 80;
+          data[idx + 3] = 200;
+        }
+      }
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const texture = new CanvasTexture(canvas);
+  return texture;
 }
 function createGasGiantTextures(colorHex, seed = 77) {
   const w = 256, h = 128;
@@ -30334,6 +30397,9 @@ function triggerBioDischarge() {
   STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 15);
   STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 10);
   STATE.bioDischargeCooldown = 4.5;
+  if (empLight) {
+    empLight.intensity = 7.5;
+  }
   if (shockwaveMesh) {
     scene.remove(shockwaveMesh);
     shockwaveMesh.geometry.dispose();
@@ -30648,7 +30714,7 @@ function spawnPlanetsAndAsteroids() {
     scene.add(corona.mesh);
     activeCoronaMeshes.push(corona.mesh);
     activeCoronaUpdaters.push(corona.update);
-    const starLight = new PointLight(parseInt(starData.color), 3.2, 400, 0.4);
+    const starLight = new PointLight(parseInt(starData.color), 3.5, 600, 2);
     starLight.position.set(0, 0, 0);
     scene.add(starLight);
     starData.colorCss = starData.color.replace("0x", "#");
@@ -30673,11 +30739,20 @@ function spawnPlanetsAndAsteroids() {
     const seed = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) + idx * 77;
     const isGas = p.type === "Gas Giant";
     const isHab = p.type === "Habitable";
+    const generated = generatePlanetAttributes(p);
+    let finalSpecies = p.species || generated.species;
+    if (p.type === "Habitable" && (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0)) {
+      finalSpecies = generated.species;
+    }
     let texData;
     let cloudTexture = null;
+    let cityLightsTexture = null;
     if (isHab) {
       texData = createHabitableTextures(p.color, seed);
       cloudTexture = createCloudTexture(seed + 999);
+      if (finalSpecies && finalSpecies.population > 0) {
+        cityLightsTexture = createCityLightsTexture(seed, finalSpecies.techLevel || "Spacefaring");
+      }
     } else if (isGas) {
       texData = createGasGiantTextures(p.color, seed);
     } else {
@@ -30688,16 +30763,43 @@ function spawnPlanetsAndAsteroids() {
       map: texData.map,
       bumpMap: texData.bumpMap || null,
       bumpScale: isGas ? 0 : 0.08,
-      roughness: isGas ? 0.35 : 0.75,
+      roughness: isGas ? 0.35 : 0.72,
       metalness: isGas ? 0.1 : 0.15
     });
+    if (cityLightsTexture) {
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.nightMap = { value: cityLightsTexture };
+        shader.uniforms.sunPosition = { value: new Vector3(0, 0, 0) };
+        shader.vertexShader = `
+                    varying vec3 vWorldPosition;
+                    varying vec3 vWorldNormal;
+                    ${shader.vertexShader}
+                `.replace(`#include <worldpos_vertex>`, `#include <worldpos_vertex>
+                    vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;
+                    vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+                    `);
+        shader.fragmentShader = `
+                    uniform sampler2D nightMap;
+                    uniform vec3 sunPosition;
+                    varying vec3 vWorldPosition;
+                    varying vec3 vWorldNormal;
+                    ${shader.fragmentShader}
+                `.replace(`#include <emissivemap_fragment>`, `#include <emissivemap_fragment>
+                    vec3 toSun = normalize(sunPosition - vWorldPosition);
+                    float sunDot = dot(vWorldNormal, toSun);
+                    float nightFactor = smoothstep(0.15, -0.3, sunDot);
+                    vec4 nightLights = texture2D(nightMap, vUv);
+                    totalEmissiveRadiance += nightLights.rgb * nightFactor * 2.2;
+                    `);
+      };
+    }
     const mesh = new Mesh(geo, mat);
     const planetGroup = new Group;
     planetGroup.position.set(px, 0, pz);
     planetGroup.add(mesh);
     if (isHab || isGas) {
       const atmoHex = isHab ? 3718648 : parseInt(p.color);
-      const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.5 : 1.15);
+      const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.4 : 1.1);
       planetGroup.add(atmoMesh);
     }
     let cloudMesh = null;
@@ -30742,13 +30844,6 @@ function spawnPlanetsAndAsteroids() {
     const ring = createGravityRing(px, pz, pRange, parseInt(p.color), 0.08);
     const orbitSpeed = 0.055 / Math.sqrt(scaledDist);
     const pColorCss = p.color.replace("0x", "#");
-    const generated = generatePlanetAttributes(p);
-    let finalSpecies = p.species || generated.species;
-    if (p.type === "Habitable") {
-      if (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0) {
-        finalSpecies = generated.species;
-      }
-    }
     const planetEntry = {
       mesh: planetGroup,
       bodyMesh: mesh,
@@ -32368,6 +32463,23 @@ function animate(time) {
         playerGlowMesh.material.color.setHex(11032055);
       } else {
         playerGlowMesh.material.color.setHex(65416);
+      }
+    }
+    if (thrustLight) {
+      const isThrusting = STATE.keys.w;
+      const targetThrust = isThrusting ? 2.6 + Math.random() * 0.5 : 0;
+      thrustLight.intensity += (targetThrust - thrustLight.intensity) * Math.min(1, dt * 12);
+    }
+    if (empLight && empLight.intensity > 0) {
+      empLight.intensity = Math.max(0, empLight.intensity - dt * 20);
+    }
+    if (playerLight) {
+      if (STATE.health < 30) {
+        playerLight.color.setHex(16007006);
+      } else if (STATE.telepathyActive) {
+        playerLight.color.setHex(11032055);
+      } else {
+        playerLight.color.setHex(65416);
       }
     }
   }

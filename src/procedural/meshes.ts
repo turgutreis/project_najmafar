@@ -4,6 +4,9 @@ import { STATE } from '../core/state';
 
 export let playerMesh: THREE.Mesh;
 export let playerGlowMesh: THREE.Mesh;
+export let playerLight: THREE.PointLight;
+export let thrustLight: THREE.PointLight;
+export let empLight: THREE.PointLight;
 export let targetReticleGroup: THREE.Group | null = null;
 export let sonarWaveMesh: THREE.Mesh | null = null;
 export let abductBeamMesh: THREE.Line | null = null;
@@ -44,9 +47,18 @@ export function createPlayerMesh(): THREE.Group {
     playerGlowMesh = new THREE.Mesh(glowGeo, glowMat);
     playerGroup.add(playerGlowMesh);
 
-    // Internal core light
-    const coreLight = new THREE.PointLight(0x00ff88, 3, 15);
-    playerGroup.add(coreLight);
+    // Dynamic Bioluminescent Aura Light (Lights up nearby asteroids & terrain)
+    playerLight = new THREE.PointLight(0x00ff88, 1.2, 30, 1.8);
+    playerGroup.add(playerLight);
+
+    // Dynamic Plasma Thrust Flare Light (Illuminates space debris behind ship when thrusting)
+    thrustLight = new THREE.PointLight(0x38bdf8, 0.0, 35, 1.5);
+    thrustLight.position.set(-2.4, 0, 0);
+    playerGroup.add(thrustLight);
+
+    // EMP Shockwave Flash Light (Lights up entire sector on discharge [X])
+    empLight = new THREE.PointLight(0xd946ef, 0.0, 180, 1.0);
+    playerGroup.add(empLight);
 
     // Bio-Tentacles (appendages that sway)
     const tentacleCount = 4;
