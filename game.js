@@ -30794,6 +30794,9 @@ function spawnPlanetsAndAsteroids() {
       };
     }
     const mesh = new Mesh(geo, mat);
+    const axialTilt = (seed % 17 + 12) * Math.PI / 180;
+    mesh.rotation.z = axialTilt;
+    mesh.rotation.x = (seed % 7 - 3) * Math.PI / 180;
     const planetGroup = new Group;
     planetGroup.position.set(px, 0, pz);
     planetGroup.add(mesh);
@@ -30812,6 +30815,7 @@ function spawnPlanetsAndAsteroids() {
         blending: AdditiveBlending
       });
       cloudMesh = new Mesh(cloudGeo, cloudMat);
+      cloudMesh.rotation.z = axialTilt;
       planetGroup.add(cloudMesh);
     }
     let psioAuraMesh = null;
@@ -30977,6 +30981,11 @@ function spawnPlanetsAndAsteroids() {
       isResource: true,
       resourceType: isOrganic ? "bio" : "silicon",
       isAbsorbed: false,
+      rotSpeed: {
+        x: (Math.random() - 0.5) * 0.6,
+        y: (Math.random() - 0.5) * 0.8,
+        z: (Math.random() - 0.5) * 0.6
+      },
       ringMesh: null
     };
     STATE.gravitySources.push(sourceObj);
@@ -32115,10 +32124,10 @@ function updatePhysics(dt) {
         p.ringMesh.position.set(px, 0, pz);
       }
       if (p.bodyMesh) {
-        p.bodyMesh.rotation.y += (p.type === "Gas Giant" ? 0.06 : 0.035) * dt;
+        p.bodyMesh.rotation.y += (p.type === "Gas Giant" ? 0.22 : 0.16) * dt;
       }
       if (p.cloudMesh) {
-        p.cloudMesh.rotation.y += 0.05 * dt;
+        p.cloudMesh.rotation.y += 0.22 * dt;
       }
       if (p.psioAuraMesh) {
         const aPulse = 1 + Math.sin(Date.now() * 0.005) * 0.15;
@@ -32138,8 +32147,15 @@ function updatePhysics(dt) {
         m.ringMesh.position.copy(parentPos);
       }
       if (m.bodyMesh) {
-        m.bodyMesh.rotation.y += 0.05 * dt;
+        m.bodyMesh.rotation.y += 0.2 * dt;
       }
+    }
+  });
+  STATE.gravitySources.forEach((s) => {
+    if (s.type === "asteroid" && s.mesh && s.rotSpeed && !s.isAbsorbed) {
+      s.mesh.rotation.x += s.rotSpeed.x * dt;
+      s.mesh.rotation.y += s.rotSpeed.y * dt;
+      s.mesh.rotation.z += s.rotSpeed.z * dt;
     }
   });
   if (STATE.lockedTarget && STATE.lockedTarget.mesh) {

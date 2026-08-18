@@ -247,6 +247,12 @@ export function spawnPlanetsAndAsteroids() {
         }
 
         const mesh = new THREE.Mesh(geo, mat);
+
+        // Realistic Astronomical Axial Tilt (e.g. 12° to 28° like Earth/Mars)
+        const axialTilt = (((seed % 17) + 12) * Math.PI) / 180;
+        mesh.rotation.z = axialTilt;
+        mesh.rotation.x = (((seed % 7) - 3) * Math.PI) / 180;
+
         const planetGroup = new THREE.Group();
         planetGroup.position.set(px, 0, pz);
         planetGroup.add(mesh);
@@ -268,6 +274,7 @@ export function spawnPlanetsAndAsteroids() {
                 blending: THREE.AdditiveBlending
             });
             cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
+            cloudMesh.rotation.z = axialTilt;
             planetGroup.add(cloudMesh);
         }
 
@@ -454,6 +461,11 @@ export function spawnPlanetsAndAsteroids() {
             isResource: true,
             resourceType: isOrganic ? 'bio' : 'silicon',
             isAbsorbed: false,
+            rotSpeed: {
+                x: (Math.random() - 0.5) * 0.6,
+                y: (Math.random() - 0.5) * 0.8,
+                z: (Math.random() - 0.5) * 0.6
+            },
             ringMesh: null
         };
 

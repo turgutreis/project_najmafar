@@ -28,10 +28,10 @@ export function updatePhysics(dt: number) {
             }
 
             if (p.bodyMesh) {
-                p.bodyMesh.rotation.y += (p.type === 'Gas Giant' ? 0.06 : 0.035) * dt;
+                p.bodyMesh.rotation.y += (p.type === 'Gas Giant' ? 0.22 : 0.16) * dt;
             }
             if (p.cloudMesh) {
-                p.cloudMesh.rotation.y += 0.05 * dt;
+                p.cloudMesh.rotation.y += 0.22 * dt;
             }
             if (p.psioAuraMesh) {
                 const aPulse = 1.0 + Math.sin(Date.now() * 0.005) * 0.15;
@@ -54,8 +54,17 @@ export function updatePhysics(dt: number) {
             }
 
             if (m.bodyMesh) {
-                m.bodyMesh.rotation.y += 0.05 * dt;
+                m.bodyMesh.rotation.y += 0.20 * dt;
             }
+        }
+    });
+
+    // 1.1 Asteroids 3D Tumbling Rotation
+    STATE.gravitySources.forEach(s => {
+        if (s.type === 'asteroid' && s.mesh && s.rotSpeed && !s.isAbsorbed) {
+            s.mesh.rotation.x += s.rotSpeed.x * dt;
+            s.mesh.rotation.y += s.rotSpeed.y * dt;
+            s.mesh.rotation.z += s.rotSpeed.z * dt;
         }
     });
 

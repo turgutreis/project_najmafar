@@ -136,6 +136,7 @@ export interface GravitySource {
     isResource?: boolean;
     resourceType?: 'bio' | 'energy' | 'silicon';
     isAbsorbed?: boolean;
+    rotSpeed?: { x: number; y: number; z: number };
     ringMesh?: THREE.Mesh | null;
 }
 
