@@ -46,9 +46,13 @@ export function setupControls() {
         }
         if (key === 'f') {
             if (STATE.nearestPlanet) {
-                const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
-                if (isScanned && STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
-                    triggerAbductStart();
+                const isScanned = STATE.nearestPlanet.scanned || (STATE.scannedPlanets && STATE.scannedPlanets[STATE.nearestPlanet.name]);
+                if (isScanned) {
+                    if (STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
+                        triggerAbductStart();
+                    } else {
+                        addLogEntry("SYSTEM", `Planet ${STATE.nearestPlanet.name} ist bereits gescannt. Keine biologischen Wesen für Transfer.`);
+                    }
                 } else {
                     triggerScanStart();
                 }
@@ -330,9 +334,11 @@ export function processInput(dt: number) {
 
         if (isPressedEdge(0)) { // Button A
             if (STATE.nearestPlanet) {
-                const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
-                if (isScanned && STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
-                    triggerAbductStart();
+                const isScanned = STATE.nearestPlanet.scanned || (STATE.scannedPlanets && STATE.scannedPlanets[STATE.nearestPlanet.name]);
+                if (isScanned) {
+                    if (STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
+                        triggerAbductStart();
+                    }
                 } else {
                     triggerScanStart();
                 }

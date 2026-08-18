@@ -8038,6 +8038,33 @@ function checkIntersection(object, raycaster, ray, thresholdSq, a, b, i) {
     object
   };
 }
+var _start = /* @__PURE__ */ new Vector3;
+var _end = /* @__PURE__ */ new Vector3;
+
+class LineSegments extends Line {
+  constructor(geometry, material) {
+    super(geometry, material);
+    this.isLineSegments = true;
+    this.type = "LineSegments";
+  }
+  computeLineDistances() {
+    const geometry = this.geometry;
+    if (geometry.index === null) {
+      const positionAttribute = geometry.attributes.position;
+      const lineDistances = [];
+      for (let i = 0, l = positionAttribute.count;i < l; i += 2) {
+        _start.fromBufferAttribute(positionAttribute, i);
+        _end.fromBufferAttribute(positionAttribute, i + 1);
+        lineDistances[i] = i === 0 ? 0 : lineDistances[i - 1];
+        lineDistances[i + 1] = lineDistances[i] + _start.distanceTo(_end);
+      }
+      geometry.setAttribute("lineDistance", new Float32BufferAttribute(lineDistances, 1));
+    } else {
+      warn("LineSegments.computeLineDistances(): Computation only possible with non-indexed BufferGeometry.");
+    }
+    return this;
+  }
+}
 class PointsMaterial extends Material {
   constructor(parameters) {
     super();
@@ -30171,6 +30198,79 @@ function removeHarvestBeam() {
     harvestBeamMesh = null;
   }
 }
+var scanBeamMesh = null;
+var scanPlanetRingMesh = null;
+function createScanVisuals(startPos, targetPos, targetSize = 3) {
+  removeScanVisuals();
+  const pts = [
+    startPos.clone(),
+    targetPos.clone(),
+    startPos.clone(),
+    targetPos.clone()
+  ];
+  const geo = new BufferGeometry().setFromPoints(pts);
+  const mat = new LineBasicMaterial({
+    color: 3718648,
+    linewidth: 3,
+    transparent: true,
+    opacity: 0.9,
+    blending: AdditiveBlending
+  });
+  scanBeamMesh = new LineSegments(geo, mat);
+  scene.add(scanBeamMesh);
+  const ringGeo = new RingGeometry(targetSize * 1.05, targetSize * 1.35, 48);
+  ringGeo.rotateX(Math.PI / 2);
+  const ringMat = new MeshBasicMaterial({
+    color: 440020,
+    transparent: true,
+    opacity: 0.75,
+    side: DoubleSide,
+    blending: AdditiveBlending,
+    wireframe: true
+  });
+  scanPlanetRingMesh = new Mesh(ringGeo, ringMat);
+  scanPlanetRingMesh.position.copy(targetPos);
+  scene.add(scanPlanetRingMesh);
+}
+function updateScanVisuals(startPos, targetPos) {
+  if (scanBeamMesh) {
+    const positions = scanBeamMesh.geometry.attributes.position.array;
+    positions[0] = startPos.x;
+    positions[1] = startPos.y + 0.3;
+    positions[2] = startPos.z + 0.6;
+    positions[3] = targetPos.x;
+    positions[4] = targetPos.y;
+    positions[5] = targetPos.z;
+    positions[6] = startPos.x;
+    positions[7] = startPos.y + 0.3;
+    positions[8] = startPos.z - 0.6;
+    positions[9] = targetPos.x;
+    positions[10] = targetPos.y;
+    positions[11] = targetPos.z;
+    scanBeamMesh.geometry.attributes.position.needsUpdate = true;
+    scanBeamMesh.material.opacity = 0.65 + Math.sin(Date.now() * 0.04) * 0.35;
+  }
+  if (scanPlanetRingMesh) {
+    scanPlanetRingMesh.position.copy(targetPos);
+    scanPlanetRingMesh.position.y = Math.sin(Date.now() * 0.008) * 1.5;
+    scanPlanetRingMesh.rotation.y += 0.04;
+    scanPlanetRingMesh.material.opacity = 0.5 + Math.sin(Date.now() * 0.02) * 0.4;
+  }
+}
+function removeScanVisuals() {
+  if (scanBeamMesh) {
+    scene.remove(scanBeamMesh);
+    scanBeamMesh.geometry.dispose();
+    scanBeamMesh.material.dispose();
+    scanBeamMesh = null;
+  }
+  if (scanPlanetRingMesh) {
+    scene.remove(scanPlanetRingMesh);
+    scanPlanetRingMesh.geometry.dispose();
+    scanPlanetRingMesh.material.dispose();
+    scanPlanetRingMesh = null;
+  }
+}
 
 // src/engine/audio.ts
 var audioCtx = null;
@@ -31706,12 +31806,18 @@ function generateFallbackMoons(p) {
 function triggerScanStart() {
   if (!STATE.gameStarted || STATE.scanningPlanet || STATE.extractingPlanet || !STATE.nearestPlanet)
     return;
-  const dx = STATE.playerPosition.x - STATE.nearestPlanet.mesh.position.x;
-  const dz = STATE.playerPosition.z - STATE.nearestPlanet.mesh.position.z;
+  const planet = STATE.nearestPlanet;
+  const isAlreadyScanned = planet.scanned || STATE.scannedPlanets && STATE.scannedPlanets[planet.name];
+  if (isAlreadyScanned) {
+    addLogEntry("SYSTEM", `Planet ${planet.name} ist bereits vollständig kartografiert & gescannt.`);
+    return;
+  }
+  const dx = STATE.playerPosition.x - planet.mesh.position.x;
+  const dz = STATE.playerPosition.z - planet.mesh.position.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
   if (dist >= 20)
     return;
-  STATE.scanningPlanet = STATE.nearestPlanet;
+  STATE.scanningPlanet = planet;
   STATE.scanProgress = 0;
   const progContainer = document.getElementById("scan-progress-container");
   if (progContainer)
@@ -31719,6 +31825,7 @@ function triggerScanStart() {
   const scanBtn = document.getElementById("start-scan-btn");
   if (scanBtn)
     scanBtn.setAttribute("disabled", "true");
+  createScanVisuals(STATE.playerPosition, planet.mesh.position, planet.size || 3);
   startScanSound();
   addLogEntry("SYSTEM", `Spektral-Scan initiiert für: ${STATE.scanningPlanet.name}. Halte Position (Distanz < 20)...`);
 }
@@ -31732,6 +31839,7 @@ function updateScanning(dt) {
     cancelScanning("Signalverlust. Abstand überschritt Sicherheitsradius.");
     return;
   }
+  updateScanVisuals(STATE.playerPosition, STATE.scanningPlanet.mesh.position);
   const scanSpeedMult = STATE.crewBuffs ? STATE.crewBuffs.scanSpeed : 1;
   STATE.scanProgress += dt * 35 * scanSpeedMult;
   const bar = document.getElementById("scan-progress-bar");
@@ -31746,6 +31854,7 @@ function updateScanning(dt) {
 }
 function cancelScanning(reason) {
   stopScanSound();
+  removeScanVisuals();
   addLogEntry("SYSTEM", `Scan abgebrochen: ${reason}`);
   STATE.scanningPlanet = null;
   STATE.scanProgress = 0;
@@ -31755,6 +31864,7 @@ function cancelScanning(reason) {
 }
 function completeScanning() {
   stopScanSound();
+  removeScanVisuals();
   const progContainer = document.getElementById("scan-progress-container");
   if (progContainer)
     progContainer.style.display = "none";
@@ -34263,9 +34373,13 @@ function setupControls() {
     }
     if (key === "f") {
       if (STATE.nearestPlanet) {
-        const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
-        if (isScanned && STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
-          triggerAbductStart();
+        const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets && STATE.scannedPlanets[STATE.nearestPlanet.name];
+        if (isScanned) {
+          if (STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
+            triggerAbductStart();
+          } else {
+            addLogEntry("SYSTEM", `Planet ${STATE.nearestPlanet.name} ist bereits gescannt. Keine biologischen Wesen für Transfer.`);
+          }
         } else {
           triggerScanStart();
         }
@@ -34529,9 +34643,11 @@ function processInput(dt) {
     }
     if (isPressedEdge(0)) {
       if (STATE.nearestPlanet) {
-        const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets[STATE.nearestPlanet.name];
-        if (isScanned && STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
-          triggerAbductStart();
+        const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets && STATE.scannedPlanets[STATE.nearestPlanet.name];
+        if (isScanned) {
+          if (STATE.nearestPlanet.attributes.species && STATE.nearestPlanet.attributes.species.population > 0) {
+            triggerAbductStart();
+          }
         } else {
           triggerScanStart();
         }

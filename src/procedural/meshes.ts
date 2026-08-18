@@ -184,3 +184,88 @@ export function removeHarvestBeam() {
         harvestBeamMesh = null;
     }
 }
+
+// 3D Holographic Spectral Scanner Visuals (Dual Mandible Laser Beams & Planetary Scanner Ring)
+export let scanBeamMesh: THREE.LineSegments | null = null;
+export let scanPlanetRingMesh: THREE.Mesh | null = null;
+
+export function createScanVisuals(startPos: THREE.Vector3, targetPos: THREE.Vector3, targetSize: number = 3.0) {
+    removeScanVisuals();
+
+    // 1. Dual Spectral Sensor Beams
+    const pts = [
+        startPos.clone(), targetPos.clone(),
+        startPos.clone(), targetPos.clone()
+    ];
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({
+        color: 0x38bdf8,
+        linewidth: 3,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending
+    });
+    scanBeamMesh = new THREE.LineSegments(geo, mat);
+    scene.add(scanBeamMesh);
+
+    // 2. Holographic Scan Grid Ring around Planet
+    const ringGeo = new THREE.RingGeometry(targetSize * 1.05, targetSize * 1.35, 48);
+    ringGeo.rotateX(Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x06b6d4,
+        transparent: true,
+        opacity: 0.75,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        wireframe: true
+    });
+    scanPlanetRingMesh = new THREE.Mesh(ringGeo, ringMat);
+    scanPlanetRingMesh.position.copy(targetPos);
+    scene.add(scanPlanetRingMesh);
+}
+
+export function updateScanVisuals(startPos: THREE.Vector3, targetPos: THREE.Vector3) {
+    if (scanBeamMesh) {
+        const positions = (scanBeamMesh.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+        // Left Mandible Beam
+        positions[0] = startPos.x;
+        positions[1] = startPos.y + 0.3;
+        positions[2] = startPos.z + 0.6;
+        positions[3] = targetPos.x;
+        positions[4] = targetPos.y;
+        positions[5] = targetPos.z;
+
+        // Right Mandible Beam
+        positions[6] = startPos.x;
+        positions[7] = startPos.y + 0.3;
+        positions[8] = startPos.z - 0.6;
+        positions[9] = targetPos.x;
+        positions[10] = targetPos.y;
+        positions[11] = targetPos.z;
+
+        scanBeamMesh.geometry.attributes.position.needsUpdate = true;
+        (scanBeamMesh.material as THREE.Material).opacity = 0.65 + Math.sin(Date.now() * 0.04) * 0.35;
+    }
+
+    if (scanPlanetRingMesh) {
+        scanPlanetRingMesh.position.copy(targetPos);
+        scanPlanetRingMesh.position.y = Math.sin(Date.now() * 0.008) * 1.5;
+        scanPlanetRingMesh.rotation.y += 0.04;
+        (scanPlanetRingMesh.material as THREE.Material).opacity = 0.5 + Math.sin(Date.now() * 0.02) * 0.4;
+    }
+}
+
+export function removeScanVisuals() {
+    if (scanBeamMesh) {
+        scene.remove(scanBeamMesh);
+        scanBeamMesh.geometry.dispose();
+        (scanBeamMesh.material as THREE.Material).dispose();
+        scanBeamMesh = null;
+    }
+    if (scanPlanetRingMesh) {
+        scene.remove(scanPlanetRingMesh);
+        scanPlanetRingMesh.geometry.dispose();
+        (scanPlanetRingMesh.material as THREE.Material).dispose();
+        scanPlanetRingMesh = null;
+    }
+}

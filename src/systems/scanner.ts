@@ -4,6 +4,7 @@ import { getAudioContext } from '../engine/audio';
 import { collapseQuantumCivilization } from '../procedural/quantum-civ';
 import { getFaction } from '../systems/factions';
 import { openDiplomacyComms } from '../systems/diplomacy';
+import { createScanVisuals, updateScanVisuals, removeScanVisuals } from '../procedural/meshes';
 import { SpeciesData, PlanetAttributes } from '../types/game';
 
 let scanOsc: OscillatorNode | null = null;
@@ -96,12 +97,19 @@ export function generateFallbackMoons(p: any) {
 export function triggerScanStart() {
     if (!STATE.gameStarted || STATE.scanningPlanet || STATE.extractingPlanet || !STATE.nearestPlanet) return;
 
-    const dx = STATE.playerPosition.x - STATE.nearestPlanet.mesh.position.x;
-    const dz = STATE.playerPosition.z - STATE.nearestPlanet.mesh.position.z;
+    const planet = STATE.nearestPlanet;
+    const isAlreadyScanned = planet.scanned || (STATE.scannedPlanets && STATE.scannedPlanets[planet.name]);
+    if (isAlreadyScanned) {
+        addLogEntry("SYSTEM", `Planet ${planet.name} ist bereits vollständig kartografiert & gescannt.`);
+        return;
+    }
+
+    const dx = STATE.playerPosition.x - planet.mesh.position.x;
+    const dz = STATE.playerPosition.z - planet.mesh.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
     if (dist >= 20) return;
 
-    STATE.scanningPlanet = STATE.nearestPlanet;
+    STATE.scanningPlanet = planet;
     STATE.scanProgress = 0;
 
     const progContainer = document.getElementById('scan-progress-container');
@@ -110,6 +118,7 @@ export function triggerScanStart() {
     const scanBtn = document.getElementById('start-scan-btn');
     if (scanBtn) scanBtn.setAttribute('disabled', 'true');
 
+    createScanVisuals(STATE.playerPosition, planet.mesh.position, planet.size || 3.0);
     startScanSound();
     addLogEntry("SYSTEM", `Spektral-Scan initiiert für: ${STATE.scanningPlanet.name}. Halte Position (Distanz < 20)...`);
 }
@@ -126,6 +135,8 @@ export function updateScanning(dt: number) {
         return;
     }
 
+    updateScanVisuals(STATE.playerPosition, STATE.scanningPlanet.mesh.position);
+
     const scanSpeedMult = (STATE.crewBuffs ? STATE.crewBuffs.scanSpeed : 1.0);
     STATE.scanProgress += dt * 35 * scanSpeedMult;
 
@@ -141,6 +152,7 @@ export function updateScanning(dt: number) {
 
 export function cancelScanning(reason: string) {
     stopScanSound();
+    removeScanVisuals();
     addLogEntry("SYSTEM", `Scan abgebrochen: ${reason}`);
     STATE.scanningPlanet = null;
     STATE.scanProgress = 0;
@@ -150,6 +162,7 @@ export function cancelScanning(reason: string) {
 
 export function completeScanning() {
     stopScanSound();
+    removeScanVisuals();
     const progContainer = document.getElementById('scan-progress-container');
     if (progContainer) progContainer.style.display = 'none';
 
