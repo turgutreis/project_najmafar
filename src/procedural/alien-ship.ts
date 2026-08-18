@@ -195,22 +195,8 @@ export function createAlienBioShip(): AlienShipController {
         tendrils.push(tendrilGroup);
     }
 
-    // 10. Outer Psionic Shield Energy Membrane (Smooth Fresnel Halo - NO WIREFRAME)
-    const shieldGeo = new THREE.SphereGeometry(3.2, 32, 16);
-    shieldGeo.scale(1.5, 0.45, 1.4);
-    const shieldMat = new THREE.MeshBasicMaterial({
-        color: 0x00ff88,
-        wireframe: false,
-        transparent: true,
-        opacity: 0.10,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
-    });
-    const shieldGlowMesh = new THREE.Mesh(shieldGeo, shieldMat);
-    group.add(shieldGlowMesh);
-
     // Set prominent scale for clear, crisp visibility
-    group.scale.set(1.4, 1.4, 1.4);
+    group.scale.set(1.5, 1.5, 1.5);
 
     let animTime = 0;
 
@@ -218,7 +204,7 @@ export function createAlienBioShip(): AlienShipController {
         group,
         coreMesh,
         psioCoreMesh,
-        shieldGlowMesh,
+        shieldGlowMesh: null as any,
         leftWing,
         rightWing,
         leftMandible,
@@ -228,7 +214,7 @@ export function createAlienBioShip(): AlienShipController {
         update: (dt: number) => {
             animTime += dt;
 
-            // A. Breathing Psionic Core & Shield Pulse
+            // A. Breathing Psionic Core Pulse
             const breath = Math.sin(animTime * 2.5);
             const coreScale = 1.0 + breath * 0.08;
             psioCoreMesh.scale.set(1.4 * coreScale, 0.55 * coreScale, 0.75 * coreScale);
@@ -245,7 +231,6 @@ export function createAlienBioShip(): AlienShipController {
             (psioCoreMesh.material as THREE.MeshPhysicalMaterial).emissive.setHex(activeColor);
             (biolumMat as THREE.MeshStandardMaterial).color.setHex(activeColor);
             (biolumMat as THREE.MeshStandardMaterial).emissive.setHex(activeColor);
-            (shieldGlowMesh.material as THREE.MeshBasicMaterial).color.setHex(activeColor);
 
             // B. Undulating Wing Motion (Manta wave)
             const speedMagnitude = STATE.playerVelocity ? STATE.playerVelocity.length() : 0;

@@ -29809,25 +29809,13 @@ function createAlienBioShip() {
     group.add(tendrilGroup);
     tendrils.push(tendrilGroup);
   }
-  const shieldGeo = new SphereGeometry(3.2, 32, 16);
-  shieldGeo.scale(1.5, 0.45, 1.4);
-  const shieldMat = new MeshBasicMaterial({
-    color: 65416,
-    wireframe: false,
-    transparent: true,
-    opacity: 0.1,
-    blending: AdditiveBlending,
-    depthWrite: false
-  });
-  const shieldGlowMesh = new Mesh(shieldGeo, shieldMat);
-  group.add(shieldGlowMesh);
-  group.scale.set(1.4, 1.4, 1.4);
+  group.scale.set(1.5, 1.5, 1.5);
   let animTime = 0;
   return {
     group,
     coreMesh,
     psioCoreMesh,
-    shieldGlowMesh,
+    shieldGlowMesh: null,
     leftWing,
     rightWing,
     leftMandible,
@@ -29849,7 +29837,6 @@ function createAlienBioShip() {
       psioCoreMesh.material.emissive.setHex(activeColor);
       biolumMat.color.setHex(activeColor);
       biolumMat.emissive.setHex(activeColor);
-      shieldGlowMesh.material.color.setHex(activeColor);
       const speedMagnitude = STATE.playerVelocity ? STATE.playerVelocity.length() : 0;
       const wingFreq = 3.2 + Math.min(speedMagnitude * 0.15, 3.5);
       const wingWave = Math.sin(animTime * wingFreq) * 0.22;
@@ -34444,12 +34431,22 @@ function processInput(dt) {
       STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.2 * dt);
     }
     if (STATE.playerGroup) {
-      const targetAngle = Math.atan2(inputVec.x, inputVec.z);
-      STATE.playerGroup.rotation.y = MathUtils.lerp(STATE.playerGroup.rotation.y, targetAngle, 0.1);
+      const targetAngle = -Math.atan2(inputVec.z, inputVec.x);
+      let diff = targetAngle - STATE.playerGroup.rotation.y;
+      while (diff < -Math.PI)
+        diff += Math.PI * 2;
+      while (diff > Math.PI)
+        diff -= Math.PI * 2;
+      STATE.playerGroup.rotation.y += diff * Math.min(1, dt * 10);
+      const turnRoll = -diff * 0.35;
+      STATE.playerGroup.rotation.x = MathUtils.lerp(STATE.playerGroup.rotation.x, turnRoll, 0.1);
     }
     STATE.currentDrag = STATE.drag;
     setThrusterSound(true);
   } else {
+    if (STATE.playerGroup) {
+      STATE.playerGroup.rotation.x = MathUtils.lerp(STATE.playerGroup.rotation.x, 0, 0.1);
+    }
     STATE.currentDrag = STATE.brakeDrag;
     setThrusterSound(false);
   }

@@ -379,12 +379,18 @@ export function processInput(dt: number) {
             STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.2 * dt);
         }
 
-        // Rotate ship towards movement direction smoothly
+        // Rotate ship towards movement direction smoothly (natural flight orientation)
         if (STATE.playerGroup) {
-            const targetAngle = Math.atan2(inputVec.x, inputVec.z);
-            STATE.playerGroup.rotation.y = THREE.MathUtils.lerp(
-                STATE.playerGroup.rotation.y, targetAngle, 0.1
-            );
+            // Ship nose is along +X in local space. Angle to point +X along (inputVec.x, inputVec.z):
+            const targetAngle = -Math.atan2(inputVec.z, inputVec.x);
+            let diff = targetAngle - STATE.playerGroup.rotation.y;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            STATE.playerGroup.rotation.y += diff * Math.min(1.0, dt * 10.0);
+
+            // Natural organic banking roll into turns
+            const turnRoll = -diff * 0.35;
+            STATE.playerGroup.rotation.x = THREE.MathUtils.lerp(STATE.playerGroup.rotation.x, turnRoll, 0.1);
         }
 
         // Thrusting drag (low - responsive flight)
@@ -392,6 +398,11 @@ export function processInput(dt: number) {
 
         setThrusterSound(true);
     } else {
+        // Level out banking roll
+        if (STATE.playerGroup) {
+            STATE.playerGroup.rotation.x = THREE.MathUtils.lerp(STATE.playerGroup.rotation.x, 0, 0.1);
+        }
+
         // Retro-dampening (high drag - ship brakes when not thrusting)
         STATE.currentDrag = STATE.brakeDrag;
 
