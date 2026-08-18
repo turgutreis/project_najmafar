@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { STATE } from './core/state';
-import { initScene, starfield, renderer, scene, camera } from './engine/scene';
+import { initScene, starfieldController, renderer, scene, camera } from './engine/scene';
 import { initPostProcessing, renderPostProcessing } from './engine/postprocessing';
 import { initTrajectory, updateTrajectory } from './engine/trajectory';
 import { createPlayerMesh, playerMesh, playerGlowMesh, playerLight, thrustLight, empLight, alienShipController, gravityCircles } from './procedural/meshes';
@@ -29,9 +29,9 @@ function animate(time: number) {
     const dt = Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
 
-    // Background starfield slow rotation
-    if (starfield) {
-        starfield.rotation.y += dt * 0.005;
+    // Background starfield & cosmic nebula updates (rotation & parallax)
+    if (starfieldController) {
+        starfieldController.update(dt, STATE.playerPosition);
     }
 
     // Update active procedural shaders (solar corona, volumetric sun rays, and lens flares)

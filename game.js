@@ -29506,69 +29506,210 @@ function renderPostProcessing() {
   }
 }
 
+// src/engine/starfield.ts
+function createRealisticStarfield() {
+  const group = new Group;
+  const microCount = 4500;
+  const microGeo = new BufferGeometry;
+  const microPos = new Float32Array(microCount * 3);
+  const microCol = new Float32Array(microCount * 3);
+  for (let i = 0;i < microCount; i++) {
+    const r = Math.sqrt(Math.random()) * 650;
+    const theta = Math.random() * Math.PI * 2;
+    microPos[i * 3] = Math.cos(theta) * r;
+    microPos[i * 3 + 1] = -180 - Math.random() * 120;
+    microPos[i * 3 + 2] = Math.sin(theta) * r;
+    const rand = Math.random();
+    if (rand < 0.4) {
+      microCol[i * 3] = 0.95;
+      microCol[i * 3 + 1] = 0.95;
+      microCol[i * 3 + 2] = 1;
+    } else if (rand < 0.65) {
+      microCol[i * 3] = 1;
+      microCol[i * 3 + 1] = 0.9;
+      microCol[i * 3 + 2] = 0.65;
+    } else if (rand < 0.85) {
+      microCol[i * 3] = 0.45;
+      microCol[i * 3 + 1] = 0.85;
+      microCol[i * 3 + 2] = 1;
+    } else {
+      microCol[i * 3] = 1;
+      microCol[i * 3 + 1] = 0.55;
+      microCol[i * 3 + 2] = 0.45;
+    }
+  }
+  microGeo.setAttribute("position", new BufferAttribute(microPos, 3));
+  microGeo.setAttribute("color", new BufferAttribute(microCol, 3));
+  const microMat = new PointsMaterial({
+    size: 0.55,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.75,
+    depthWrite: false
+  });
+  const microPoints = new Points(microGeo, microMat);
+  group.add(microPoints);
+  const midCount = 1200;
+  const midGeo = new BufferGeometry;
+  const midPos = new Float32Array(midCount * 3);
+  const midCol = new Float32Array(midCount * 3);
+  for (let i = 0;i < midCount; i++) {
+    const r = Math.sqrt(Math.random()) * 600;
+    const theta = Math.random() * Math.PI * 2;
+    midPos[i * 3] = Math.cos(theta) * r;
+    midPos[i * 3 + 1] = -140 - Math.random() * 60;
+    midPos[i * 3 + 2] = Math.sin(theta) * r;
+    const rand = Math.random();
+    if (rand < 0.35) {
+      midCol[i * 3] = 1;
+      midCol[i * 3 + 1] = 1;
+      midCol[i * 3 + 2] = 1;
+    } else if (rand < 0.6) {
+      midCol[i * 3] = 0.35;
+      midCol[i * 3 + 1] = 0.88;
+      midCol[i * 3 + 2] = 1;
+    } else if (rand < 0.85) {
+      midCol[i * 3] = 1;
+      midCol[i * 3 + 1] = 0.82;
+      midCol[i * 3 + 2] = 0.35;
+    } else {
+      midCol[i * 3] = 0.95;
+      midCol[i * 3 + 1] = 0.45;
+      midCol[i * 3 + 2] = 0.85;
+    }
+  }
+  midGeo.setAttribute("position", new BufferAttribute(midPos, 3));
+  midGeo.setAttribute("color", new BufferAttribute(midCol, 3));
+  const midMat = new PointsMaterial({
+    size: 1.1,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false
+  });
+  const midPoints = new Points(midGeo, midMat);
+  group.add(midPoints);
+  const beaconCount = 120;
+  const beaconGeo = new BufferGeometry;
+  const beaconPos = new Float32Array(beaconCount * 3);
+  const beaconCol = new Float32Array(beaconCount * 3);
+  for (let i = 0;i < beaconCount; i++) {
+    const r = Math.sqrt(Math.random()) * 550;
+    const theta = Math.random() * Math.PI * 2;
+    beaconPos[i * 3] = Math.cos(theta) * r;
+    beaconPos[i * 3 + 1] = -110 - Math.random() * 40;
+    beaconPos[i * 3 + 2] = Math.sin(theta) * r;
+    const rand = Math.random();
+    if (rand < 0.4) {
+      beaconCol[i * 3] = 0.5;
+      beaconCol[i * 3 + 1] = 0.95;
+      beaconCol[i * 3 + 2] = 1;
+    } else if (rand < 0.7) {
+      beaconCol[i * 3] = 1;
+      beaconCol[i * 3 + 1] = 0.88;
+      beaconCol[i * 3 + 2] = 0.3;
+    } else {
+      beaconCol[i * 3] = 1;
+      beaconCol[i * 3 + 1] = 1;
+      beaconCol[i * 3 + 2] = 1;
+    }
+  }
+  beaconGeo.setAttribute("position", new BufferAttribute(beaconPos, 3));
+  beaconGeo.setAttribute("color", new BufferAttribute(beaconCol, 3));
+  const beaconMat = new PointsMaterial({
+    size: 1.7,
+    vertexColors: true,
+    transparent: true,
+    opacity: 1,
+    depthWrite: false
+  });
+  const beaconPoints = new Points(beaconGeo, beaconMat);
+  group.add(beaconPoints);
+  const nebulaCanvas = document.createElement("canvas");
+  nebulaCanvas.width = 256;
+  nebulaCanvas.height = 256;
+  const nCtx = nebulaCanvas.getContext("2d");
+  const gradient = nCtx.createRadialGradient(128, 128, 10, 128, 128, 128);
+  gradient.addColorStop(0, "rgba(168, 85, 247, 0.45)");
+  gradient.addColorStop(0.35, "rgba(56, 189, 248, 0.25)");
+  gradient.addColorStop(0.7, "rgba(15, 23, 42, 0.12)");
+  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+  nCtx.fillStyle = gradient;
+  nCtx.fillRect(0, 0, 256, 256);
+  const nebulaTex = new CanvasTexture(nebulaCanvas);
+  const nebulaGeo = new PlaneGeometry(350, 350);
+  nebulaGeo.rotateX(-Math.PI / 2);
+  const nebulaColors = [6514417, 440020, 14239471, 3900150];
+  const nebulaMeshes = [];
+  for (let k = 0;k < 6; k++) {
+    const nMat = new MeshBasicMaterial({
+      map: nebulaTex,
+      color: nebulaColors[k % nebulaColors.length],
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      side: DoubleSide
+    });
+    const nMesh = new Mesh(nebulaGeo, nMat);
+    const ang = k / 6 * Math.PI * 2 + 0.4;
+    const dist = 120 + k % 3 * 110;
+    nMesh.position.set(Math.cos(ang) * dist, -240 - k * 15, Math.sin(ang) * dist);
+    nMesh.rotation.y = k * 1.1;
+    group.add(nMesh);
+    nebulaMeshes.push(nMesh);
+  }
+  let totalTime = 0;
+  return {
+    group,
+    update: (dt, playerPos) => {
+      totalTime += dt;
+      group.rotation.y = totalTime * 0.0015;
+      if (playerPos) {
+        microPoints.position.x = playerPos.x * 0.015;
+        microPoints.position.z = playerPos.z * 0.015;
+        midPoints.position.x = playerPos.x * 0.035;
+        midPoints.position.z = playerPos.z * 0.035;
+        beaconPoints.position.x = playerPos.x * 0.06;
+        beaconPoints.position.z = playerPos.z * 0.06;
+      }
+    },
+    dispose: () => {
+      microGeo.dispose();
+      microMat.dispose();
+      midGeo.dispose();
+      midMat.dispose();
+      beaconGeo.dispose();
+      beaconMat.dispose();
+      nebulaGeo.dispose();
+      nebulaTex.dispose();
+      nebulaMeshes.forEach((m) => m.material.dispose());
+    }
+  };
+}
+
 // src/engine/scene.ts
 var scene;
 var camera;
 var renderer;
-var starfield;
+var starfieldController = null;
 function initScene(container) {
   const target = container || document.getElementById("canvas-container") || document.body;
   scene = new Scene;
   camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 80, 0);
+  camera.position.set(0, 65, 0);
   camera.lookAt(0, 0, 0);
   renderer = new WebGLRenderer({ antialias: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(132105, 1);
+  renderer.setClearColor(66312, 1);
   renderer.toneMapping = ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
   target.appendChild(renderer.domElement);
   const ambientLight = new AmbientLight(396312, 0.18);
   scene.add(ambientLight);
-  createStarfield();
+  starfieldController = createRealisticStarfield();
+  scene.add(starfieldController.group);
   window.addEventListener("resize", onWindowResize);
-}
-function createStarfield() {
-  const starCount = 3000;
-  const geometry = new BufferGeometry;
-  const positions = new Float32Array(starCount * 3);
-  const colors = new Float32Array(starCount * 3);
-  for (let i = 0;i < starCount; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const radius = 100 + Math.random() * 380;
-    positions[i * 3] = Math.cos(angle) * radius;
-    positions[i * 3 + 1] = -120 - Math.random() * 80;
-    positions[i * 3 + 2] = Math.sin(angle) * radius;
-    const rand = Math.random();
-    if (rand < 0.25) {
-      colors[i * 3] = 0.65;
-      colors[i * 3 + 1] = 0.25;
-      colors[i * 3 + 2] = 0.95;
-    } else if (rand < 0.55) {
-      colors[i * 3] = 0.25;
-      colors[i * 3 + 1] = 0.82;
-      colors[i * 3 + 2] = 0.98;
-    } else if (rand < 0.75) {
-      colors[i * 3] = 0.98;
-      colors[i * 3 + 1] = 0.8;
-      colors[i * 3 + 2] = 0.15;
-    } else {
-      colors[i * 3] = 0.95;
-      colors[i * 3 + 1] = 0.95;
-      colors[i * 3 + 2] = 1;
-    }
-  }
-  geometry.setAttribute("position", new BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new BufferAttribute(colors, 3));
-  const material = new PointsMaterial({
-    size: 0.75,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.85,
-    depthWrite: false
-  });
-  starfield = new Points(geometry, material);
-  scene.add(starfield);
 }
 function onWindowResize() {
   if (!camera || !renderer)
@@ -34775,8 +34916,8 @@ function animate(time) {
     lastTime = time;
   const dt = Math.min((time - lastTime) / 1000, 0.1);
   lastTime = time;
-  if (starfield) {
-    starfield.rotation.y += dt * 0.005;
+  if (starfieldController) {
+    starfieldController.update(dt, STATE.playerPosition);
   }
   updateUniverseShaders(dt, camera);
   gravityCircles.forEach((c) => {
