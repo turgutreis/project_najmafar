@@ -28639,7 +28639,9 @@ var STATE = {
     free_traders: 0,
     aethelgard_guardians: 5
   },
-  activeDiplomacyPlanet: null
+  activeDiplomacyPlanet: null,
+  cameraHeight: 65,
+  targetCameraHeight: 65
 };
 var activePlanets = [];
 
@@ -29674,110 +29676,117 @@ function updateTrajectory() {
 function createAlienBioShip() {
   const group = new Group;
   const chitinMat = new MeshStandardMaterial({
-    color: 659487,
-    roughness: 0.25,
-    metalness: 0.85,
-    emissive: 330776,
-    flatShading: false
+    color: 462106,
+    roughness: 0.2,
+    metalness: 0.9,
+    emissive: 198676
   });
   const dorsalPlateMat = new MeshStandardMaterial({
     color: 988970,
-    roughness: 0.2,
-    metalness: 0.9,
-    emissive: 142370
+    roughness: 0.15,
+    metalness: 0.95,
+    emissive: 413243
   });
   const biolumMat = new MeshStandardMaterial({
     color: 65416,
     emissive: 65416,
-    emissiveIntensity: 0.9,
+    emissiveIntensity: 1.2,
     roughness: 0.1,
-    metalness: 0.2
+    metalness: 0.1
   });
   const nucleusMat = new MeshPhysicalMaterial({
     color: 65416,
     emissive: 65416,
-    emissiveIntensity: 0.6,
-    roughness: 0.1,
+    emissiveIntensity: 0.9,
+    roughness: 0.05,
     metalness: 0.1,
     transparent: true,
-    opacity: 0.85,
-    transmission: 0.6,
-    ior: 1.45
+    opacity: 0.9,
+    transmission: 0.7,
+    ior: 1.5
   });
-  const bodyGeo = new ConeGeometry(1.6, 4.6, 16);
+  const bodyGeo = new ConeGeometry(1.8, 5.2, 24);
   bodyGeo.rotateZ(-Math.PI / 2);
   bodyGeo.scale(1, 0.45, 0.75);
   const coreMesh = new Mesh(bodyGeo, chitinMat);
-  coreMesh.position.x = 0.4;
+  coreMesh.position.x = 0.5;
   group.add(coreMesh);
-  const plateCount = 4;
+  const plateCount = 5;
   for (let i = 0;i < plateCount; i++) {
-    const pSize = 1.4 - i * 0.22;
-    const plateGeo = new CylinderGeometry(pSize * 0.7, pSize, 0.5, 8);
+    const pSize = 1.6 - i * 0.22;
+    const plateGeo = new CylinderGeometry(pSize * 0.65, pSize, 0.55, 12);
     plateGeo.rotateZ(-Math.PI / 2);
-    plateGeo.scale(0.8, 0.4, 0.9);
+    plateGeo.scale(0.85, 0.45, 0.95);
     const plate = new Mesh(plateGeo, dorsalPlateMat);
-    plate.position.set(0.6 - i * 0.7, 0.25 - i * 0.04, 0);
+    plate.position.set(0.8 - i * 0.75, 0.28 - i * 0.03, 0);
     group.add(plate);
   }
-  const nucGeo = new SphereGeometry(0.75, 24, 24);
-  nucGeo.scale(1.4, 0.6, 0.7);
+  const nucGeo = new SphereGeometry(0.85, 24, 24);
+  nucGeo.scale(1.4, 0.55, 0.75);
   const psioCoreMesh = new Mesh(nucGeo, nucleusMat);
-  psioCoreMesh.position.set(0.3, 0.38, 0);
+  psioCoreMesh.position.set(0.35, 0.42, 0);
   group.add(psioCoreMesh);
-  const veinGeo = new BoxGeometry(2.4, 0.08, 0.12);
+  const veinGeo = new BoxGeometry(2.8, 0.1, 0.14);
   const veinMesh = new Mesh(veinGeo, biolumMat);
-  veinMesh.position.set(0.1, 0.42, 0);
+  veinMesh.position.set(0.1, 0.46, 0);
   group.add(veinMesh);
   const leftMandible = new Group;
   const rightMandible = new Group;
-  const mandGeo = new ConeGeometry(0.35, 1.8, 8);
+  const mandGeo = new ConeGeometry(0.38, 2.2, 12);
   mandGeo.rotateZ(-Math.PI / 2.3);
-  mandGeo.scale(1, 0.4, 0.8);
+  mandGeo.scale(1, 0.35, 0.75);
   const leftMandMesh = new Mesh(mandGeo, dorsalPlateMat);
-  leftMandMesh.position.set(0.7, 0, 0.35);
+  leftMandMesh.position.set(0.9, 0, 0.35);
   leftMandible.add(leftMandMesh);
-  leftMandible.position.set(1.9, 0, 0.45);
+  leftMandible.position.set(2.2, 0, 0.5);
   const rightMandMesh = new Mesh(mandGeo, dorsalPlateMat);
-  rightMandMesh.position.set(0.7, 0, -0.35);
+  rightMandMesh.position.set(0.9, 0, -0.35);
   rightMandible.add(rightMandMesh);
-  rightMandible.position.set(1.9, 0, -0.45);
+  rightMandible.position.set(2.2, 0, -0.5);
+  const fangGeo = new CylinderGeometry(0.06, 0.02, 1.2, 6);
+  fangGeo.rotateZ(Math.PI / 3);
+  const leftFang = new Mesh(fangGeo, biolumMat);
+  leftFang.position.set(0.9, 0.05, 0.4);
+  leftMandible.add(leftFang);
+  const rightFang = new Mesh(fangGeo, biolumMat);
+  rightFang.position.set(0.9, 0.05, -0.4);
+  rightMandible.add(rightFang);
   group.add(leftMandible);
   group.add(rightMandible);
   const leftWing = new Group;
   const rightWing = new Group;
   const wingShape = new Shape;
   wingShape.moveTo(0, 0);
-  wingShape.lineTo(0.8, -2.8);
-  wingShape.bezierCurveTo(0.2, -4.2, -1.2, -3.8, -2.2, -2);
-  wingShape.lineTo(-1.2, 0);
+  wingShape.lineTo(1.2, -3.4);
+  wingShape.bezierCurveTo(0.4, -5.2, -1.6, -4.8, -2.8, -2.4);
+  wingShape.lineTo(-1.6, 0);
   wingShape.closePath();
-  const extrudeSettings = { depth: 0.12, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.06, bevelThickness: 0.06 };
+  const extrudeSettings = { depth: 0.14, bevelEnabled: true, bevelSegments: 3, steps: 1, bevelSize: 0.08, bevelThickness: 0.08 };
   const wingGeo = new ExtrudeGeometry(wingShape, extrudeSettings);
   wingGeo.rotateX(Math.PI / 2);
   const leftWingMesh = new Mesh(wingGeo, chitinMat);
   leftWing.add(leftWingMesh);
-  leftWing.position.set(0.2, 0, 0.6);
+  leftWing.position.set(0.2, 0, 0.7);
   const rightWingGeo = wingGeo.clone();
   rightWingGeo.scale(1, 1, -1);
   const rightWingMesh = new Mesh(rightWingGeo, chitinMat);
   rightWing.add(rightWingMesh);
-  rightWing.position.set(0.2, 0, -0.6);
-  const wingEdgeGeo = new CylinderGeometry(0.08, 0.04, 3.4, 6);
+  rightWing.position.set(0.2, 0, -0.7);
+  const wingEdgeGeo = new CylinderGeometry(0.09, 0.04, 4.2, 6);
   wingEdgeGeo.rotateZ(Math.PI / 3);
   const leftEdge = new Mesh(wingEdgeGeo, biolumMat);
-  leftEdge.position.set(0.4, 0.05, 1.8);
+  leftEdge.position.set(0.6, 0.06, 2.2);
   leftWing.add(leftEdge);
   const rightEdge = new Mesh(wingEdgeGeo, biolumMat);
-  rightEdge.position.set(0.4, 0.05, -1.8);
+  rightEdge.position.set(0.6, 0.06, -2.2);
   rightWing.add(rightEdge);
   group.add(leftWing);
   group.add(rightWing);
   const ventFlaps = [];
   for (let v = 0;v < 3; v++) {
-    const vGeo = new BoxGeometry(0.8, 0.08, 0.4);
+    const vGeo = new BoxGeometry(0.9, 0.1, 0.45);
     const vMesh = new Mesh(vGeo, dorsalPlateMat);
-    vMesh.position.set(-1.6 - v * 0.3, 0.15 - v * 0.05, (v - 1) * 0.45);
+    vMesh.position.set(-1.8 - v * 0.35, 0.16 - v * 0.05, (v - 1) * 0.5);
     group.add(vMesh);
     ventFlaps.push(vMesh);
   }
@@ -29785,32 +29794,34 @@ function createAlienBioShip() {
   const tendrilCount = 2;
   for (let t = 0;t < tendrilCount; t++) {
     const tendrilGroup = new Group;
-    tendrilGroup.position.set(-2, 0, t === 0 ? 0.4 : -0.4);
+    tendrilGroup.position.set(-2.4, 0, t === 0 ? 0.45 : -0.45);
     let lastJoint = tendrilGroup;
-    const segmentCount = 6;
+    const segmentCount = 7;
     for (let s = 0;s < segmentCount; s++) {
-      const segGeo = new ConeGeometry(0.24 - s * 0.035, 0.7, 6);
+      const segGeo = new ConeGeometry(0.26 - s * 0.032, 0.75, 8);
       segGeo.rotateZ(Math.PI / 2);
-      const segMat = s === segmentCount - 1 ? biolumMat : chitinMat;
+      const segMat = s >= segmentCount - 2 ? biolumMat : chitinMat;
       const segMesh = new Mesh(segGeo, segMat);
-      segMesh.position.x = -0.55;
+      segMesh.position.x = -0.6;
       lastJoint.add(segMesh);
       lastJoint = segMesh;
     }
     group.add(tendrilGroup);
     tendrils.push(tendrilGroup);
   }
-  const shieldGeo = new SphereGeometry(2.6, 20, 16);
-  shieldGeo.scale(1.5, 0.6, 1.4);
+  const shieldGeo = new SphereGeometry(3.2, 32, 16);
+  shieldGeo.scale(1.5, 0.45, 1.4);
   const shieldMat = new MeshBasicMaterial({
     color: 65416,
-    wireframe: true,
+    wireframe: false,
     transparent: true,
-    opacity: 0.25,
-    blending: AdditiveBlending
+    opacity: 0.1,
+    blending: AdditiveBlending,
+    depthWrite: false
   });
   const shieldGlowMesh = new Mesh(shieldGeo, shieldMat);
   group.add(shieldGlowMesh);
+  group.scale.set(1.4, 1.4, 1.4);
   let animTime = 0;
   return {
     group,
@@ -29827,8 +29838,7 @@ function createAlienBioShip() {
       animTime += dt;
       const breath = Math.sin(animTime * 2.5);
       const coreScale = 1 + breath * 0.08;
-      psioCoreMesh.scale.set(1.4 * coreScale, 0.6 * coreScale, 0.7 * coreScale);
-      shieldGlowMesh.scale.set(1.5 * (1 + breath * 0.04), 0.6 * (1 + breath * 0.04), 1.4 * (1 + breath * 0.04));
+      psioCoreMesh.scale.set(1.4 * coreScale, 0.55 * coreScale, 0.75 * coreScale);
       let activeColor = 65416;
       if (STATE.health < 30) {
         activeColor = 16007006;
@@ -29841,20 +29851,20 @@ function createAlienBioShip() {
       biolumMat.emissive.setHex(activeColor);
       shieldGlowMesh.material.color.setHex(activeColor);
       const speedMagnitude = STATE.playerVelocity ? STATE.playerVelocity.length() : 0;
-      const wingFreq = 3.5 + Math.min(speedMagnitude * 0.15, 4);
-      const wingWave = Math.sin(animTime * wingFreq) * 0.18;
+      const wingFreq = 3.2 + Math.min(speedMagnitude * 0.15, 3.5);
+      const wingWave = Math.sin(animTime * wingFreq) * 0.22;
       leftWing.rotation.x = wingWave;
-      leftWing.rotation.z = Math.cos(animTime * wingFreq) * 0.06;
+      leftWing.rotation.z = Math.cos(animTime * wingFreq) * 0.08;
       rightWing.rotation.x = -wingWave;
-      rightWing.rotation.z = -Math.cos(animTime * wingFreq) * 0.06;
+      rightWing.rotation.z = -Math.cos(animTime * wingFreq) * 0.08;
       const isAbducting = STATE.abductActive || STATE.extractingPlanet !== null;
-      const mandAngle = isAbducting ? 0.35 + Math.sin(animTime * 8) * 0.12 : 0.08 + Math.sin(animTime * 1.5) * 0.05;
+      const mandAngle = isAbducting ? 0.45 + Math.sin(animTime * 8) * 0.15 : 0.08 + Math.sin(animTime * 1.5) * 0.05;
       leftMandible.rotation.y = mandAngle;
       rightMandible.rotation.y = -mandAngle;
       const isThrusting = STATE.keys ? STATE.keys.w : false;
-      const targetVentAngle = isThrusting ? 0.45 : 0.08 + Math.sin(animTime * 2) * 0.04;
+      const targetVentAngle = isThrusting ? 0.55 : 0.08 + Math.sin(animTime * 2) * 0.04;
       ventFlaps.forEach((f, idx) => {
-        f.rotation.z = targetVentAngle * (idx === 1 ? 1.2 : 0.8);
+        f.rotation.z = targetVentAngle * (idx === 1 ? 1.3 : 0.9);
       });
       tendrils.forEach((tGroup, tIdx) => {
         let currentJoint = tGroup;
@@ -29863,8 +29873,8 @@ function createAlienBioShip() {
           const next = currentJoint.children[0];
           if (next) {
             const phase = animTime * 4 + depth * 0.6 + tIdx * Math.PI;
-            next.rotation.z = Math.sin(phase) * 0.14;
-            next.rotation.y = Math.cos(phase * 0.8) * 0.1;
+            next.rotation.z = Math.sin(phase) * 0.16;
+            next.rotation.y = Math.cos(phase * 0.8) * 0.12;
             currentJoint = next;
             depth++;
           } else {
@@ -34191,6 +34201,13 @@ function setupControls() {
     });
   });
   setupTargetRaycasting();
+  window.addEventListener("wheel", (e) => {
+    if (e.target && e.target.closest("#main-menu, #how-to-play-modal, #deck-container, #diplomacy-overlay")) {
+      return;
+    }
+    const delta = Math.sign(e.deltaY) * 6;
+    STATE.targetCameraHeight = Math.max(30, Math.min(130, (STATE.targetCameraHeight || 65) + delta));
+  }, { passive: true });
 }
 function setupTargetRaycasting() {
   let pointerDownPos = { x: 0, y: 0 };
@@ -34615,7 +34632,8 @@ function updatePhysics(dt) {
   }
   camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
   camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
-  camera.position.y = 80;
+  STATE.cameraHeight = MathUtils.lerp(STATE.cameraHeight || 65, STATE.targetCameraHeight || 65, 0.08);
+  camera.position.y = STATE.cameraHeight;
   if (STATE.health <= 0 && !STATE.isGameOver && STATE.gameStarted) {
     triggerGameOver("Biologischer Zellkern kollabiert durch extreme Umwelteinflüsse & Hüllenschaden.");
     return;

@@ -206,10 +206,11 @@ export function updatePhysics(dt: number) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
     }
 
-    // Camera follow (Smooth lag)
+    // Camera follow (Smooth lag + Dynamic Smooth Zoom)
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
-    camera.position.y = 80;
+    STATE.cameraHeight = THREE.MathUtils.lerp(STATE.cameraHeight || 65, STATE.targetCameraHeight || 65, 0.08);
+    camera.position.y = STATE.cameraHeight;
 
     // Check for Critical Biological Collapse (Game Over)
     if (STATE.health <= 0 && !STATE.isGameOver && STATE.gameStarted) {

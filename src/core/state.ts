@@ -105,7 +105,9 @@ export const STATE: GameState = {
         free_traders: 0,
         aethelgard_guardians: 5
     },
-    activeDiplomacyPlanet: null
+    activeDiplomacyPlanet: null,
+    cameraHeight: 65,
+    targetCameraHeight: 65
 };
 
 export const activePlanets: PlanetEntry[] = [];

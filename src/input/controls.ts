@@ -115,6 +115,15 @@ export function setupControls() {
     });
 
     setupTargetRaycasting();
+
+    // Mouse Wheel Camera Zoom Listener (Zoom in up-close to see Alien anatomy, or out for system view)
+    window.addEventListener('wheel', (e) => {
+        if (e.target && (e.target as HTMLElement).closest('#main-menu, #how-to-play-modal, #deck-container, #diplomacy-overlay')) {
+            return;
+        }
+        const delta = Math.sign(e.deltaY) * 6;
+        STATE.targetCameraHeight = Math.max(30, Math.min(130, (STATE.targetCameraHeight || 65) + delta));
+    }, { passive: true });
 }
 
 export function setupTargetRaycasting() {

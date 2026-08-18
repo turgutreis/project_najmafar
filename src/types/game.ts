@@ -297,4 +297,7 @@ export interface GameState {
     // Faction Reputation & Diplomacy (Phase C/D)
     reputation: Record<FactionId, number>;
     activeDiplomacyPlanet: PlanetEntry | null;
+
+    cameraHeight?: number;
+    targetCameraHeight?: number;
 }
