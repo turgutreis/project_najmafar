@@ -9,12 +9,17 @@ import { initPlanetDefenseFleets, clearFleet } from './fleet';
 import { addLogEntry } from '../ui/hud';
 import { createSunCoronaMesh } from '../procedural/sun-shader';
 import { createAtmosphereMesh } from '../procedural/atmosphere-shader';
+import { createSunRays, SunRaysController } from '../procedural/sun-rays';
 
 export const activeCoronaMeshes: THREE.Mesh[] = [];
 export const activeCoronaUpdaters: ((dt: number) => void)[] = [];
+export let activeSunRays: SunRaysController | null = null;
 
-export function updateUniverseShaders(dt: number) {
+export function updateUniverseShaders(dt: number, cam?: THREE.Camera) {
     activeCoronaUpdaters.forEach(fn => fn(dt));
+    if (activeSunRays && cam) {
+        activeSunRays.update(dt, cam);
+    }
 }
 
 export async function checkUniverseData() {
@@ -91,6 +96,12 @@ export function clearActiveSystem() {
     activeCoronaMeshes.length = 0;
     activeCoronaUpdaters.length = 0;
 
+    if (activeSunRays) {
+        scene.remove(activeSunRays.group);
+        activeSunRays.dispose();
+        activeSunRays = null;
+    }
+
     STATE.gravitySources = [];
     STATE.asteroids = [];
     activePlanets.length = 0;
@@ -147,6 +158,10 @@ export function spawnPlanetsAndAsteroids() {
         scene.add(corona.mesh);
         activeCoronaMeshes.push(corona.mesh);
         activeCoronaUpdaters.push(corona.update);
+
+        // Volumetric Solar God-Rays, Anamorphic Lens Flare, & Diffraction Spikes
+        activeSunRays = createSunRays(starData.size, parseInt(starData.color));
+        scene.add(activeSunRays.group);
 
         const starLight = new THREE.PointLight(parseInt(starData.color), 3.5, 600, 2.0);
         starLight.position.set(0, 0, 0);

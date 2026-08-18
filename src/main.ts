@@ -34,8 +34,8 @@ function animate(time: number) {
         starfield.rotation.y += dt * 0.005;
     }
 
-    // Dynamic solar plasma & atmosphere shaders
-    updateUniverseShaders(dt);
+    // Update active procedural shaders (solar corona, volumetric sun rays, and lens flares)
+    updateUniverseShaders(dt, camera);
 
     // Pulse gravity rings
     gravityCircles.forEach(c => {

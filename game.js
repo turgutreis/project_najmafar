@@ -30595,11 +30595,166 @@ function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.1) {
   return new Mesh(atmosphereGeo, atmosphereMat);
 }
 
+// src/procedural/sun-rays.ts
+var sunRayVertexShader = `
+varying vec2 vUv;
+varying vec3 vWorldPosition;
+
+void main() {
+    vUv = uv;
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPos.xyz;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+}
+`;
+var sunRayFragmentShader = `
+uniform vec3 rayColor;
+uniform float time;
+varying vec2 vUv;
+
+void main() {
+    vec2 p = vUv - vec2(0.5);
+    float dist = length(p) * 2.0;
+    if (dist > 1.0) discard;
+
+    float angle = atan(p.y, p.x);
+    
+    // Multi-frequency radial ray beams
+    float ray1 = sin(angle * 8.0 + time * 0.35);
+    float ray2 = sin(angle * 14.0 - time * 0.25);
+    float ray3 = sin(angle * 22.0 + time * 0.5);
+    
+    float combinedRays = max(0.0, (ray1 * 0.5 + ray2 * 0.35 + ray3 * 0.25) + 0.35);
+    
+    // Radial soft falloff from core to outer tip
+    float radialFalloff = pow(max(0.0, 1.0 - dist), 1.6);
+    
+    // Core glow intensity
+    float coreGlow = pow(max(0.0, 1.0 - dist), 4.0) * 1.8;
+    
+    float alpha = (combinedRays * radialFalloff * 0.75 + coreGlow) * 0.85;
+    vec3 finalColor = rayColor * (1.2 + combinedRays * 0.6);
+    
+    gl_FragColor = vec4(finalColor, alpha);
+}
+`;
+var anamorphicStreakVertexShader = `
+varying vec2 vUv;
+void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+var anamorphicStreakFragmentShader = `
+uniform vec3 flareColor;
+varying vec2 vUv;
+
+void main() {
+    // Horizontal thin anamorphic beam
+    float dx = abs(vUv.x - 0.5) * 2.0;
+    float dy = abs(vUv.y - 0.5) * 2.0;
+
+    // Sharp horizontal beam with soft gradient edges
+    float beam = pow(max(0.0, 1.0 - dy), 14.0) * pow(max(0.0, 1.0 - dx), 1.2);
+    
+    // Central bright lens flare glare
+    float centerGlare = pow(max(0.0, 1.0 - length(vUv - vec2(0.5)) * 2.0), 3.0) * 0.8;
+
+    float alpha = (beam * 0.95 + centerGlare);
+    gl_FragColor = vec4(flareColor * 1.5, alpha * 0.9);
+}
+`;
+function createSunRays(starRadius, hexColor) {
+  const group = new Group;
+  group.position.set(0, 0, 0);
+  const color = new Color(hexColor);
+  const beamRadius = starRadius * 9.5;
+  const rayGeo = new PlaneGeometry(beamRadius * 2, beamRadius * 2);
+  const rayMat = new ShaderMaterial({
+    vertexShader: sunRayVertexShader,
+    fragmentShader: sunRayFragmentShader,
+    uniforms: {
+      rayColor: { value: color },
+      time: { value: 0 }
+    },
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    side: DoubleSide
+  });
+  const horizontalRayPlane = new Mesh(rayGeo, rayMat);
+  horizontalRayPlane.rotation.x = Math.PI / 2;
+  group.add(horizontalRayPlane);
+  const verticalRayPlane = new Mesh(rayGeo, rayMat.clone());
+  group.add(verticalRayPlane);
+  const streakWidth = starRadius * 16;
+  const streakHeight = starRadius * 2.2;
+  const streakGeo = new PlaneGeometry(streakWidth, streakHeight);
+  const streakMat = new ShaderMaterial({
+    vertexShader: anamorphicStreakVertexShader,
+    fragmentShader: anamorphicStreakFragmentShader,
+    uniforms: {
+      flareColor: { value: color }
+    },
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    side: DoubleSide
+  });
+  const streakMesh = new Mesh(streakGeo, streakMat);
+  group.add(streakMesh);
+  const crossGeo = new PlaneGeometry(starRadius * 7.5, starRadius * 7.5);
+  const crossMat = new ShaderMaterial({
+    vertexShader: anamorphicStreakVertexShader,
+    fragmentShader: anamorphicStreakFragmentShader,
+    uniforms: {
+      flareColor: { value: new Color(16777215) }
+    },
+    transparent: true,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    side: DoubleSide
+  });
+  const crossMesh1 = new Mesh(crossGeo, crossMat);
+  const crossMesh2 = new Mesh(crossGeo, crossMat);
+  crossMesh2.rotation.z = Math.PI / 4;
+  group.add(crossMesh1);
+  group.add(crossMesh2);
+  let totalTime = 0;
+  return {
+    group,
+    update: (dt, camera2) => {
+      totalTime += dt;
+      rayMat.uniforms.time.value = totalTime;
+      verticalRayPlane.material.uniforms.time.value = totalTime * 0.85;
+      horizontalRayPlane.rotation.z += dt * 0.04;
+      verticalRayPlane.rotation.z -= dt * 0.03;
+      if (camera2) {
+        streakMesh.quaternion.copy(camera2.quaternion);
+        crossMesh1.quaternion.copy(camera2.quaternion);
+        crossMesh2.quaternion.copy(camera2.quaternion);
+      }
+    },
+    dispose: () => {
+      rayGeo.dispose();
+      rayMat.dispose();
+      streakGeo.dispose();
+      streakMat.dispose();
+      crossGeo.dispose();
+      crossMat.dispose();
+    }
+  };
+}
+
 // src/systems/universe.ts
 var activeCoronaMeshes = [];
 var activeCoronaUpdaters = [];
-function updateUniverseShaders(dt) {
+var activeSunRays = null;
+function updateUniverseShaders(dt, cam) {
   activeCoronaUpdaters.forEach((fn) => fn(dt));
+  if (activeSunRays && cam) {
+    activeSunRays.update(dt, cam);
+  }
 }
 async function checkUniverseData() {
   try {
@@ -30667,6 +30822,11 @@ function clearActiveSystem() {
   activeCoronaMeshes.forEach((m) => scene.remove(m));
   activeCoronaMeshes.length = 0;
   activeCoronaUpdaters.length = 0;
+  if (activeSunRays) {
+    scene.remove(activeSunRays.group);
+    activeSunRays.dispose();
+    activeSunRays = null;
+  }
   STATE.gravitySources = [];
   STATE.asteroids = [];
   activePlanets.length = 0;
@@ -30714,6 +30874,8 @@ function spawnPlanetsAndAsteroids() {
     scene.add(corona.mesh);
     activeCoronaMeshes.push(corona.mesh);
     activeCoronaUpdaters.push(corona.update);
+    activeSunRays = createSunRays(starData.size, parseInt(starData.color));
+    scene.add(activeSunRays.group);
     const starLight = new PointLight(parseInt(starData.color), 3.5, 600, 2);
     starLight.position.set(0, 0, 0);
     scene.add(starLight);
@@ -32439,7 +32601,7 @@ function animate(time) {
   if (starfield) {
     starfield.rotation.y += dt * 0.005;
   }
-  updateUniverseShaders(dt);
+  updateUniverseShaders(dt, camera);
   gravityCircles.forEach((c) => {
     const timePulse = Math.sin(Date.now() * 0.003 * c.pulseSpeed);
     c.mesh.material.opacity = c.baseOpacity + timePulse * (c.baseOpacity * 0.5);
