@@ -85,6 +85,14 @@ export function setupControls() {
         btn.addEventListener('click', toggleTelepathy);
     }
 
+    const empBtn = document.getElementById('trigger-emp-btn');
+    if (empBtn) {
+        empBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            triggerBioDischarge();
+        });
+    }
+
     // Music Toggle Buttons
     const musicBtn = document.getElementById('music-toggle-btn');
     if (musicBtn) {

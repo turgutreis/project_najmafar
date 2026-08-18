@@ -101,17 +101,57 @@ export function initPlanetDefenseFleets() {
 }
 
 export function updateFleet(dt: number) {
-    // 1. Update Bio-Discharge Cooldown & Visual Shockwave
+    // 1. Update Bio-Discharge Cooldown & Continuous Expanding Visual Shockwave
     if (STATE.bioDischargeCooldown > 0) {
         STATE.bioDischargeCooldown = Math.max(0, STATE.bioDischargeCooldown - dt);
     }
+    updateEmpHUD();
 
     if (shockwaveMesh && shockwaveTimer > 0) {
         shockwaveTimer -= dt;
-        const progress = 1.0 - (shockwaveTimer / 0.5);
-        const scale = 2.0 + progress * 24.0;
-        shockwaveMesh.scale.set(scale, 1, scale);
-        (shockwaveMesh.material as THREE.Material).opacity = (1.0 - progress) * 0.7;
+        const totalDuration = 0.6;
+        const progress = Math.min(1.0, 1.0 - (shockwaveTimer / totalDuration));
+        const maxRadius = 30.0;
+        const currentRadius = 2.0 + progress * maxRadius;
+
+        shockwaveMesh.scale.set(currentRadius, 1, currentRadius);
+        (shockwaveMesh.material as THREE.Material).opacity = (1.0 - progress) * 0.85;
+
+        // CONTINUOUS SHOCKWAVE HIT DETECTION: Any active ship caught in the expanding ring gets disabled!
+        const shockOrigin = shockwaveMesh.position;
+        let newlyDisabled = 0;
+
+        STATE.fleetShips.forEach(ship => {
+            if (ship.state !== 'disabled') {
+                const distToShock = ship.position.distanceTo(shockOrigin);
+                if (distToShock <= currentRadius + 3.0) {
+                    ship.state = 'disabled';
+                    const pushDir = new THREE.Vector3().subVectors(ship.position, shockOrigin).normalize();
+                    ship.velocity.copy(pushDir.multiplyScalar(16));
+                    (ship.bodyMesh.material as THREE.MeshStandardMaterial).color.setHex(0x475569);
+                    (ship.bodyMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+                    newlyDisabled++;
+                }
+            }
+        });
+
+        if (newlyDisabled > 0) {
+            playCrashSound();
+            playSiliconCollectSound();
+            addLogEntry("CREW", `Capt. Miller: 'EMP-Welle hat ${newlyDisabled} Abfangjäger erfasst! Systeme lahmgelegt!'`);
+            addLogEntry("SYSTEM", `${newlyDisabled} Abfangjäger deaktiviert. Wrackteile können assimiliert werden [E].`);
+        }
+
+        // DESTROY ENEMY PROJECTILES IN SHOCKWAVE RADIUS
+        for (let i = STATE.fleetProjectiles.length - 1; i >= 0; i--) {
+            const proj = STATE.fleetProjectiles[i];
+            if (proj.position.distanceTo(shockOrigin) <= currentRadius + 2.5) {
+                scene.remove(proj.mesh);
+                proj.mesh.geometry.dispose();
+                (proj.mesh.material as THREE.Material).dispose();
+                STATE.fleetProjectiles.splice(i, 1);
+            }
+        }
 
         if (shockwaveTimer <= 0) {
             scene.remove(shockwaveMesh);
@@ -293,6 +333,29 @@ function fireFleetProjectile(ship: FleetShip, targetPos: THREE.Vector3) {
     STATE.fleetProjectiles.push(projectile);
 }
 
+// Live EMP Cooldown and Ability UI Feedback
+export function updateEmpHUD() {
+    const btn = document.getElementById('trigger-emp-btn');
+    const badge = document.getElementById('emp-status-badge');
+    const bar = document.getElementById('emp-bar-fill');
+    if (!btn || !badge || !bar) return;
+
+    if (STATE.bioDischargeCooldown > 0) {
+        const totalCd = 3.5;
+        const progress = Math.max(0, Math.min(1.0, 1.0 - (STATE.bioDischargeCooldown / totalCd)));
+        bar.style.width = `${Math.round(progress * 100)}%`;
+        badge.innerText = `${STATE.bioDischargeCooldown.toFixed(1)}s`;
+        badge.className = 'emp-status-badge cooling';
+        btn.className = 'emp-action-btn cooling-down';
+    } else {
+        bar.style.width = '100%';
+        const hasRes = STATE.bioEnergy >= 15 && STATE.mentalEnergy >= 10;
+        badge.innerText = hasRes ? 'BEREIT' : 'WENIG ENERGIE';
+        badge.className = hasRes ? 'emp-status-badge' : 'emp-status-badge cooling';
+        btn.className = hasRes ? 'emp-action-btn ready' : 'emp-action-btn cooling-down';
+    }
+}
+
 // Player Action: Bio-Electric EMP Discharge (Key X / Gamepad X)
 export function triggerBioDischarge() {
     if (!STATE.gameStarted) return;
@@ -303,18 +366,18 @@ export function triggerBioDischarge() {
     }
 
     if (STATE.bioEnergy < 15 || STATE.mentalEnergy < 10) {
-        addLogEntry("SYSTEM", `Zu wenig Bio-Energie oder Mentalkraft für Bio-Elektrische Entladung!`);
+        addLogEntry("SYSTEM", `Zu wenig Bio-Energie oder Mentalkraft für Bio-Elektrische Entladung (benötigt 15 Bio / 10 Psi)!`);
         return;
     }
 
     // Deduct Costs & Trigger Cooldown
     STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 15);
     STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 10);
-    STATE.bioDischargeCooldown = 4.5; // 4.5s cooldown
+    STATE.bioDischargeCooldown = 3.5; // 3.5s responsive cooldown
 
     // Trigger Dynamic EMP Sector Flash Light
     if (empLight) {
-        empLight.intensity = 7.5;
+        empLight.intensity = 8.0;
     }
 
     // Spawn Visual Shockwave Ring
@@ -329,41 +392,17 @@ export function triggerBioDischarge() {
     const shockMat = new THREE.MeshBasicMaterial({
         color: 0x00ff88,
         transparent: true,
-        opacity: 0.85,
+        opacity: 0.9,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending
     });
     shockwaveMesh = new THREE.Mesh(shockGeo, shockMat);
     shockwaveMesh.position.copy(STATE.playerPosition);
     scene.add(shockwaveMesh);
-    shockwaveTimer = 0.5;
+    shockwaveTimer = 0.6;
 
     playCrashSound();
-    addLogEntry("SYSTEM", `⚡ BIO-ELEKTRISCHE EMP-ENTLADUNG GEZÜNDET! Elektromagnetische Schockwelle expandiert.`);
-
-    // Check & Disable nearby Fleet Ships within 20 units
-    const radius = 20.0;
-    let disabledCount = 0;
-
-    STATE.fleetShips.forEach(ship => {
-        if (ship.state !== 'disabled') {
-            const dist = ship.position.distanceTo(STATE.playerPosition);
-            if (dist <= radius) {
-                ship.state = 'disabled';
-                ship.velocity.copy(new THREE.Vector3().subVectors(ship.position, STATE.playerPosition).normalize().multiplyScalar(12));
-                (ship.bodyMesh.material as THREE.MeshStandardMaterial).color.setHex(0x475569);
-                (ship.bodyMesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
-
-                disabledCount++;
-            }
-        }
-    });
-
-    if (disabledCount > 0) {
-        addLogEntry("CREW", `Capt. Miller: 'Feindliche Abfangjäger durch EMP lahmgelegt! Ihre Systeme sind kollabiert!'`);
-        addLogEntry("SYSTEM", `${disabledCount} Abfangjäger deaktiviert. Wrackteile können assimiliert werden [E].`);
-        playSiliconCollectSound();
-    }
+    addLogEntry("SYSTEM", `⚡ BIO-ELEKTRISCHE EMP-ENTLADUNG GEZÜNDET! Elektromagnetische Schockwelle expandiert (Radius 30).`);
 }
 
 // Salvage disabled fleet wreck

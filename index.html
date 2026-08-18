@@ -552,7 +552,20 @@
         <footer class="hud-bottom glass-panel">
             <div class="controls-guide">
                 <div class="control-item"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> Schubdüsen | <span class="key">LEERTASTE</span> Beruhigungsfeld</div>
-                <div class="control-item"><span class="key">F</span> Scan | <span class="key">E</span> Assimilieren | <span class="key">X</span> Bio-EMP | <span class="key">M</span> Sternenkarte | <span class="key">ESC</span> Pause</div>
+                <div class="control-item"><span class="key">F</span> Scan | <span class="key">E</span> Assimilieren | <span class="key">M</span> Sternenkarte | <span class="key">ESC</span> Pause</div>
+                
+                <!-- Dedicated EMP Ability & Cooldown Bar -->
+                <div id="emp-ability-widget" class="emp-ability-widget">
+                    <button id="trigger-emp-btn" class="emp-action-btn ready" title="Zünde bio-elektrische EMP-Schockwelle gegen feindliche Schiffe">
+                        <span class="emp-icon">⚡</span>
+                        <span class="emp-name">BIO-EMP [X]</span>
+                        <span id="emp-status-badge" class="emp-status-badge">BEREIT</span>
+                    </button>
+                    <div class="emp-bar-track">
+                        <div id="emp-bar-fill" class="emp-bar-fill" style="width: 100%;"></div>
+                    </div>
+                </div>
+
                 <div class="control-item" style="margin-top: 4px;">
                     <button id="music-toggle-btn" class="music-btn">🔇 Musik: Aus</button>
                 </div>
