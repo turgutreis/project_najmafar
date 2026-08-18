@@ -491,3 +491,134 @@ export function createCloudTexture(seed = 888) {
     ctx.putImageData(img, 0, 0);
     return new THREE.CanvasTexture(canvas);
 }
+
+// 8. Procedural Alien Bio-Ship Carapace & Armor Textures
+export function createAlienCarapaceTexture(seed = 1337) {
+    const w = 512, h = 256;
+    const colCanvas = document.createElement('canvas');
+    colCanvas.width = w; colCanvas.height = h;
+    const colCtx = colCanvas.getContext('2d')!;
+    const colImg = colCtx.createImageData(w, h);
+    const colData = colImg.data;
+
+    const bumpCanvas = document.createElement('canvas');
+    bumpCanvas.width = w; bumpCanvas.height = h;
+    const bumpCtx = bumpCanvas.getContext('2d')!;
+    const bumpImg = bumpCtx.createImageData(w, h);
+    const bumpData = bumpImg.data;
+
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const idx = (y * w + x) * 4;
+            const nx = (x / w) * 16.0;
+            const ny = (y / h) * 16.0;
+
+            // Cellular voronoi-like scale pattern
+            const n1 = fbm(nx, ny, 3, seed);
+            const n2 = fbm(nx * 2.5, ny * 2.5, 2, seed + 42);
+            
+            // Hexagonal plate grooves
+            const gridX = Math.abs(Math.sin(nx * Math.PI));
+            const gridY = Math.abs(Math.sin(ny * Math.PI));
+            const groove = Math.pow(gridX * gridY, 0.4);
+
+            // Iridescent Bio-Chitin Color (Obsidian base with emerald & indigo sheen)
+            const r = Math.floor(10 + n1 * 18 + (1 - groove) * 12);
+            const g = Math.floor(22 + n1 * 38 + n2 * 25);
+            const b = Math.floor(35 + n1 * 45 + (groove * 15));
+
+            colData[idx] = Math.min(255, r);
+            colData[idx + 1] = Math.min(255, g);
+            colData[idx + 2] = Math.min(255, b);
+            colData[idx + 3] = 255;
+
+            // Bump relief: Raised chitin scales with carved plate grooves
+            const bumpVal = Math.floor((n1 * 0.6 + (1 - groove) * 0.4) * 255);
+            bumpData[idx] = bumpVal;
+            bumpData[idx + 1] = bumpVal;
+            bumpData[idx + 2] = bumpVal;
+            bumpData[idx + 3] = 255;
+        }
+    }
+
+    colCtx.putImageData(colImg, 0, 0);
+    bumpCtx.putImageData(bumpImg, 0, 0);
+
+    const map = new THREE.CanvasTexture(colCanvas);
+    map.wrapS = THREE.RepeatWrapping;
+    map.wrapT = THREE.RepeatWrapping;
+
+    const bumpMap = new THREE.CanvasTexture(bumpCanvas);
+    bumpMap.wrapS = THREE.RepeatWrapping;
+    bumpMap.wrapT = THREE.RepeatWrapping;
+
+    return { map, bumpMap };
+}
+
+// 9. Procedural Alien Wing Membrane & Muscle Fiber Texture
+export function createAlienWingTexture(seed = 555) {
+    const w = 512, h = 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    const img = ctx.createImageData(w, h);
+    const data = img.data;
+
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const idx = (y * w + x) * 4;
+            const u = x / w;
+            const v = y / h;
+
+            // Striated muscle fibers radiating across wing
+            const striation = Math.sin(u * 60.0 + fbm(u * 8, v * 8, 2, seed) * 10.0) * 0.5 + 0.5;
+            const noise = fbm(u * 12, v * 6, 3, seed);
+
+            const r = Math.floor(12 + noise * 15 + striation * 10);
+            const g = Math.floor(30 + noise * 40 + striation * 35);
+            const b = Math.floor(45 + noise * 50);
+
+            data[idx] = Math.min(255, r);
+            data[idx + 1] = Math.min(255, g);
+            data[idx + 2] = Math.min(255, b);
+            data[idx + 3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+    const map = new THREE.CanvasTexture(canvas);
+    map.wrapS = THREE.RepeatWrapping;
+    map.wrapT = THREE.RepeatWrapping;
+    return map;
+}
+
+// 10. Procedural Bioluminescent Neural Vein Map
+export function createAlienVeinTexture(seed = 777) {
+    const w = 256, h = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    const img = ctx.createImageData(w, h);
+    const data = img.data;
+
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const idx = (y * w + x) * 4;
+            const u = x / w;
+            const v = y / h;
+
+            // Sharp synaptic vein branches
+            const n = fbm(u * 14.0, v * 14.0, 4, seed);
+            const vein = Math.pow(Math.max(0, 1.0 - Math.abs(n - 0.5) * 8.0), 3.0);
+
+            data[idx] = Math.floor(vein * 0 * 255);
+            data[idx + 1] = Math.floor(vein * 1.0 * 255);
+            data[idx + 2] = Math.floor(vein * 0.55 * 255);
+            data[idx + 3] = 255;
+        }
+    }
+    ctx.putImageData(img, 0, 0);
+    const map = new THREE.CanvasTexture(canvas);
+    map.wrapS = THREE.RepeatWrapping;
+    map.wrapT = THREE.RepeatWrapping;
+    return map;
+}

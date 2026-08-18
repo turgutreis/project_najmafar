@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { STATE } from '../core/state';
+import { createAlienCarapaceTexture, createAlienWingTexture, createAlienVeinTexture } from './textures';
 
 export interface AlienShipController {
     group: THREE.Group;
@@ -18,28 +19,49 @@ export interface AlienShipController {
 export function createAlienBioShip(): AlienShipController {
     const group = new THREE.Group();
 
-    // 1. Materials
-    // Deep obsidian iridescent bio-chitin carapace
+    // 1. Procedural Bio-Textures
+    const carapaceTex = createAlienCarapaceTexture(1337);
+    const wingTex = createAlienWingTexture(555);
+    const veinTex = createAlienVeinTexture(777);
+
+    // 2. Materials
+    // Deep obsidian iridescent bio-chitin carapace with relief scales
     const chitinMat = new THREE.MeshStandardMaterial({
-        color: 0x070d1a,
-        roughness: 0.2,
-        metalness: 0.9,
+        map: carapaceTex.map,
+        bumpMap: carapaceTex.bumpMap,
+        bumpScale: 0.08,
+        roughness: 0.35,
+        metalness: 0.75,
         emissive: 0x030814
     });
 
     // Segmented dorsal armor plates (Bio-metallic scales)
     const dorsalPlateMat = new THREE.MeshStandardMaterial({
-        color: 0x0f172a,
-        roughness: 0.15,
-        metalness: 0.95,
-        emissive: 0x064e3b
+        map: carapaceTex.map,
+        bumpMap: carapaceTex.bumpMap,
+        bumpScale: 0.12,
+        roughness: 0.25,
+        metalness: 0.85,
+        emissive: 0x064e3b,
+        emissiveIntensity: 0.3
+    });
+
+    // Sculpted Manta Wing Membrane with muscle striations
+    const wingMat = new THREE.MeshStandardMaterial({
+        map: wingTex,
+        bumpMap: carapaceTex.bumpMap,
+        bumpScale: 0.06,
+        roughness: 0.38,
+        metalness: 0.65,
+        side: THREE.DoubleSide
     });
 
     // Radiant Bioluminescent Psionic Veins
     const biolumMat = new THREE.MeshStandardMaterial({
         color: 0x00ff88,
         emissive: 0x00ff88,
-        emissiveIntensity: 1.2,
+        emissiveMap: veinTex,
+        emissiveIntensity: 1.4,
         roughness: 0.1,
         metalness: 0.1
     });
@@ -57,7 +79,7 @@ export function createAlienBioShip(): AlienShipController {
         ior: 1.5
     });
 
-    // 2. Central Streamlined Fuselage (Thorax & Head)
+    // 3. Central Streamlined Fuselage (Thorax & Head)
     const bodyGeo = new THREE.ConeGeometry(1.8, 5.2, 24);
     bodyGeo.rotateZ(-Math.PI / 2); // Point forward (+X)
     bodyGeo.scale(1.0, 0.45, 0.75); // Flattened aerodynamic bio-fuselage
@@ -65,7 +87,7 @@ export function createAlienBioShip(): AlienShipController {
     coreMesh.position.x = 0.5;
     group.add(coreMesh);
 
-    // 3. Segmented Dorsal Carapace Plates (Trilobite spinal crests)
+    // 4. Segmented Dorsal Carapace Plates (Trilobite spinal crests)
     const plateCount = 5;
     for (let i = 0; i < plateCount; i++) {
         const pSize = 1.6 - i * 0.22;
@@ -77,20 +99,20 @@ export function createAlienBioShip(): AlienShipController {
         group.add(plate);
     }
 
-    // 4. Central Psionic Neural Core (Pulsing Bio-Heart)
+    // 5. Central Psionic Neural Core (Pulsing Bio-Heart)
     const nucGeo = new THREE.SphereGeometry(0.85, 24, 24);
     nucGeo.scale(1.4, 0.55, 0.75);
     const psioCoreMesh = new THREE.Mesh(nucGeo, nucleusMat);
     psioCoreMesh.position.set(0.35, 0.42, 0);
     group.add(psioCoreMesh);
 
-    // 5. Bioluminescent Neural Spine Ridge
+    // 6. Bioluminescent Neural Spine Ridge
     const veinGeo = new THREE.BoxGeometry(2.8, 0.1, 0.14);
     const veinMesh = new THREE.Mesh(veinGeo, biolumMat);
     veinMesh.position.set(0.1, 0.46, 0);
     group.add(veinMesh);
 
-    // 6. Front Predatory Mandibles (Grasping pincers that open/close)
+    // 7. Front Predatory Mandibles (Grasping pincers that open/close)
     const leftMandible = new THREE.Group();
     const rightMandible = new THREE.Group();
 
@@ -122,7 +144,7 @@ export function createAlienBioShip(): AlienShipController {
     group.add(leftMandible);
     group.add(rightMandible);
 
-    // 7. Broad Cosmic Manta Wings (Undulating Bio-Wings with glowing leading edges)
+    // 8. Broad Cosmic Manta Wings (Undulating Bio-Wings with glowing leading edges)
     const leftWing = new THREE.Group();
     const rightWing = new THREE.Group();
 
@@ -138,13 +160,13 @@ export function createAlienBioShip(): AlienShipController {
     const wingGeo = new THREE.ExtrudeGeometry(wingShape, extrudeSettings);
     wingGeo.rotateX(Math.PI / 2); // Flat on XZ plane
 
-    const leftWingMesh = new THREE.Mesh(wingGeo, chitinMat);
+    const leftWingMesh = new THREE.Mesh(wingGeo, wingMat);
     leftWing.add(leftWingMesh);
     leftWing.position.set(0.2, 0, 0.7);
 
     const rightWingGeo = wingGeo.clone();
     rightWingGeo.scale(1, 1, -1);
-    const rightWingMesh = new THREE.Mesh(rightWingGeo, chitinMat);
+    const rightWingMesh = new THREE.Mesh(rightWingGeo, wingMat);
     rightWing.add(rightWingMesh);
     rightWing.position.set(0.2, 0, -0.7);
 
@@ -162,7 +184,7 @@ export function createAlienBioShip(): AlienShipController {
     group.add(leftWing);
     group.add(rightWing);
 
-    // 8. Rear Breathing Vent Flaps (Adaptive Biological Thruster Exhaust)
+    // 9. Rear Breathing Vent Flaps (Adaptive Biological Thruster Exhaust)
     const ventFlaps: THREE.Mesh[] = [];
     for (let v = 0; v < 3; v++) {
         const vGeo = new THREE.BoxGeometry(0.9, 0.1, 0.45);
@@ -172,7 +194,7 @@ export function createAlienBioShip(): AlienShipController {
         ventFlaps.push(vMesh);
     }
 
-    // 9. Twin Bio-Whip Tendrils (Swaying tail appendages)
+    // 10. Twin Bio-Whip Tendrils (Swaying tail appendages)
     const tendrils: THREE.Group[] = [];
     const tendrilCount = 2;
     for (let t = 0; t < tendrilCount; t++) {
