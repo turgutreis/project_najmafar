@@ -3,7 +3,7 @@ import { STATE } from './core/state';
 import { initScene, starfield, renderer, scene, camera } from './engine/scene';
 import { initPostProcessing, renderPostProcessing } from './engine/postprocessing';
 import { initTrajectory, updateTrajectory } from './engine/trajectory';
-import { createPlayerMesh, playerMesh, playerGlowMesh, playerLight, thrustLight, empLight, gravityCircles } from './procedural/meshes';
+import { createPlayerMesh, playerMesh, playerGlowMesh, playerLight, thrustLight, empLight, alienShipController, gravityCircles } from './procedural/meshes';
 import { setupControls, processInput } from './input/controls';
 import { checkUniverseData, clearActiveSystem, spawnPlanetsAndAsteroids, updateUniverseShaders } from './systems/universe';
 import { updatePhysics } from './engine/physics';
@@ -65,40 +65,9 @@ function animate(time: number) {
         // Minimap 2D radar
         updateMinimap();
 
-        // Biomechanical tentacle animation
-        if (STATE.playerGroup) {
-            const timeVal = Date.now() * 0.005;
-            STATE.playerGroup.children.forEach((child, index) => {
-                if (index >= 3) { // Tentacle groups
-                    let parent: any = child;
-                    let depth = 0;
-                    while (parent && parent.children && parent.children.length > 0) {
-                        const joint = parent.children[0];
-                        if (joint) {
-                            joint.rotation.z = Math.sin(timeVal + index + depth * 0.5) * 0.15;
-                            joint.rotation.y = Math.cos(timeVal + depth * 0.3) * 0.1;
-                            parent = joint;
-                            depth++;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            });
-        }
-
-        // Bioluminescent shell pulse & dynamic color reaction
-        if (playerGlowMesh) {
-            const glowPulse = 1.0 + Math.sin(Date.now() * 0.004) * 0.08;
-            playerGlowMesh.scale.set(1.6 * glowPulse, 0.9 * glowPulse, 0.9 * glowPulse);
-
-            if (STATE.health < 30) {
-                (playerGlowMesh.material as THREE.MeshBasicMaterial).color.setHex(0xf43f5e); // Red emergency alert
-            } else if (STATE.telepathyActive) {
-                (playerGlowMesh.material as THREE.MeshBasicMaterial).color.setHex(0xa855f7); // Purple psionic trance
-            } else {
-                (playerGlowMesh.material as THREE.MeshBasicMaterial).color.setHex(0x00ff88); // Bio green nominal
-            }
+        // Dynamic Alien Bio-Ship organic animation (undulating manta wings, breathing nucleus, mandibles, tendrils)
+        if (alienShipController) {
+            alienShipController.update(dt);
         }
 
         // Dynamic Ship, Thrust, and EMP PointLights

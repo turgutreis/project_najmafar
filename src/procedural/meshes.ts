@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { scene } from '../engine/scene';
 import { STATE } from '../core/state';
+import { createAlienBioShip, AlienShipController } from './alien-ship';
 
 export let playerMesh: THREE.Mesh;
 export let playerGlowMesh: THREE.Mesh;
 export let playerLight: THREE.PointLight;
 export let thrustLight: THREE.PointLight;
 export let empLight: THREE.PointLight;
+export let alienShipController: AlienShipController | null = null;
 export let targetReticleGroup: THREE.Group | null = null;
 export let sonarWaveMesh: THREE.Mesh | null = null;
 export let abductBeamMesh: THREE.Line | null = null;
@@ -15,80 +17,30 @@ export let harvestBeamMesh: THREE.Line | null = null;
 export const gravityCircles: { mesh: THREE.Mesh; pulseSpeed: number; baseOpacity: number }[] = [];
 
 export function createPlayerMesh(): THREE.Group {
-    const playerGroup = new THREE.Group();
+    const ship = createAlienBioShip();
+    alienShipController = ship;
 
-    // Core body (Elongated ellipsoid)
-    const coreGeo = new THREE.SphereGeometry(2, 32, 16);
-    coreGeo.scale(1.5, 0.8, 0.8);
-
-    const coreMat = new THREE.MeshStandardMaterial({
-        color: 0x0f172a,
-        roughness: 0.1,
-        metalness: 0.9,
-        emissive: 0x111827,
-        flatShading: true
-    });
-
-    playerMesh = new THREE.Mesh(coreGeo, coreMat);
-    playerGroup.add(playerMesh);
-
-    // Bioluminescent outer shield shell
-    const glowGeo = new THREE.SphereGeometry(2.4, 16, 16);
-    glowGeo.scale(1.6, 0.9, 0.9);
-
-    const glowMat = new THREE.MeshBasicMaterial({
-        color: 0x00ff88,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.4,
-        blending: THREE.AdditiveBlending
-    });
-
-    playerGlowMesh = new THREE.Mesh(glowGeo, glowMat);
-    playerGroup.add(playerGlowMesh);
+    playerMesh = ship.coreMesh;
+    playerGlowMesh = ship.shieldGlowMesh;
 
     // Dynamic Bioluminescent Aura Light (Lights up nearby asteroids & terrain)
     playerLight = new THREE.PointLight(0x00ff88, 1.2, 30, 1.8);
-    playerGroup.add(playerLight);
+    ship.group.add(playerLight);
 
     // Dynamic Plasma Thrust Flare Light (Illuminates space debris behind ship when thrusting)
     thrustLight = new THREE.PointLight(0x38bdf8, 0.0, 35, 1.5);
     thrustLight.position.set(-2.4, 0, 0);
-    playerGroup.add(thrustLight);
+    ship.group.add(thrustLight);
 
     // EMP Shockwave Flash Light (Lights up entire sector on discharge [X])
     empLight = new THREE.PointLight(0xd946ef, 0.0, 180, 1.0);
-    playerGroup.add(empLight);
+    ship.group.add(empLight);
 
-    // Bio-Tentacles (appendages that sway)
-    const tentacleCount = 4;
-    for (let i = 0; i < tentacleCount; i++) {
-        const tentacleGroup = new THREE.Group();
-        const jointCount = 5;
-        let lastParent = tentacleGroup;
+    ship.group.position.copy(STATE.playerPosition);
+    scene.add(ship.group);
+    STATE.playerGroup = ship.group;
 
-        for (let j = 0; j < jointCount; j++) {
-            const jointGeo = new THREE.SphereGeometry(0.5 - j * 0.08, 8, 8);
-            const jointMat = new THREE.MeshStandardMaterial({
-                color: 0x00ff88,
-                emissive: 0x003311,
-                roughness: 0.2
-            });
-            const jointMesh = new THREE.Mesh(jointGeo, jointMat);
-            jointMesh.position.x = -1.2 - j * 0.8;
-            jointMesh.position.z = (i - 1.5) * 0.6;
-            lastParent.add(jointMesh);
-            lastParent = jointMesh as any;
-        }
-
-        playerGroup.add(tentacleGroup);
-    }
-
-    playerGroup.position.copy(STATE.playerPosition);
-    scene.add(playerGroup);
-    STATE.playerGroup = playerGroup;
-
-    return playerGroup;
+    return ship.group;
 }
 
 export function createGravityRing(x: number, z: number, radius: number, color: number, baseOpacity = 0.12): THREE.Mesh {
