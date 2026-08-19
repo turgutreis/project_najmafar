@@ -194,8 +194,8 @@ export function updatePhysics(dt: number) {
     // 6. Integrate Equations of Motion (Euler with vacuum inertia and exponential drag)
     STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
 
-    // Dynamic top speed clamp (Smooth calm cosmic cruising speed)
-    const maxSpeed = 16.0;
+    // Dynamic top speed clamp (Smooth cosmic cruising speed)
+    const maxSpeed = 35.0;
     if (STATE.playerVelocity.lengthSq() > maxSpeed * maxSpeed) {
         STATE.playerVelocity.setLength(maxSpeed);
     }

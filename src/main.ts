@@ -143,7 +143,7 @@ function setupMenuListeners() {
                 clearActiveSystem();
                 spawnPlanetsAndAsteroids();
                 STATE.playerPosition.set(0, 0, 65);
-                STATE.playerVelocity.set(0.6, 0, 0);
+                STATE.playerVelocity.set(0.8, 0, 0);
                 if (STATE.playerGroup) {
                     STATE.playerGroup.position.set(0, 0, 65);
                 }

@@ -303,7 +303,7 @@ export function processInput(dt: number) {
     if (STATE.keys.s) isRetroBraking = true;
     if (STATE.keys.a) turnInput += 1;
     if (STATE.keys.d) turnInput -= 1;
-    if (STATE.keys.Space || STATE.keys.Shift) STATE.spaceBrakeActive = true;
+    if (STATE.keys.Shift) STATE.spaceBrakeActive = true;
 
     // 2. Gamepad Input
     let gp: Gamepad | null = null;
