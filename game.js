@@ -32536,7 +32536,13 @@ function updateScannerUI(planet, dist) {
     if (speciesRow && speciesEl) {
       if (hasSentient) {
         speciesRow.style.display = "flex";
-        speciesEl.innerText = `${spec.name} (Pop: ${spec.population})`;
+        let candidateTag = "";
+        if (spec.candidates && spec.candidates.length > 0) {
+          const topCand = spec.candidates[0];
+          const hasRole = STATE.crew.some((c) => c.role === topCand.role);
+          candidateTag = hasRole ? `<br><span class="candidate-role-synergy-tag duplicate-role">\uD83D\uDC65 Ziel: ${topCand.roleName || topCand.role} (Verstärkt Buffs)</span>` : `<br><span class="candidate-role-synergy-tag new-role">✨ Ziel: ${topCand.roleName || topCand.role} (Neue Rolle: Synergie!)</span>`;
+        }
+        speciesEl.innerHTML = `<span style="color: #38bdf8; font-weight: bold;">${spec.name}</span> (Pop: ${spec.population})${candidateTag}`;
       } else {
         speciesRow.style.display = "none";
       }
@@ -34816,29 +34822,40 @@ function renderCrewUI() {
     capText.innerText = `${STATE.crew.length} / ${STATE.maxCrewCapacity}`;
   const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
   const totalCrew = STATE.crew.length;
+  const rolesPresent = new Set(STATE.crew.map((c) => c.role));
+  const slotPilot = document.getElementById("slot-pilot");
+  const slotBio = document.getElementById("slot-biologist");
+  const slotEng = document.getElementById("slot-engineer");
+  const slotPsych = document.getElementById("slot-psychologist");
+  if (slotPilot)
+    slotPilot.className = rolesPresent.has("pilot") ? "role-slot active" : "role-slot";
+  if (slotBio)
+    slotBio.className = rolesPresent.has("biologist") ? "role-slot active" : "role-slot";
+  if (slotEng)
+    slotEng.className = rolesPresent.has("engineer") ? "role-slot active" : "role-slot";
+  if (slotPsych)
+    slotPsych.className = rolesPresent.has("psychologist") || rolesPresent.has("cryptologist") ? "role-slot active" : "role-slot";
   if (synBanner && synTitle && synDesc) {
     if (totalCrew === 0) {
       synBanner.className = "crew-synergy-banner";
-      synTitle.innerText = "\uD83C\uDF0C Kosmische Einsamkeit";
-      synDesc.innerText = "Keine Geister an Bord. Das Wesen sehnt sich nach Gedanken-Resonanz.";
+      synTitle.innerText = "\uD83C\uDF0C Kosmische Einsamkeit (100%)";
+      synDesc.innerText = "Keine Geister im Kollektiv. Entführe Wesen von habitablen Planeten, um Einsamkeit zu lindern.";
     } else if (totalCrew === 1) {
-      if (STATE.crewSatietyTimer > 45) {
-        synBanner.className = "crew-synergy-banner satiety-decay";
-        synTitle.innerText = "⏳ Geistige Sättigung (Eintönigkeit)";
-        synDesc.innerText = "Alle Gedanken des Individuums erforscht. Das Wesen verlangt nach neuen Perspektiven!";
-      } else {
-        synBanner.className = "crew-synergy-banner";
-        synTitle.innerText = "\uD83C\uDF31 Erste Gedanken-Resonanz";
-        synDesc.innerText = "1 Geist an Bord. Erweitere das Kollektiv für stärkere Synergien.";
-      }
+      synBanner.className = "crew-synergy-banner";
+      synTitle.innerText = `\uD83C\uDF31 Erste Bindung (${Math.round(STATE.loneliness)}% Einsamkeit)`;
+      synDesc.innerText = `1 Geist an Bord (${STATE.crew[0]?.roleName || "Begleiter"}). Finde weitere Wesen mit anderen Rollen für Synergien!`;
+    } else if (totalCrew >= 2 && uniqueRoles === 1) {
+      synBanner.className = "crew-synergy-banner";
+      synTitle.innerText = `\uD83D\uDC65 Doppelter Rollen-Fokus (${Math.round(STATE.loneliness)}% Einsamkeit)`;
+      synDesc.innerText = `${totalCrew}x selbe Rolle an Bord: Rollen-Effekt verstärkt! Finde eine andere Rolle für "Duale Resonanz".`;
     } else if (uniqueRoles === 2) {
       synBanner.className = "crew-synergy-banner";
-      synTitle.innerText = "✨ Duale Resonanz";
-      synDesc.innerText = "2 Rollen im Einklang. Einsamkeit stabil, passive Buffs verstärkt.";
-    } else if (uniqueRoles >= 3) {
+      synTitle.innerText = `✨ Duale Resonanz (${Math.round(STATE.loneliness)}% Einsamkeit)`;
+      synDesc.innerText = "2 verschiedene Rollen im Einklang! Einsamkeit stark gesenkt. Noch 1 weitere Rolle für 'Kosmische Harmonie'.";
+    } else if (uniqueRoles >= 3 || totalCrew >= 3) {
       synBanner.className = "crew-synergy-banner harmony";
-      synTitle.innerText = "\uD83D\uDCAB Kosmische Harmonie";
-      synDesc.innerText = "Diverses Kollektiv aktiv! Einsamkeit auf 0% & +15% Bio/Mental-Regeneration!";
+      synTitle.innerText = "\uD83D\uDCAB Kosmische Harmonie (0% Einsamkeit)";
+      synDesc.innerText = "Diverses Trio aktiv! Einsamkeit vollständig beseitigt & passive Bio-/Mentalenergie-Regeneration online!";
     }
   }
   if (!container)

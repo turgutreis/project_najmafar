@@ -383,7 +383,15 @@ export function updateScannerUI(planet: any, dist: number) {
         if (speciesRow && speciesEl) {
             if (hasSentient) {
                 speciesRow.style.display = 'flex';
-                speciesEl.innerText = `${spec.name} (Pop: ${spec.population})`;
+                let candidateTag = '';
+                if (spec.candidates && spec.candidates.length > 0) {
+                    const topCand = spec.candidates[0];
+                    const hasRole = STATE.crew.some(c => c.role === topCand.role);
+                    candidateTag = hasRole
+                        ? `<br><span class="candidate-role-synergy-tag duplicate-role">👥 Ziel: ${topCand.roleName || topCand.role} (Verstärkt Buffs)</span>`
+                        : `<br><span class="candidate-role-synergy-tag new-role">✨ Ziel: ${topCand.roleName || topCand.role} (Neue Rolle: Synergie!)</span>`;
+                }
+                speciesEl.innerHTML = `<span style="color: #38bdf8; font-weight: bold;">${spec.name}</span> (Pop: ${spec.population})${candidateTag}`;
             } else {
                 speciesRow.style.display = 'none';
             }
