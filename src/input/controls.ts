@@ -398,12 +398,16 @@ export function processInput(dt: number) {
         STATE.playerAcceleration.addScaledVector(forwardDir, effectiveThrust);
 
         if (hasEnergy) {
-            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 2.8 * dt);
+            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 5.5 * dt);
         }
 
         setThrusterSound(true);
     } else {
         setThrusterSound(false);
+        // Passive slow bio-energy metabolism when not thrusting
+        if (!isRetroBraking && STATE.bioEnergy < STATE.maxBioEnergy) {
+            STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.8 * dt);
+        }
     }
 
     // 5. Active Retro-Braking (Counter-Thrust on 'S')
@@ -417,7 +421,7 @@ export function processInput(dt: number) {
         }
 
         if (hasEnergy) {
-            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.8 * dt);
+            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.5 * dt);
         }
     }
 

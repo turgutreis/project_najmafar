@@ -12,7 +12,7 @@ import { updateHarvesting, triggerHarvestStart } from './systems/harvesting';
 import { updateAbduction, triggerAbductStart } from './systems/abduction';
 import { updateFleet } from './systems/fleet';
 import { updateCrewSimulation, renderCrewUI } from './systems/crew';
-import { updateMinimap, updateSonarWave, initHUD, addLogEntry } from './ui/hud';
+import { updateMinimap, updateSonarWave, initHUD, addLogEntry, updateHUDStats } from './ui/hud';
 import { initDeckUI, updateMutationUI } from './ui/deck';
 import { toggleGalaxyMap, warpToSystem, isMapOpen } from './systems/galaxy-map';
 import { toggleMusic, isMusicPlaying, isMusicUserMuted } from './engine/audio';
@@ -49,6 +49,9 @@ function animate(time: number) {
 
         // Core Physics simulation (orbits, gravity, collisions)
         updatePhysics(dt);
+
+        // Real-time HUD and status updates
+        updateHUDStats(STATE.telepathyActive);
 
         // Subsystems updates
         updateScanning(dt);

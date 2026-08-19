@@ -35735,11 +35735,14 @@ function processInput(dt) {
   if (isThrusting) {
     STATE.playerAcceleration.addScaledVector(forwardDir, effectiveThrust);
     if (hasEnergy) {
-      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 2.8 * dt);
+      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 5.5 * dt);
     }
     setThrusterSound(true);
   } else {
     setThrusterSound(false);
+    if (!isRetroBraking && STATE.bioEnergy < STATE.maxBioEnergy) {
+      STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.8 * dt);
+    }
   }
   if (isRetroBraking) {
     const curSpeed = STATE.playerVelocity.length();
@@ -35750,7 +35753,7 @@ function processInput(dt) {
       STATE.playerAcceleration.addScaledVector(forwardDir, -effectiveThrust * 0.4);
     }
     if (hasEnergy) {
-      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.8 * dt);
+      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.5 * dt);
     }
   }
   if (STATE.flightAssist) {
@@ -36258,6 +36261,7 @@ function animate(time) {
   if (STATE.gameStarted) {
     processInput(dt);
     updatePhysics(dt);
+    updateHUDStats(STATE.telepathyActive);
     updateScanning(dt);
     updateHarvesting(dt);
     updateAbduction(dt);
