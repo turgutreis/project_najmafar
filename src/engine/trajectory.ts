@@ -5,7 +5,7 @@ import { scene } from './scene';
 const DASH_SEGMENTS = 130; // 130 dashed road segments (260 vertices)
 const TRAJECTORY_DT = 0.08;
 const DASH_RATIO = 0.65; // 65% dash, 35% gap
-const SOFTENING_SQ = 6.0;
+const SOFTENING_SQ = 25.0;
 
 let trajectoryGeometry: THREE.BufferGeometry;
 let trajectoryLines: THREE.LineSegments;

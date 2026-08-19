@@ -384,8 +384,8 @@ export function spawnPlanetsAndAsteroids() {
 
         scene.add(planetGroup);
 
-        const pMass = p.size * p.size * 12.0 * (isGas ? 1.8 : 1.2);
-        const pRange = Math.max(22.0, p.size * 7.5);
+        const pMass = p.size * 4.0 * (isGas ? 1.4 : 1.0);
+        const pRange = Math.max(18.0, p.size * 4.5);
 
         const sourceObj: any = {
             mesh: planetGroup,

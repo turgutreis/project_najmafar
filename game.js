@@ -29884,7 +29884,7 @@ function onWindowResize() {
 var DASH_SEGMENTS = 130;
 var TRAJECTORY_DT = 0.08;
 var DASH_RATIO = 0.65;
-var SOFTENING_SQ = 6;
+var SOFTENING_SQ = 25;
 var trajectoryGeometry;
 var trajectoryLines;
 var trajectoryPositions;
@@ -33440,8 +33440,8 @@ function spawnPlanetsAndAsteroids() {
       }
     }
     scene.add(planetGroup);
-    const pMass = p.size * p.size * 12 * (isGas ? 1.8 : 1.2);
-    const pRange = Math.max(22, p.size * 7.5);
+    const pMass = p.size * 4 * (isGas ? 1.4 : 1);
+    const pRange = Math.max(18, p.size * 4.5);
     const sourceObj = {
       mesh: planetGroup,
       type: "planet",
@@ -35960,9 +35960,8 @@ function updatePhysics(dt) {
         minSourceDist = distance;
         closestSource = source;
       }
-      const clampedDist = Math.max(distance, source.radius * 1.2);
-      const forceStrength = STATE.gConstant * source.mass / (clampedDist * clampedDist);
-      const invDist = 1 / distance;
+      const forceStrength = STATE.gConstant * source.mass / (distSq + 25);
+      const invDist = 1 / Math.max(0.1, distance);
       STATE.playerAcceleration.x += dx * invDist * forceStrength;
       STATE.playerAcceleration.z += dz * invDist * forceStrength;
     }
@@ -36067,13 +36066,18 @@ function updateCollisions(dt) {
       } else if (source.type === "planet" || source.type === "star") {
         _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
         const isStar = source.type === "star";
-        const safeClearance = isStar ? 24 : colDistance + 0.6;
+        const safeClearance = isStar ? 24 : colDistance + 0.2;
         STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, safeClearance);
         if (STATE.playerGroup)
           STATE.playerGroup.position.copy(STATE.playerPosition);
-        const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-        const bounceForce = isStar ? 28 : Math.max(22, Math.abs(currentOutwardSpeed) * 0.8 + 16);
-        STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
+        if (isStar) {
+          STATE.playerVelocity.copy(_bounceDir).multiplyScalar(22);
+        } else {
+          const inwardSpeed = STATE.playerVelocity.dot(_bounceDir);
+          if (inwardSpeed < 0) {
+            STATE.playerVelocity.addScaledVector(_bounceDir, -inwardSpeed * 1.05);
+          }
+        }
         if (STATE.collisionCooldown === 0) {
           STATE.collisionCooldown = 1.2;
           const damage = isStar ? STATE.mutations.armor.purchased ? 18 : 35 : STATE.mutations.armor.purchased ? 15 : 30;

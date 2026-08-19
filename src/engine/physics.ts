@@ -164,9 +164,9 @@ export function updatePhysics(dt: number) {
                 closestSource = source;
             }
 
-            const clampedDist = Math.max(distance, source.radius * 1.2);
-            const forceStrength = (STATE.gConstant * source.mass) / (clampedDist * clampedDist);
-            const invDist = 1 / distance;
+            // Plummer smoothed gravity: F = G*M / (r^2 + r_soft^2)
+            const forceStrength = (STATE.gConstant * source.mass) / (distSq + 25.0);
+            const invDist = 1 / Math.max(0.1, distance);
 
             STATE.playerAcceleration.x += dx * invDist * forceStrength;
             STATE.playerAcceleration.z += dz * invDist * forceStrength;
@@ -295,16 +295,22 @@ export function updateCollisions(dt: number) {
                 _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
 
                 const isStar = source.type === 'star';
-                const safeClearance = isStar ? 24.0 : colDistance + 0.6;
+                const safeClearance = isStar ? 24.0 : colDistance + 0.2;
 
                 // Snap cleanly outside collider radius
                 STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, safeClearance);
                 if (STATE.playerGroup) STATE.playerGroup.position.copy(STATE.playerPosition);
 
-                // Elastic Repulsion Reflex (Solar flare ejection if hitting star)
-                const currentOutwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-                const bounceForce = isStar ? 28.0 : Math.max(22, Math.abs(currentOutwardSpeed) * 0.8 + 16);
-                STATE.playerVelocity.copy(_bounceDir).multiplyScalar(bounceForce);
+                if (isStar) {
+                    // Star ejection
+                    STATE.playerVelocity.copy(_bounceDir).multiplyScalar(22.0);
+                } else {
+                    // Smooth atmospheric deflection (cancels inward descent, allows smooth tangential glide)
+                    const inwardSpeed = STATE.playerVelocity.dot(_bounceDir);
+                    if (inwardSpeed < 0) {
+                        STATE.playerVelocity.addScaledVector(_bounceDir, -inwardSpeed * 1.05);
+                    }
+                }
 
                 if (STATE.collisionCooldown === 0) {
                     STATE.collisionCooldown = 1.2;
