@@ -97,60 +97,56 @@ export async function checkUniverseData() {
     }
 }
 
-export function clearActiveSystem() {
-    activePlanets.forEach(p => {
-        scene.remove(p.mesh);
-        if (p.bodyMesh) {
-            p.bodyMesh.geometry.dispose();
-            if (p.bodyMesh.material instanceof Array) {
-                p.bodyMesh.material.forEach((m: THREE.Material) => m.dispose());
-            } else if (p.bodyMesh.material) {
-                p.bodyMesh.material.dispose();
+function disposeObject3D(obj: THREE.Object3D | null | undefined) {
+    if (!obj) return;
+    obj.traverse((child: any) => {
+        if (child.geometry && typeof child.geometry.dispose === 'function') {
+            child.geometry.dispose();
+        }
+        if (child.material) {
+            if (Array.isArray(child.material)) {
+                child.material.forEach((m: any) => m && typeof m.dispose === 'function' && m.dispose());
+            } else if (typeof child.material.dispose === 'function') {
+                child.material.dispose();
             }
         }
-        if (p.cloudMesh) {
-            p.cloudMesh.geometry.dispose();
-            (p.cloudMesh.material as THREE.Material).dispose();
-        }
-        if (p.psioAuraMesh) {
-            p.psioAuraMesh.geometry.dispose();
-            (p.psioAuraMesh.material as THREE.Material).dispose();
+    });
+}
+
+export function clearActiveSystem() {
+    activePlanets.forEach(p => {
+        if (p.mesh) {
+            scene.remove(p.mesh);
+            disposeObject3D(p.mesh);
         }
         if (p.ringMesh) {
             scene.remove(p.ringMesh);
-            p.ringMesh.geometry.dispose();
-            (p.ringMesh.material as THREE.Material).dispose();
+            disposeObject3D(p.ringMesh);
         }
     });
 
     STATE.gravitySources.forEach(s => {
         if (s.ringMesh) {
             scene.remove(s.ringMesh);
-            s.ringMesh.geometry.dispose();
-            (s.ringMesh.material as THREE.Material).dispose();
+            disposeObject3D(s.ringMesh);
         }
-        if (s.type === 'star') {
+        if (s.mesh) {
             scene.remove(s.mesh);
-            if (s.mesh instanceof THREE.Mesh) {
-                s.mesh.geometry.dispose();
-                (s.mesh.material as THREE.Material).dispose();
-            }
+            disposeObject3D(s.mesh);
         }
     });
 
     STATE.asteroids.forEach(a => {
-        scene.remove(a.mesh);
-        if (a.mesh instanceof THREE.Mesh) {
-            a.mesh.geometry.dispose();
-            if (a.mesh.material instanceof Array) {
-                a.mesh.material.forEach((m: THREE.Material) => m.dispose());
-            } else if (a.mesh.material) {
-                (a.mesh.material as THREE.Material).dispose();
-            }
+        if (a.mesh) {
+            scene.remove(a.mesh);
+            disposeObject3D(a.mesh);
         }
     });
 
-    activeCoronaMeshes.forEach(m => scene.remove(m));
+    activeCoronaMeshes.forEach(m => {
+        scene.remove(m);
+        disposeObject3D(m);
+    });
     activeCoronaMeshes.length = 0;
     activeCoronaUpdaters.length = 0;
 
