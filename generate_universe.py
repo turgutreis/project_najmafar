@@ -671,15 +671,36 @@ def main():
     parser.add_argument("--count", dest="count", type=int, default=1000, help="Number of stellar systems to generate")
     parser.add_argument("--api-key", "--token", dest="api_key", type=str, default="", help="IBM Quantum API Key / Token")
     parser.add_argument("--qpu", "--use-qpu", dest="qpu", action="store_true", help="Use real IBM QPU instead of simulator")
+    parser.add_argument("--force", dest="force", action="store_true", help="Force overwrite even if universe_data.json contains real IBM QPU data")
     args = parser.parse_args()
 
     api_key = args.api_key or os.environ.get("IBM_QUANTUM_API_KEY", "") or os.environ.get("QISKIT_IBM_TOKEN", "")
     use_qpu = args.qpu
     
+    # 1. Check existing universe file to protect real IBM QPU data
+    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "universe_data.json")
+    is_existing_qpu = False
+    if os.path.exists(output_path):
+        try:
+            with open(output_path, "r", encoding="utf-8") as f:
+                existing_data = json.load(f)
+                if existing_data.get("meta", {}).get("generatorMode") == "IBM_QPU":
+                    is_existing_qpu = True
+        except Exception:
+            pass
+
+    # If existing data is from a real IBM QPU and current run is not QPU and not forced:
+    if is_existing_qpu and not use_qpu and not args.force:
+        sim_output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "universe_data.sim.json")
+        print(f"🔒 SCHUTZAKTIV: 'universe_data.json' enthält ein echtes IBM-QPU-Universum!", flush=True)
+        print(f"Simulator-Ergebnisse werden separat in '{sim_output_path}' gespeichert, um die QPU-Daten nicht zu überschreiben.", flush=True)
+        output_path = sim_output_path
+
+    # 2. Fetch quantum random stream and provenance metadata
     qrng, meta_info = generate_quantum_bits(api_key, use_qpu)
     galaxy_data = build_galaxy(qrng, meta_info, count=args.count)
     
-    output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "universe_data.json")
+    # 3. Export to JSON
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(galaxy_data, f, indent=2, ensure_ascii=False)
         
