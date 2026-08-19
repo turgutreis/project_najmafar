@@ -191,6 +191,7 @@ export function updatePhysics(dt: number) {
         }
     }
 
+    STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
     STATE.playerVelocity.x += netGx * dt;
     STATE.playerVelocity.z += netGz * dt;
 

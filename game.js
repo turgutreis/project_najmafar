@@ -36102,6 +36102,7 @@ function updatePhysics(dt) {
       netGz += dz * invDist * gForce;
     }
   }
+  STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
   STATE.playerVelocity.x += netGx * dt;
   STATE.playerVelocity.z += netGz * dt;
   const effectiveDrag = STATE.currentDrag;
