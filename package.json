@@ -27,6 +27,9 @@
   "build": {
     "appId": "com.najmafar.game",
     "productName": "Project Najmafar",
+    "directories": {
+      "output": "dist"
+    },
     "files": [
       "index.html",
       "style.css",
@@ -42,17 +45,29 @@
       ],
       "category": "public.app-category.games"
     },
+    "dmg": {
+      "title": "Project Najmafar Installer"
+    },
     "win": {
       "target": [
         "nsis",
         "portable"
       ]
     },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Project Najmafar"
+    },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
+      "category": "Game",
+      "synopsis": "Project Najmafar - Cosmic Evolution Survival Game",
       "maintainer": "Ali Mazlum <a_mazlum@web.de>"
     }
   }

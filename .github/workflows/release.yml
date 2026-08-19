@@ -1,0 +1,130 @@
+name: Multi-Platform Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: 'Custom Release Notes / Description'
+        required: false
+        default: 'Automated Multi-Platform Release for Project Najmafar'
+      is_draft:
+        description: 'Publish as Draft Release?'
+        type: boolean
+        default: false
+      is_prerelease:
+        description: 'Publish as Pre-Release (Alpha/Beta)?'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: Windows
+            target: win
+            artifact_name: project-najmafar-windows
+          - os: macos-latest
+            platform: macOS
+            target: mac
+            artifact_name: project-najmafar-macos
+          - os: ubuntu-latest
+            platform: Linux
+            target: linux
+            artifact_name: project-najmafar-linux
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun Runtime
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: bun install
+
+      - name: TypeScript Typecheck
+        run: bun run typecheck
+
+      - name: Bundle Engine & Main Logic
+        run: bun run build:ts
+
+      - name: Install Linux Dependencies (Ubuntu only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools libfuse2
+
+      - name: Build Electron App (${{ matrix.platform }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bun x electron-builder --${{ matrix.target }}
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: warn
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download All Platform Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+
+      - name: Flatten Artifact Files
+        run: |
+          mkdir -p release-files
+          find release-artifacts -type f -exec cp {} release-files/ \;
+          echo "Release Files Ready:"
+          ls -la release-files/
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-files/*
+          draft: ${{ github.event.inputs.is_draft || false }}
+          prerelease: ${{ github.event.inputs.is_prerelease || true }}
+          generate_release_notes: true
+          body: |
+            ${{ github.event.inputs.release_notes || '🚀 Project Najmafar - Cosmic Evolution Survival Release' }}
+
+            ### 📦 Verfügbare Downloads:
+            - **🪟 Windows:** `.exe` (Installer & Portable)
+            - **🍎 macOS:** `.dmg` & `.zip`
+            - **🐧 Linux:** `.AppImage` & `.deb`
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
