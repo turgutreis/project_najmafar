@@ -14,6 +14,36 @@ const _bounceDir = new THREE.Vector3();
 const _inputDir = new THREE.Vector3();
 
 export function updatePhysics(dt: number) {
+    // 0. Detect nearest planetary sub-system
+    let nearestPlanet: any = null;
+    let nearestPlanetDist = Infinity;
+
+    activePlanets.forEach(p => {
+        if (!p.isMoon) {
+            const dx = STATE.playerPosition.x - p.mesh.position.x;
+            const dz = STATE.playerPosition.z - p.mesh.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < nearestPlanetDist) {
+                nearestPlanetDist = dist;
+                nearestPlanet = p;
+            }
+        }
+    });
+
+    const orbitTriggerDist = 55.0;
+    if (nearestPlanet && nearestPlanetDist < orbitTriggerDist) {
+        STATE.isInPlanetOrbit = true;
+        STATE.orbitPlanet = nearestPlanet;
+        const rawProximity = Math.max(0, Math.min(1.0, 1.0 - (nearestPlanetDist / orbitTriggerDist)));
+        const easedProximity = Math.sin(rawProximity * Math.PI / 2);
+        STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1.0, dt * 4.0));
+    } else {
+        STATE.isInPlanetOrbit = false;
+        STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1.0, dt * 3.0));
+    }
+
+    const zoomFactor = STATE.orbitZoomFactor || 0;
+
     // 1. Update celestial orbits (Planets around star, Moons around parent planet)
     activePlanets.forEach(p => {
         if (!p.isMoon) {
@@ -26,6 +56,13 @@ export function updatePhysics(dt: number) {
             if (p.ringMesh) {
                 p.ringMesh.position.set(px, 0, pz);
             }
+
+            // Dynamic Planetary Scale: Planet expands smoothly into a colossal world in orbit mode
+            const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
+            const targetScale = isFocus ? (1.0 + 1.8 * zoomFactor) : 1.0;
+            const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 4.0));
+            p.mesh.scale.set(curScale, curScale, curScale);
+            p.source.radius = p.size * curScale;
 
             if (p.bodyMesh) {
                 p.bodyMesh.rotation.y += (p.type === 'Gas Giant' ? 0.22 : 0.16) * dt;
@@ -42,6 +79,17 @@ export function updatePhysics(dt: number) {
 
     activePlanets.forEach(m => {
         if (m.isMoon && m.parentPlanet) {
+            // Dynamic Sub-System Moon Expansion
+            const isParentFocus = STATE.isInPlanetOrbit && (STATE.orbitPlanet === m.parentPlanet || STATE.orbitPlanet === m);
+            const baseDist = m.baseDistance || m.distance || 6.0;
+            const targetMoonDist = isParentFocus ? (baseDist + 24.0 * zoomFactor) : baseDist;
+            m.distance = THREE.MathUtils.lerp(m.distance, targetMoonDist, Math.min(1.0, dt * 4.0));
+
+            const targetMoonScale = isParentFocus ? (1.0 + 0.9 * zoomFactor) : 1.0;
+            const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 4.0));
+            m.mesh.scale.set(curMScale, curMScale, curMScale);
+            m.source.radius = m.size * curMScale;
+
             m.angle += dt * m.speed;
             const parentPos = m.parentPlanet.mesh.position;
             const mx = parentPos.x + m.distance * Math.cos(m.angle);
@@ -51,6 +99,8 @@ export function updatePhysics(dt: number) {
             m.source.position.set(mx, 0, mz);
             if (m.ringMesh) {
                 m.ringMesh.position.copy(parentPos);
+                const rScale = m.distance / baseDist;
+                m.ringMesh.scale.set(rScale, 1, rScale);
             }
 
             if (m.bodyMesh) {
@@ -114,93 +164,53 @@ export function updatePhysics(dt: number) {
     STATE.nearestPlanet = targetPlanet;
     updateScannerUI(targetPlanet, targetDist);
 
-    // 4. Update Psionic Compass HUD
-    const compassHud = document.getElementById('psionic-compass-hud');
-    if (compassHud) {
-        const targetBody = STATE.lockedTarget || activePlanets.find(p => p.attributes && p.attributes.species && p.attributes.species.population > 0);
-        if (targetBody) {
-            compassHud.style.display = 'flex';
-            const cdx = targetBody.mesh.position.x - STATE.playerPosition.x;
-            const cdz = targetBody.mesh.position.z - STATE.playerPosition.z;
-            const cdist = Math.sqrt(cdx * cdx + cdz * cdz);
-
-            const angle = Math.atan2(cdz, cdx) - Math.PI / 2;
-
-            const nameEl = document.getElementById('compass-planet-name');
-            const distEl = document.getElementById('compass-distance-text');
-            const needleEl = document.getElementById('compass-arrow-needle');
-
-            if (nameEl) {
-                const specTag = (targetBody.attributes && targetBody.attributes.species) ? ` (${targetBody.attributes.species.name})` : '';
-                nameEl.innerText = `${targetBody.name}${specTag}`;
-            }
-            if (distEl) distEl.innerText = `Distanz: ${cdist.toFixed(0)} Einheiten`;
-            if (needleEl) needleEl.style.transform = `rotate(${angle * (180 / Math.PI)}deg)`;
-        } else {
-            compassHud.style.display = 'none';
-        }
-    }
-
-    // 5. Calculate Net Gravitational Forces (Input thrust already added by processInput)
+    // 4. Multi-Body Gravity Calculation (Inverse-square law with Softening)
+    let netGx = 0;
+    let netGz = 0;
 
     const sources = STATE.gravitySources;
-    const sourceCount = sources.length;
-    let minSourceDist = Infinity;
-    let closestSource: any = null;
+    const count = sources.length;
 
-    for (let s = 0; s < sourceCount; s++) {
-        const source = sources[s];
-        if (source.isAbsorbed) continue;
+    for (let i = 0; i < count; i++) {
+        const s = sources[i];
+        if (s.isAbsorbed) continue;
 
-        const dx = source.position.x - STATE.playerPosition.x;
-        const dz = source.position.z - STATE.playerPosition.z;
+        const dx = s.position.x - STATE.playerPosition.x;
+        const dz = s.position.z - STATE.playerPosition.z;
         const distSq = dx * dx + dz * dz;
-        const rangeSq = source.gravityRange * source.gravityRange;
+        const rangeSq = s.gravityRange * s.gravityRange;
 
-        if (distSq < rangeSq && distSq > 0.01) {
-            const distance = Math.sqrt(distSq);
-            if (distance < minSourceDist) {
-                minSourceDist = distance;
-                closestSource = source;
-            }
+        if (distSq < rangeSq) {
+            const dist = Math.sqrt(distSq);
+            // Softened Plummer gravity: F = G*M / (r^2 + 25.0)
+            const gForce = (STATE.gConstant * s.mass) / (distSq + 25.0);
+            const invDist = 1 / Math.max(0.1, dist);
 
-            // Plummer smoothed gravity: F = G*M / (r^2 + r_soft^2)
-            const forceStrength = (STATE.gConstant * source.mass) / (distSq + 25.0);
-            const invDist = 1 / Math.max(0.1, distance);
-
-            STATE.playerAcceleration.x += dx * invDist * forceStrength;
-            STATE.playerAcceleration.z += dz * invDist * forceStrength;
+            netGx += dx * invDist * gForce;
+            netGz += dz * invDist * gForce;
         }
     }
 
-    // Stellar Radiation / Star Hazard (Safe outside R > 16)
-    const starSource = STATE.gravitySources.find(s => s.type === 'star');
-    if (starSource) {
-        const sdistSq = STATE.playerPosition.x * STATE.playerPosition.x + STATE.playerPosition.z * STATE.playerPosition.z;
-        const radiationRadius = 16.0;
-        if (sdistSq < radiationRadius * radiationRadius) {
-            const distance = Math.sqrt(sdistSq);
-            const radRatio = 1 - (distance / radiationRadius);
-            const burnDamage = (0.8 + radRatio * radRatio * 8.0) * dt;
-            STATE.health = Math.max(0, STATE.health - burnDamage);
-            STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + (1.5 + radRatio * 4.0) * dt));
-            if (Math.random() < 0.01) {
-                addLogEntry("SYSTEM", `⚠️ THERMISCHE WARNUNG: Sonnennähe zu ${starSource.name} (R=${distance.toFixed(1)} < 16)! Strahlungsschaden erlitten.`);
-            }
-        }
-    }
+    STATE.playerVelocity.x += netGx * dt;
+    STATE.playerVelocity.z += netGz * dt;
 
-    // 6. Integrate Equations of Motion (Euler with exponential drag)
-    STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
+    // 5. Apply Natural Vacuum Drag / Momentum preservation
+    const effectiveDrag = STATE.currentDrag;
+    STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
 
+    // Top Speed Clamp
     const maxSpeed = 35.0;
-    if (STATE.playerVelocity.lengthSq() > maxSpeed * maxSpeed) {
-        STATE.playerVelocity.setLength(maxSpeed);
+    const curSpeed = STATE.playerVelocity.length();
+    if (curSpeed > maxSpeed) {
+        STATE.playerVelocity.multiplyScalar(maxSpeed / curSpeed);
     }
 
-    STATE.playerVelocity.multiplyScalar(Math.exp(-STATE.currentDrag * dt));
-    STATE.playerPosition.addScaledVector(STATE.playerVelocity, dt);
-    STATE.shipSpeed = STATE.playerVelocity.length();
+    // Update real-time speed in state for HUD
+    STATE.shipSpeed = curSpeed;
+
+    // 6. Integrate Position
+    STATE.playerPosition.x += STATE.playerVelocity.x * dt;
+    STATE.playerPosition.z += STATE.playerVelocity.z * dt;
 
     // Boundary wrapping
     const maxBound = 500;
@@ -213,65 +223,26 @@ export function updatePhysics(dt: number) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
     }
 
-    // 6.5 Dynamic Planetary Orbit Zoom & Cinematic Sub-System Framing
-    let nearestPlanet: any = null;
-    let nearestPlanetDist = Infinity;
-
-    // Find closest parent planet (anchor of the planetary sub-system)
-    activePlanets.forEach(p => {
-        if (!p.isMoon) {
-            const dx = STATE.playerPosition.x - p.mesh.position.x;
-            const dz = STATE.playerPosition.z - p.mesh.position.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            if (dist < nearestPlanetDist) {
-                nearestPlanetDist = dist;
-                nearestPlanet = p;
-            }
-        }
-    });
-
+    // 6.5 Dynamic Framing
     let targetCamX = STATE.playerPosition.x;
     let targetCamZ = STATE.playerPosition.z;
 
-    if (nearestPlanet) {
-        // Wide 50-unit orbital zone for seamless approach
-        const orbitTriggerDist = Math.max(50.0, (nearestPlanet.size || 2.5) * 14.0);
-
-        if (nearestPlanetDist < orbitTriggerDist) {
-            STATE.isInPlanetOrbit = true;
-            STATE.orbitPlanet = nearestPlanet;
-
-            const rawProximity = Math.max(0, Math.min(1.0, 1.0 - (nearestPlanetDist / orbitTriggerDist)));
-            const easedProximity = Math.sin(rawProximity * Math.PI / 2);
-            STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1.0, dt * 4.0));
-
-            // Keep ship comfortable and proportional (Height 62-68)
-            STATE.targetCameraHeight = 65.0;
-
-            // Subtle framing offset towards planet
-            const framingWeight = 0.18 * STATE.orbitZoomFactor;
-            targetCamX = THREE.MathUtils.lerp(STATE.playerPosition.x, nearestPlanet.mesh.position.x, framingWeight);
-            targetCamZ = THREE.MathUtils.lerp(STATE.playerPosition.z, nearestPlanet.mesh.position.z, framingWeight);
-        } else {
-            STATE.isInPlanetOrbit = false;
-            STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1.0, dt * 3.0));
-            STATE.targetCameraHeight = 65.0;
-        }
-    } else {
-        STATE.isInPlanetOrbit = false;
-        STATE.targetCameraHeight = 65.0;
+    if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
+        const framingWeight = 0.18 * zoomFactor;
+        targetCamX = THREE.MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, framingWeight);
+        targetCamZ = THREE.MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, framingWeight);
     }
+
+    // Camera follow (Stable Height, Ship stays sleek & proportional)
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, Math.min(1.0, dt * 5.5));
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1.0, dt * 5.5));
+    STATE.cameraHeight = 65.0;
+    camera.position.y = 65.0;
 
     if (camera.fov !== 60.0) {
         camera.fov = 60.0;
         camera.updateProjectionMatrix();
     }
-
-    // Camera follow (Smooth lag + Dynamic Smooth Zoom)
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, Math.min(1.0, dt * 5.5));
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1.0, dt * 5.5));
-    STATE.cameraHeight = THREE.MathUtils.lerp(STATE.cameraHeight || 75, STATE.targetCameraHeight || 75, Math.min(1.0, dt * 5.0));
-    camera.position.y = STATE.cameraHeight;
 
     // Check for Critical Biological Collapse (Game Over)
     if (STATE.health <= 0 && !STATE.isGameOver && STATE.gameStarted) {
@@ -287,164 +258,80 @@ export function updatePhysics(dt: number) {
         STATE.health = Math.min(STATE.maxHealth, STATE.health + STATE.crewBuffs.repairRate * dt);
         STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.25 * dt);
     }
-
-    // Basal Metabolic Energy Drain: Living bioship consumes 0.65 Bio-Energy/s
-    STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 0.65 * dt);
-
-    // Emergency Bio-Photosynthesis Trickle (only up to 8% when completely starved)
-    if (STATE.bioEnergy < 8) {
-        const regenRate = STATE.bioEnergy <= 0 ? 0.9 : 0.4;
-        STATE.bioEnergy = Math.min(8, STATE.bioEnergy + regenRate * dt);
-    }
-
-    if (STATE.bioEnergy <= 0) {
-        STATE.health = Math.max(0, STATE.health - 2.0 * dt);
-        if (Math.random() < 0.006) {
-            addLogEntry("SYSTEM", "⚠️ KRITISCHER NAHRUNGSMANGEL: Organismus verhungert (-2.0 HP/s). Assimiliere Bio-Asteroiden!");
-        }
-    }
-
-    // 10. Determine harmony state for HUD
-    const uniqueRoles = new Set(STATE.crew.map(c => c.role)).size;
-    const isHarmony = uniqueRoles >= 3 && STATE.crew.length >= 3;
-
-    // 11. Update HUD Stats Bars
-    updateHUDStats(isHarmony);
 }
 
-export function updateCollisions(dt: number) {
-    if (STATE.collisionCooldown > 0) {
-        STATE.collisionCooldown = Math.max(0, STATE.collisionCooldown - dt);
-    }
+function updateCollisions(dt: number) {
+    const sources = STATE.gravitySources;
+    const count = sources.length;
 
-    STATE.gravitySources.forEach((source) => {
-        if (source.isAbsorbed) return;
+    for (let i = 0; i < count; i++) {
+        const s = sources[i];
+        if (s.isAbsorbed) continue;
 
-        const distance = STATE.playerPosition.distanceTo(source.position);
-        const colDistance = source.radius + 1.8;
+        const dx = STATE.playerPosition.x - s.position.x;
+        const dz = STATE.playerPosition.z - s.position.z;
+        const distSq = dx * dx + dz * dz;
 
-        if (distance < colDistance) {
-            if (source.type === 'asteroid' && source.isResource) {
-                source.isAbsorbed = true;
-                if (source.mesh) source.mesh.scale.set(0.01, 0.01, 0.01);
+        // Resource Asteroids: Absorb on proximity
+        if (s.isResource) {
+            const collectRadius = s.radius + 1.8;
+            if (distSq < collectRadius * collectRadius) {
+                s.isAbsorbed = true;
+                if (s.mesh) scene.remove(s.mesh);
 
-                const bioMult = (STATE.crewBuffs ? STATE.crewBuffs.bioGain : 1.0);
-
-                if (source.resourceType === 'bio') {
-                    STATE.health = Math.min(STATE.maxHealth, STATE.health + 30);
-                    const gain = Math.round(25 * bioMult);
+                if (s.resourceType === 'bio') {
+                    const gain = Math.round(((s as any).yield || 15) * (STATE.crewBuffs ? STATE.crewBuffs.bioGain : 1.0));
                     STATE.bioRes += gain;
-                    addLogEntry("SYSTEM", `Organischer Asteroid absorbiert. +${gain} Biomasse gewonnen. Zellkern repariert (+30 HP).`);
+                    addLogEntry("HARVEST", `+${gain} Biomasse geborgen (${s.name}).`);
                     playBioCollectSound();
-                } else {
-                    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 50);
-                    const gain = Math.round(25 * bioMult);
+                } else if (s.resourceType === 'silicon') {
+                    const gain = Math.round((s as any).yield || 20);
                     STATE.siliconRes += gain;
-                    addLogEntry("SYSTEM", `Silizium-Komet absorbiert. +${gain} Silizium gewonnen (+50% Energie).`);
+                    addLogEntry("HARVEST", `+${gain} Silizium extrahiert (${s.name}).`);
                     playSiliconCollectSound();
                 }
+
+                updateHUDStats();
                 updateMutationUI();
-                respawnAsteroid(source);
-            } else if (source.type === 'planet' || source.type === 'star') {
-                _bounceDir.subVectors(STATE.playerPosition, source.position).normalize();
+                continue;
+            }
+        }
 
-                const isStar = source.type === 'star';
-                const safeClearance = isStar ? 24.0 : colDistance + 0.2;
+        // Solid Celestial Collisions (Star, Planets, Moons)
+        const minDist = s.type === 'star' ? s.radius + 1.2 : s.radius + 0.8;
 
-                // Snap cleanly outside collider radius
-                STATE.playerPosition.copy(source.position).addScaledVector(_bounceDir, safeClearance);
-                if (STATE.playerGroup) STATE.playerGroup.position.copy(STATE.playerPosition);
+        if (distSq < minDist * minDist) {
+            const dist = Math.max(0.01, Math.sqrt(distSq));
+            const nx = dx / dist;
+            const nz = dz / dist;
 
-                if (isStar) {
-                    // Star ejection
-                    STATE.playerVelocity.copy(_bounceDir).multiplyScalar(22.0);
-                } else {
-                    // Smooth atmospheric deflection (cancels inward descent, allows smooth tangential glide)
-                    const inwardSpeed = STATE.playerVelocity.dot(_bounceDir);
-                    if (inwardSpeed < 0) {
-                        STATE.playerVelocity.addScaledVector(_bounceDir, -inwardSpeed * 1.05);
-                    }
-                }
+            // Push ship smoothly to the atmospheric boundary
+            STATE.playerPosition.x = s.position.x + nx * minDist;
+            STATE.playerPosition.z = s.position.z + nz * minDist;
 
-                if (STATE.collisionCooldown === 0) {
-                    STATE.collisionCooldown = 1.2;
+            if (STATE.playerGroup) {
+                STATE.playerGroup.position.copy(STATE.playerPosition);
+            }
 
-                    const damage = isStar
-                        ? (STATE.mutations.armor.purchased ? 18 : 35)
-                        : (STATE.mutations.armor.purchased ? 15 : 30);
-                    STATE.health = Math.max(0, STATE.health - damage);
+            // Atmospheric Glide
+            const inwardSpeed = STATE.playerVelocity.x * (-nx) + STATE.playerVelocity.z * (-nz);
+
+            if (inwardSpeed > 0) {
+                _bounceDir.set(nx, 0, nz);
+                STATE.playerVelocity.addScaledVector(_bounceDir, inwardSpeed * 1.05);
+                STATE.playerVelocity.multiplyScalar(0.92);
+
+                if (inwardSpeed > 4.0) {
+                    const rawDamage = Math.min(25, Math.floor(inwardSpeed * 1.5));
+                    const armor = STATE.mutations?.armor?.purchased ? 0.35 : 0;
+                    const dmg = Math.max(1, Math.floor(rawDamage * (1 - armor)));
+                    STATE.health = Math.max(0, STATE.health - dmg);
 
                     playCrashSound();
-
-                    const stressMult = (STATE.crewBuffs ? STATE.crewBuffs.stressDampening : 1.0);
-                    const stressAmount = (STATE.mutations.o2.purchased ? 10 : 22) * stressMult;
-                    STATE.crew.forEach(c => c.stress = Math.min(100, c.stress + stressAmount));
-
-                    if (isStar) {
-                        addLogEntry("SYSTEM", `🔥 SOLAR-ERUPTION: Magnetische Sonneneruption schleudert Schiff in sicheren Orbit (${safeClearance.toFixed(0)} LJ)!`);
-                    } else if (STATE.mutations.armor.purchased) {
-                        addLogEntry("SYSTEM", `Kollision mit ${source.name}! Chitin-Panzerung dämpft Aufprall (-15 HP).`);
-                    } else {
-                        addLogEntry("SYSTEM", `WARNUNG: Harter Aufprall auf ${source.name}! Zellhülle schwer beschädigt (-30 HP).`);
-                    }
+                    addLogEntry("WARN", `Atmosphären-Kollision mit ${s.name}! -${dmg}% Hülle.`);
+                    updateHUDStats();
                 }
             }
         }
-    });
-}
-
-function respawnAsteroid(sourceObj: any) {
-    setTimeout(() => {
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 30 + Math.random() * 120;
-        const x = Math.cos(angle) * dist;
-        const z = Math.sin(angle) * dist;
-        const size = 0.4 + Math.random() * 0.45;
-
-        const geo = new THREE.DodecahedronGeometry(size, 1);
-        const posAttr = geo.attributes.position;
-        for (let j = 0; j < posAttr.count; j++) {
-            const vx = posAttr.getX(j);
-            const vy = posAttr.getY(j);
-            const vz = posAttr.getZ(j);
-            const scale = 1 + (Math.random() - 0.5) * 0.3;
-            posAttr.setXYZ(j, vx * scale, vy * scale, vz * scale);
-        }
-        geo.computeVertexNormals();
-
-        const isOrganic = Math.random() > 0.45;
-        const color = isOrganic ? 0x00ff88 : 0x06b6d4;
-
-        const mat = new THREE.MeshStandardMaterial({
-            color: color,
-            roughness: 0.9,
-            metalness: 0.8,
-            emissive: isOrganic ? 0x003311 : 0x002233
-        });
-
-        if (sourceObj.mesh) {
-            scene.remove(sourceObj.mesh);
-            sourceObj.mesh.geometry.dispose();
-            sourceObj.mesh.material.dispose();
-        }
-
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(x, 0, z);
-        scene.add(mesh);
-
-        sourceObj.position.set(x, 0, z);
-        sourceObj.mesh = mesh;
-        sourceObj.name = isOrganic ? "Organische Biosphäre" : "Silizium-Komet";
-        sourceObj.resourceType = isOrganic ? 'bio' : 'silicon';
-        sourceObj.mass = size * 4;
-        sourceObj.radius = size;
-        sourceObj.gravityRange = size * 3;
-        sourceObj.isAbsorbed = false;
-
-        if (sourceObj.ringMesh) {
-            sourceObj.ringMesh.position.set(x, 0, z);
-            sourceObj.ringMesh.scale.set(sourceObj.gravityRange / (size * 3), 1, sourceObj.gravityRange / (size * 3));
-            (sourceObj.ringMesh.material as THREE.MeshBasicMaterial).color.setHex(color);
-        }
-    }, 15000);
+    }
 }
