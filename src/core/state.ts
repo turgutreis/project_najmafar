@@ -116,8 +116,12 @@ export const STATE: GameState = {
         aethelgard_guardians: 5
     },
     activeDiplomacyPlanet: null,
-    cameraHeight: 65,
-    targetCameraHeight: 65
+    cameraHeight: 70,
+    targetCameraHeight: 70,
+    cameraLookTarget: new THREE.Vector3(0, 0, 0),
+    isInPlanetOrbit: false,
+    orbitPlanet: null,
+    orbitZoomFactor: 0.0
 };
 
 export const activePlanets: PlanetEntry[] = [];

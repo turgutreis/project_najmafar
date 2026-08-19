@@ -213,10 +213,67 @@ export function updatePhysics(dt: number) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
     }
 
+    // 6.5 Dynamic Planetary Orbit Zoom & Cinematic Framing
+    let nearestBody: any = null;
+    let nearestBodyDist = Infinity;
+
+    activePlanets.forEach(p => {
+        const dx = STATE.playerPosition.x - p.mesh.position.x;
+        const dz = STATE.playerPosition.z - p.mesh.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < nearestBodyDist) {
+            nearestBodyDist = dist;
+            nearestBody = p;
+        }
+    });
+
+    let targetCamX = STATE.playerPosition.x;
+    let targetCamZ = STATE.playerPosition.z;
+
+    if (nearestBody) {
+        const orbitTriggerDist = Math.max(22.0, (nearestBody.size || 2.5) * 5.2);
+        if (nearestBodyDist < orbitTriggerDist) {
+            STATE.isInPlanetOrbit = true;
+            STATE.orbitPlanet = nearestBody;
+
+            // Normalized orbit proximity (0 at boundary -> 1 at surface)
+            const rawProximity = Math.max(0, Math.min(1.0, 1.0 - (nearestBodyDist / orbitTriggerDist)));
+            STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, rawProximity, Math.min(1.0, dt * 3.5));
+
+            // Smoothly lower camera down to 30-34 units in orbital proximity
+            const minOrbitHeight = Math.max(24.0, (nearestBody.size || 2.5) * 6.5);
+            STATE.targetCameraHeight = THREE.MathUtils.lerp(70.0, minOrbitHeight, STATE.orbitZoomFactor);
+
+            // Cinematic Offset: Camera frames both ship and the planet center
+            const framingWeight = 0.24 * STATE.orbitZoomFactor;
+            targetCamX = THREE.MathUtils.lerp(STATE.playerPosition.x, nearestBody.mesh.position.x, framingWeight);
+            targetCamZ = THREE.MathUtils.lerp(STATE.playerPosition.z, nearestBody.mesh.position.z, framingWeight);
+
+            // Cinematic FOV tightening for epic scale
+            const targetFov = THREE.MathUtils.lerp(60.0, 48.0, STATE.orbitZoomFactor);
+            if (Math.abs(camera.fov - targetFov) > 0.05) {
+                camera.fov = targetFov;
+                camera.updateProjectionMatrix();
+            }
+        } else {
+            STATE.isInPlanetOrbit = false;
+            STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1.0, dt * 2.5));
+            STATE.targetCameraHeight = 70.0;
+
+            if (camera.fov !== 60.0) {
+                camera.fov = THREE.MathUtils.lerp(camera.fov, 60.0, Math.min(1.0, dt * 2.5));
+                camera.updateProjectionMatrix();
+            }
+        }
+    } else {
+        STATE.isInPlanetOrbit = false;
+        STATE.targetCameraHeight = 70.0;
+    }
+
     // Camera follow (Smooth lag + Dynamic Smooth Zoom)
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
-    STATE.cameraHeight = THREE.MathUtils.lerp(STATE.cameraHeight || 65, STATE.targetCameraHeight || 65, 0.08);
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, Math.min(1.0, dt * 4.5));
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1.0, dt * 4.5));
+    STATE.cameraHeight = THREE.MathUtils.lerp(STATE.cameraHeight || 70, STATE.targetCameraHeight || 70, Math.min(1.0, dt * 4.0));
     camera.position.y = STATE.cameraHeight;
 
     // Check for Critical Biological Collapse (Game Over)

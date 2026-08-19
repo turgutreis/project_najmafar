@@ -353,4 +353,8 @@ export interface GameState {
 
     cameraHeight?: number;
     targetCameraHeight?: number;
+    cameraLookTarget?: THREE.Vector3;
+    isInPlanetOrbit?: boolean;
+    orbitPlanet?: PlanetEntry | null;
+    orbitZoomFactor?: number;
 }

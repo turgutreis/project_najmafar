@@ -534,6 +534,68 @@ html {
     background: rgba(255, 255, 255, 0.25);
 }
 
+/* Orbit Sub-System Telemetry Badge */
+.orbit-subsystem-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(56, 189, 248, 0.18));
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.2);
+    animation: orbitGlow 2.5s infinite alternate ease-in-out;
+}
+
+@keyframes orbitGlow {
+    0% { border-color: rgba(56, 189, 248, 0.4); box-shadow: 0 0 8px rgba(56, 189, 248, 0.15); }
+    100% { border-color: rgba(16, 185, 129, 0.6); box-shadow: 0 0 16px rgba(16, 185, 129, 0.3); }
+}
+
+.orbit-subsystem-badge .orbit-icon {
+    font-size: 1.2rem;
+}
+
+.orbit-subsystem-badge .orbit-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.72rem;
+    font-weight: bold;
+    color: #38bdf8;
+    letter-spacing: 0.05em;
+}
+
+.orbit-subsystem-badge .orbit-sub {
+    font-size: 0.6rem;
+    color: #94a3b8;
+}
+
+.subsystem-moons-list {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.moon-chip-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-size: 0.65rem;
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.moon-chip-btn:hover {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: #38bdf8;
+}
+
 /* Music Toggle Button */
 .music-btn {
     background: rgba(255, 255, 255, 0.05);

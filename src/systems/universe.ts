@@ -9,6 +9,7 @@ import { initPlanetDefenseFleets, clearFleet } from './fleet';
 import { addLogEntry } from '../ui/hud';
 import { createSunCoronaMesh } from '../procedural/sun-shader';
 import { createAtmosphereMesh } from '../procedural/atmosphere-shader';
+import { createPlanetaryRings } from '../procedural/planet-rings';
 import { createSunRays, SunRaysController } from '../procedural/sun-rays';
 
 export const activeCoronaMeshes: THREE.Object3D[] = [];
@@ -379,6 +380,14 @@ export function spawnPlanetsAndAsteroids() {
                 cloudMesh = new THREE.Mesh(cloudGeo, cloudMat);
                 cloudMesh.rotation.z = axialTilt;
                 planetGroup.add(cloudMesh);
+            }
+
+            // Procedural Planetary Rings (Saturn-like dust and ice particle rings)
+            const hasRings = isGas || (seed % 6 === 0);
+            if (hasRings) {
+                const ringColor = isGas ? parseInt(p.color) : 0xc0c6d0;
+                const pRings = createPlanetaryRings(p.size, ringColor, seed);
+                planetGroup.add(pRings);
             }
         }
 

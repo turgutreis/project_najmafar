@@ -28800,8 +28800,12 @@ var STATE = {
     aethelgard_guardians: 5
   },
   activeDiplomacyPlanet: null,
-  cameraHeight: 65,
-  targetCameraHeight: 65
+  cameraHeight: 70,
+  targetCameraHeight: 70,
+  cameraLookTarget: new Vector3(0, 0, 0),
+  isInPlanetOrbit: false,
+  orbitPlanet: null,
+  orbitZoomFactor: 0
 };
 var activePlanets = [];
 
@@ -32460,7 +32464,24 @@ function updateScannerUI(planet, dist) {
     distEl.innerText = `${dist.toFixed(1)} ${dist < 20 ? "(In Sensorreichweite)" : "(Zu weit entfernt)"}`;
     distEl.style.color = dist < 20 ? "#10b981" : "#f59e0b";
   }
-  const inRange = dist < 20;
+  const orbitBadge = document.getElementById("orbit-subsystem-badge");
+  const orbitBadgeTitle = document.getElementById("orbit-badge-title");
+  const orbitBadgeSub = document.getElementById("orbit-badge-sub");
+  if (orbitBadge) {
+    if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
+      orbitBadge.style.display = "flex";
+      if (orbitBadgeTitle) {
+        orbitBadgeTitle.innerText = `\uD83E\uDE90 ORBIT: ${STATE.orbitPlanet.name.toUpperCase()}`;
+      }
+      if (orbitBadgeSub) {
+        const alt = Math.max(0.5, dist - (STATE.orbitPlanet.size || 2.5)).toFixed(1);
+        orbitBadgeSub.innerText = `Orbit-Höhe: ${alt} LJ • Nahbereich aktiv`;
+      }
+    } else {
+      orbitBadge.style.display = "none";
+    }
+  }
+  const inRange = dist < 22;
   const isScanned = planet.scanned || STATE.scannedPlanets[planet.name];
   if (scanBtn) {
     scanBtn.disabled = !inRange || isScanned || STATE.scanningPlanet !== null;
@@ -32997,9 +33018,12 @@ function createSunCoronaMesh(starRadius, hexColor) {
 var atmosphereVertexShader = `
 varying vec3 vNormal;
 varying vec3 vViewDir;
+varying vec3 vWorldPosition;
 
 void main() {
     vNormal = normalize(normalMatrix * normal);
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPosition = worldPos.xyz;
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     vViewDir = normalize(-mvPosition.xyz);
     gl_Position = projectionMatrix * mvPosition;
@@ -33010,16 +33034,29 @@ uniform vec3 glowColor;
 uniform float intensityMultiplier;
 varying vec3 vNormal;
 varying vec3 vViewDir;
+varying vec3 vWorldPosition;
 
 void main() {
-    float fresnel = 1.0 - max(dot(vViewDir, vNormal), 0.0);
-    float glow = pow(fresnel, 5.0) * intensityMultiplier;
-    gl_FragColor = vec4(glowColor, glow * 0.8);
+    // 1. Soft Fresnel limb darkening / atmospheric rim
+    float dotNV = dot(vViewDir, vNormal);
+    float fresnel = 1.0 - max(dotNV, 0.0);
+    float glow = pow(fresnel, 3.2) * intensityMultiplier;
+
+    // 2. Solar illumination direction (Sun at origin 0,0,0)
+    vec3 lightDir = normalize(-vWorldPosition);
+    vec3 worldNormal = normalize(vWorldPosition);
+    float sunDot = dot(worldNormal, lightDir);
+    float dayFactor = clamp(sunDot * 0.75 + 0.35, 0.18, 1.0);
+
+    // 3. Twilight Rayleigh tint at day/night terminator line
+    vec3 twilightColor = mix(vec3(0.95, 0.58, 0.32), glowColor, clamp(sunDot * 3.2 + 0.5, 0.0, 1.0));
+
+    gl_FragColor = vec4(twilightColor, glow * dayFactor * 0.95);
 }
 `;
-function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.1) {
+function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.25) {
   const color = new Color(hexColor);
-  const atmosphereGeo = new SphereGeometry(planetRadius * 1.025, 32, 32);
+  const atmosphereGeo = new SphereGeometry(planetRadius * 1.045, 36, 36);
   const atmosphereMat = new ShaderMaterial({
     vertexShader: atmosphereVertexShader,
     fragmentShader: atmosphereFragmentShader,
@@ -33033,6 +33070,56 @@ function createAtmosphereMesh(planetRadius, hexColor, intensity = 1.1) {
     depthWrite: false
   });
   return new Mesh(atmosphereGeo, atmosphereMat);
+}
+
+// src/procedural/planet-rings.ts
+function createPlanetaryRings(planetRadius, hexColor, seed = 42) {
+  const innerRadius = planetRadius * 1.45;
+  const outerRadius = planetRadius * 2.85;
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d");
+  const baseColor = new Color(hexColor);
+  const grad = ctx.createLinearGradient(0, 0, 256, 0);
+  grad.addColorStop(0, "rgba(0,0,0,0)");
+  grad.addColorStop(0.08, `rgba(${Math.round(baseColor.r * 200)}, ${Math.round(baseColor.g * 220)}, ${Math.round(baseColor.b * 240)}, 0.45)`);
+  grad.addColorStop(0.35, `rgba(${Math.round(baseColor.r * 255)}, ${Math.round(baseColor.g * 255)}, ${Math.round(baseColor.b * 255)}, 0.85)`);
+  grad.addColorStop(0.52, "rgba(0,0,0,0.05)");
+  grad.addColorStop(0.58, "rgba(0,0,0,0.1)");
+  grad.addColorStop(0.68, `rgba(${Math.round(baseColor.r * 220)}, ${Math.round(baseColor.g * 240)}, ${Math.round(baseColor.b * 255)}, 0.7)`);
+  grad.addColorStop(0.92, `rgba(${Math.round(baseColor.r * 180)}, ${Math.round(baseColor.g * 200)}, ${Math.round(baseColor.b * 220)}, 0.3)`);
+  grad.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 256, 1);
+  const ringTexture = new CanvasTexture(canvas);
+  ringTexture.wrapS = ClampToEdgeWrapping;
+  ringTexture.wrapT = ClampToEdgeWrapping;
+  const ringGeometry = new RingGeometry(innerRadius, outerRadius, 64);
+  ringGeometry.rotateX(Math.PI / 2);
+  const pos = ringGeometry.attributes.position;
+  const uvs = ringGeometry.attributes.uv;
+  for (let i = 0;i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const r = Math.sqrt(x * x + z * z);
+    const u = (r - innerRadius) / (outerRadius - innerRadius);
+    uvs.setXY(i, u, 0.5);
+  }
+  uvs.needsUpdate = true;
+  const ringMaterial = new MeshStandardMaterial({
+    map: ringTexture,
+    side: DoubleSide,
+    transparent: true,
+    opacity: 0.88,
+    roughness: 0.8,
+    metalness: 0.2,
+    depthWrite: false
+  });
+  const ringMesh = new Mesh(ringGeometry, ringMaterial);
+  ringMesh.rotation.z = (seed % 15 + 12) * Math.PI / 180;
+  ringMesh.rotation.x = (seed % 9 - 4) * Math.PI / 180;
+  return ringMesh;
 }
 
 // src/procedural/sun-rays.ts
@@ -33467,6 +33554,12 @@ function spawnPlanetsAndAsteroids() {
         cloudMesh = new Mesh(cloudGeo, cloudMat);
         cloudMesh.rotation.z = axialTilt;
         planetGroup.add(cloudMesh);
+      }
+      const hasRings = isGas || seed % 6 === 0;
+      if (hasRings) {
+        const ringColor = isGas ? parseInt(p.color) : 12633808;
+        const pRings = createPlanetaryRings(p.size, ringColor, seed);
+        planetGroup.add(pRings);
       }
     }
     scene.add(planetGroup);
@@ -36035,9 +36128,52 @@ function updatePhysics(dt) {
   if (STATE.playerGroup) {
     STATE.playerGroup.position.copy(STATE.playerPosition);
   }
-  camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, 0.05);
-  camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, 0.05);
-  STATE.cameraHeight = MathUtils.lerp(STATE.cameraHeight || 65, STATE.targetCameraHeight || 65, 0.08);
+  let nearestBody = null;
+  let nearestBodyDist = Infinity;
+  activePlanets.forEach((p) => {
+    const dx = STATE.playerPosition.x - p.mesh.position.x;
+    const dz = STATE.playerPosition.z - p.mesh.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < nearestBodyDist) {
+      nearestBodyDist = dist;
+      nearestBody = p;
+    }
+  });
+  let targetCamX = STATE.playerPosition.x;
+  let targetCamZ = STATE.playerPosition.z;
+  if (nearestBody) {
+    const orbitTriggerDist = Math.max(22, (nearestBody.size || 2.5) * 5.2);
+    if (nearestBodyDist < orbitTriggerDist) {
+      STATE.isInPlanetOrbit = true;
+      STATE.orbitPlanet = nearestBody;
+      const rawProximity = Math.max(0, Math.min(1, 1 - nearestBodyDist / orbitTriggerDist));
+      STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, rawProximity, Math.min(1, dt * 3.5));
+      const minOrbitHeight = Math.max(24, (nearestBody.size || 2.5) * 6.5);
+      STATE.targetCameraHeight = MathUtils.lerp(70, minOrbitHeight, STATE.orbitZoomFactor);
+      const framingWeight = 0.24 * STATE.orbitZoomFactor;
+      targetCamX = MathUtils.lerp(STATE.playerPosition.x, nearestBody.mesh.position.x, framingWeight);
+      targetCamZ = MathUtils.lerp(STATE.playerPosition.z, nearestBody.mesh.position.z, framingWeight);
+      const targetFov = MathUtils.lerp(60, 48, STATE.orbitZoomFactor);
+      if (Math.abs(camera.fov - targetFov) > 0.05) {
+        camera.fov = targetFov;
+        camera.updateProjectionMatrix();
+      }
+    } else {
+      STATE.isInPlanetOrbit = false;
+      STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1, dt * 2.5));
+      STATE.targetCameraHeight = 70;
+      if (camera.fov !== 60) {
+        camera.fov = MathUtils.lerp(camera.fov, 60, Math.min(1, dt * 2.5));
+        camera.updateProjectionMatrix();
+      }
+    }
+  } else {
+    STATE.isInPlanetOrbit = false;
+    STATE.targetCameraHeight = 70;
+  }
+  camera.position.x = MathUtils.lerp(camera.position.x, targetCamX, Math.min(1, dt * 4.5));
+  camera.position.z = MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1, dt * 4.5));
+  STATE.cameraHeight = MathUtils.lerp(STATE.cameraHeight || 70, STATE.targetCameraHeight || 70, Math.min(1, dt * 4));
   camera.position.y = STATE.cameraHeight;
   if (STATE.health <= 0 && !STATE.isGameOver && STATE.gameStarted) {
     triggerGameOver("Biologischer Zellkern kollabiert durch extreme Umwelteinflüsse & Hüllenschaden.");

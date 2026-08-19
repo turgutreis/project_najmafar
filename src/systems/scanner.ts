@@ -304,7 +304,26 @@ export function updateScannerUI(planet: any, dist: number) {
         distEl.style.color = dist < 20 ? '#10b981' : '#f59e0b';
     }
 
-    const inRange = dist < 20;
+    const orbitBadge = document.getElementById('orbit-subsystem-badge');
+    const orbitBadgeTitle = document.getElementById('orbit-badge-title');
+    const orbitBadgeSub = document.getElementById('orbit-badge-sub');
+
+    if (orbitBadge) {
+        if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
+            orbitBadge.style.display = 'flex';
+            if (orbitBadgeTitle) {
+                orbitBadgeTitle.innerText = `🪐 ORBIT: ${STATE.orbitPlanet.name.toUpperCase()}`;
+            }
+            if (orbitBadgeSub) {
+                const alt = Math.max(0.5, dist - (STATE.orbitPlanet.size || 2.5)).toFixed(1);
+                orbitBadgeSub.innerText = `Orbit-Höhe: ${alt} LJ • Nahbereich aktiv`;
+            }
+        } else {
+            orbitBadge.style.display = 'none';
+        }
+    }
+
+    const inRange = dist < 22;
     const isScanned = planet.scanned || STATE.scannedPlanets[planet.name];
 
     if (scanBtn) {
