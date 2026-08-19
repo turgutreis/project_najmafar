@@ -73,10 +73,8 @@ jobs:
           sudo apt-get install -y libarchive-tools libfuse2
 
       - name: Build Electron App (${{ matrix.platform }})
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          bun x electron-builder --${{ matrix.target }}
+          bun x electron-builder --${{ matrix.target }} --publish never
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -94,6 +92,8 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
 
     steps:
@@ -108,7 +108,7 @@ jobs:
       - name: Flatten Artifact Files
         run: |
           mkdir -p release-files
-          find release-artifacts -type f -exec cp {} release-files/ \;
+          find release-artifacts -type f ! -name "*.blockmap" -exec cp {} release-files/ \;
           echo "Release Files Ready:"
           ls -la release-files/
 
