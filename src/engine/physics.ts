@@ -192,8 +192,15 @@ export function updatePhysics(dt: number) {
 
     // 6. Integrate Equations of Motion (Euler with exponential drag)
     STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
+
+    const maxSpeed = 35.0;
+    if (STATE.playerVelocity.lengthSq() > maxSpeed * maxSpeed) {
+        STATE.playerVelocity.setLength(maxSpeed);
+    }
+
     STATE.playerVelocity.multiplyScalar(Math.exp(-STATE.currentDrag * dt));
     STATE.playerPosition.addScaledVector(STATE.playerVelocity, dt);
+    STATE.shipSpeed = STATE.playerVelocity.length();
 
     // Boundary wrapping
     const maxBound = 500;

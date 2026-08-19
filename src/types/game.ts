@@ -292,6 +292,13 @@ export interface GameState {
     playerVelocity: THREE.Vector3;
     playerAcceleration: THREE.Vector3;
     thrustStrength: number;
+    retroThrustStrength: number;
+    turnSpeed: number;
+    shipHeading: number;
+    shipAngularVelocity: number;
+    flightAssist: boolean;
+    shipSpeed: number;
+    progradeVector: THREE.Vector3;
     drag: number;
     brakeDrag: number;
     currentDrag: number;

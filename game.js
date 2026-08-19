@@ -28747,12 +28747,19 @@ var STATE = {
     translator: { purchased: false, bioCost: 120, siliconCost: 80 }
   },
   playerPosition: new Vector3(0, 0, 75),
-  playerVelocity: new Vector3(5.2, 0, 0),
+  playerVelocity: new Vector3(2, 0, 0),
   playerAcceleration: new Vector3(0, 0, 0),
-  thrustStrength: 25,
-  drag: 0.4,
-  brakeDrag: 2.2,
-  currentDrag: 0.4,
+  thrustStrength: 20,
+  retroThrustStrength: 16,
+  turnSpeed: 2.6,
+  shipHeading: 0,
+  shipAngularVelocity: 0,
+  flightAssist: false,
+  shipSpeed: 2,
+  progradeVector: new Vector3(1, 0, 0),
+  drag: 0.005,
+  brakeDrag: 1.2,
+  currentDrag: 0.005,
   gConstant: 15,
   collisionCooldown: 0,
   keys: {
@@ -29874,86 +29881,125 @@ function onWindowResize() {
 }
 
 // src/engine/trajectory.ts
-var TRAJECTORY_STEPS = 160;
-var TRAJECTORY_DT = 0.08;
+var TRAJECTORY_STEPS = 80;
+var TRAJECTORY_DT = 0.065;
+var SOFTENING_SQ = 12;
+var trajectoryPoints;
 var trajectoryGeometry;
-var trajectoryLine;
 var trajectoryPositions;
 var trajectoryColors;
+var trajectorySizes;
 var _predPos = new Vector3;
 var _predVel = new Vector3;
 var _predAcc = new Vector3;
-var _thrustAcc = new Vector3;
-var _inputDir = new Vector3;
 function initTrajectory() {
   trajectoryGeometry = new BufferGeometry;
   trajectoryPositions = new Float32Array(TRAJECTORY_STEPS * 3);
   trajectoryColors = new Float32Array(TRAJECTORY_STEPS * 3);
+  trajectorySizes = new Float32Array(TRAJECTORY_STEPS);
   trajectoryGeometry.setAttribute("position", new BufferAttribute(trajectoryPositions, 3));
   trajectoryGeometry.setAttribute("color", new BufferAttribute(trajectoryColors, 3));
-  const material = new LineBasicMaterial({
+  trajectoryGeometry.setAttribute("size", new BufferAttribute(trajectorySizes, 1));
+  const canvas = document.createElement("canvas");
+  canvas.width = 32;
+  canvas.height = 32;
+  const ctx = canvas.getContext("2d");
+  const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, "rgba(255, 255, 255, 1)");
+  grad.addColorStop(0.3, "rgba(56, 189, 248, 0.85)");
+  grad.addColorStop(0.7, "rgba(56, 189, 248, 0.25)");
+  grad.addColorStop(1, "rgba(56, 189, 248, 0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 32, 32);
+  const dotTexture = new CanvasTexture(canvas);
+  const material = new PointsMaterial({
+    size: 2.2,
     vertexColors: true,
+    map: dotTexture,
     transparent: true,
-    opacity: 0.85,
-    linewidth: 1.5,
-    blending: AdditiveBlending
+    opacity: 0.9,
+    blending: AdditiveBlending,
+    depthWrite: false,
+    sizeAttenuation: true
   });
-  trajectoryLine = new Line(trajectoryGeometry, material);
-  scene.add(trajectoryLine);
+  trajectoryPoints = new Points(trajectoryGeometry, material);
+  scene.add(trajectoryPoints);
 }
 function updateTrajectory() {
-  if (!trajectoryLine)
+  if (!trajectoryPoints)
     return;
+  const curSpeed = STATE.playerVelocity.length();
+  const isThrusting = STATE.keys ? STATE.keys.w : false;
+  if (curSpeed < 0.3 && !isThrusting) {
+    trajectoryPoints.visible = false;
+    return;
+  }
+  trajectoryPoints.visible = true;
   _predPos.copy(STATE.playerPosition);
   _predVel.copy(STATE.playerVelocity);
-  _inputDir.set(0, 0, 0);
-  if (STATE.keys.w)
-    _inputDir.z -= 1;
-  if (STATE.keys.s)
-    _inputDir.z += 1;
-  if (STATE.keys.a)
-    _inputDir.x -= 1;
-  if (STATE.keys.d)
-    _inputDir.x += 1;
-  const isThrusting = _inputDir.lengthSq() > 0;
   if (isThrusting) {
-    _inputDir.normalize();
-    const thrustMult = STATE.crewBuffs ? STATE.crewBuffs.thrust : 1;
-    _thrustAcc.copy(_inputDir).multiplyScalar(STATE.thrustStrength * thrustMult);
-  } else {
-    _thrustAcc.set(0, 0, 0);
+    const hasEnergy = STATE.bioEnergy > 0;
+    const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
+    const fX = Math.cos(STATE.shipHeading || 0);
+    const fZ = -Math.sin(STATE.shipHeading || 0);
+    _predVel.x += fX * effectiveThrust * 0.15;
+    _predVel.z += fZ * effectiveThrust * 0.15;
   }
   const sources = STATE.gravitySources;
   const sourceCount = sources.length;
+  let hitSurface = false;
   for (let step = 0;step < TRAJECTORY_STEPS; step++) {
-    trajectoryPositions[step * 3] = _predPos.x;
-    trajectoryPositions[step * 3 + 1] = 0.1;
+    if (hitSurface) {
+      trajectoryPositions[step * 3 + 0] = _predPos.x;
+      trajectoryPositions[step * 3 + 1] = -100;
+      trajectoryPositions[step * 3 + 2] = _predPos.z;
+      trajectoryColors[step * 3 + 0] = 0;
+      trajectoryColors[step * 3 + 1] = 0;
+      trajectoryColors[step * 3 + 2] = 0;
+      continue;
+    }
+    trajectoryPositions[step * 3 + 0] = _predPos.x;
+    trajectoryPositions[step * 3 + 1] = 0.2;
     trajectoryPositions[step * 3 + 2] = _predPos.z;
     const progress = step / TRAJECTORY_STEPS;
-    const alpha = 1 - progress * 0.9;
+    const alpha = Math.pow(1 - progress, 1.2);
     if (isThrusting) {
-      trajectoryColors[step * 3] = 0 * alpha;
-      trajectoryColors[step * 3 + 1] = 1 * alpha;
-      trajectoryColors[step * 3 + 2] = 0.53 * alpha;
+      trajectoryColors[step * 3 + 0] = 0.1 * alpha;
+      trajectoryColors[step * 3 + 1] = 0.95 * alpha;
+      trajectoryColors[step * 3 + 2] = 0.6 * alpha;
     } else {
-      trajectoryColors[step * 3] = 0.22 * alpha;
-      trajectoryColors[step * 3 + 1] = 0.74 * alpha;
-      trajectoryColors[step * 3 + 2] = 0.97 * alpha;
+      trajectoryColors[step * 3 + 0] = 0.2 * alpha;
+      trajectoryColors[step * 3 + 1] = 0.75 * alpha;
+      trajectoryColors[step * 3 + 2] = 0.98 * alpha;
     }
-    _predAcc.copy(_thrustAcc);
+    _predAcc.set(0, 0, 0);
+    const simTime = step * TRAJECTORY_DT;
     for (let s = 0;s < sourceCount; s++) {
       const source = sources[s];
       if (source.isAbsorbed)
         continue;
-      const dx = source.position.x - _predPos.x;
-      const dz = source.position.z - _predPos.z;
+      let sourceX = source.position.x;
+      let sourceZ = source.position.z;
+      if (source.type === "planet") {
+        const planetEntry = activePlanets.find((p) => p.source === source);
+        if (planetEntry && !planetEntry.isMoon) {
+          const futureAngle = planetEntry.angle + planetEntry.speed * simTime;
+          sourceX = planetEntry.distance * Math.cos(futureAngle);
+          sourceZ = planetEntry.distance * Math.sin(futureAngle);
+        }
+      }
+      const dx = sourceX - _predPos.x;
+      const dz = sourceZ - _predPos.z;
       const distSq = dx * dx + dz * dz;
+      if (distSq <= source.radius * source.radius) {
+        hitSurface = true;
+        break;
+      }
       const rangeSq = source.gravityRange * source.gravityRange;
-      if (distSq < rangeSq && distSq > 0.01) {
+      if (distSq < rangeSq) {
         const distance = Math.sqrt(distSq);
-        const clampedDist = Math.max(distance, source.radius * 1.1);
-        const forceStrength = STATE.gConstant * source.mass / (clampedDist * clampedDist);
-        const invDist = 1 / distance;
+        const forceStrength = STATE.gConstant * source.mass / (distSq + SOFTENING_SQ);
+        const invDist = 1 / Math.max(0.1, distance);
         _predAcc.x += dx * invDist * forceStrength;
         _predAcc.z += dz * invDist * forceStrength;
       }
@@ -35205,6 +35251,9 @@ function setupControls() {
       toggleTelepathy();
       e.preventDefault();
     }
+    if (key === "z") {
+      toggleFlightAssist();
+    }
     if (key === "m") {
       toggleGalaxyMap();
     }
@@ -35451,17 +35500,27 @@ function toggleTelepathy() {
     }
   }
 }
+function toggleFlightAssist() {
+  STATE.flightAssist = !STATE.flightAssist;
+  if (STATE.flightAssist) {
+    addLogEntry("SYSTEM", "\uD83D\uDD79️ Flug-Assistent AKTIVIERT: Automatische Trägheitsbremsen online.");
+  } else {
+    addLogEntry("SYSTEM", "\uD83C\uDF0C Newton'scher DRIFT-Modus: Trägheitsdämpfer deaktiviert. Reines Gleiten.");
+  }
+}
 function processInput(dt) {
   STATE.playerAcceleration.set(0, 0, 0);
-  const inputVec = new Vector3(0, 0, 0);
+  let isThrusting = false;
+  let isRetroBraking = false;
+  let turnInput = 0;
   if (STATE.keys.w)
-    inputVec.z -= 1;
+    isThrusting = true;
   if (STATE.keys.s)
-    inputVec.z += 1;
+    isRetroBraking = true;
   if (STATE.keys.a)
-    inputVec.x -= 1;
+    turnInput += 1;
   if (STATE.keys.d)
-    inputVec.x += 1;
+    turnInput -= 1;
   let gp = null;
   if (navigator.getGamepads) {
     const gamepads = navigator.getGamepads();
@@ -35482,27 +35541,14 @@ function processInput(dt) {
     const deadzone = 0.15;
     let stickX = gp.axes[0] || 0;
     let stickY = gp.axes[1] || 0;
-    if (Math.abs(stickX) < deadzone)
-      stickX = 0;
-    if (Math.abs(stickY) < deadzone)
-      stickY = 0;
-    if (gp.buttons[12] && gp.buttons[12].pressed)
-      stickY = -1;
-    if (gp.buttons[13] && gp.buttons[13].pressed)
-      stickY = 1;
-    if (gp.buttons[14] && gp.buttons[14].pressed)
-      stickX = -1;
-    if (gp.buttons[15] && gp.buttons[15].pressed)
-      stickX = 1;
-    if (inputVec.lengthSq() === 0 && (Math.abs(stickX) > 0 || Math.abs(stickY) > 0)) {
-      inputVec.set(stickX, 0, stickY);
-    }
-    const ltPressed = gp.buttons[6] && gp.buttons[6].pressed || gp.buttons[6] && gp.buttons[6].value > 0.3;
-    if (ltPressed && !STATE.telepathyActive) {
-      toggleTelepathy();
-    } else if (!ltPressed && STATE.telepathyActive && !STATE.keys.Space) {
-      toggleTelepathy();
-    }
+    let rtVal = gp.buttons[7] ? gp.buttons[7].value : 0;
+    let ltVal = gp.buttons[6] ? gp.buttons[6].value : 0;
+    if (Math.abs(stickX) > deadzone)
+      turnInput -= stickX;
+    if (stickY < -0.3 || rtVal > 0.2)
+      isThrusting = true;
+    if (stickY > 0.3 || ltVal > 0.2)
+      isRetroBraking = true;
     if (isPressedEdge(0)) {
       if (STATE.nearestPlanet) {
         const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets && STATE.scannedPlanets[STATE.nearestPlanet.name];
@@ -35532,6 +35578,8 @@ function processInput(dt) {
       cycleTarget(1);
     if (isPressedEdge(8))
       toggleGalaxyMap();
+    if (isPressedEdge(10))
+      toggleFlightAssist();
     if (isPressedEdge(9)) {
       const mainMenu = document.getElementById("main-menu");
       if (mainMenu && STATE.gameStarted) {
@@ -35540,34 +35588,53 @@ function processInput(dt) {
     }
     prevGpButtons = gp.buttons.map((b) => b ? b.pressed || b.value > 0.5 : false);
   }
-  const isThrusting = inputVec.lengthSq() > 0;
+  if (turnInput !== 0) {
+    STATE.shipAngularVelocity = turnInput * STATE.turnSpeed;
+  } else {
+    STATE.shipAngularVelocity = MathUtils.lerp(STATE.shipAngularVelocity || 0, 0, Math.min(1, dt * 8));
+  }
+  STATE.shipHeading = (STATE.shipHeading || 0) + STATE.shipAngularVelocity * dt;
+  const hasEnergy = STATE.bioEnergy > 0;
+  const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
+  const forwardX = Math.cos(STATE.shipHeading);
+  const forwardZ = -Math.sin(STATE.shipHeading);
+  const forwardDir = new Vector3(forwardX, 0, forwardZ);
   if (isThrusting) {
-    inputVec.normalize();
-    const hasEnergy = STATE.bioEnergy > 0;
-    const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
-    STATE.playerAcceleration.addScaledVector(inputVec, effectiveThrust);
+    STATE.playerAcceleration.addScaledVector(forwardDir, effectiveThrust);
     if (hasEnergy) {
-      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.2 * dt);
+      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 2.8 * dt);
     }
-    if (STATE.playerGroup) {
-      const targetAngle = -Math.atan2(inputVec.z, inputVec.x);
-      let diff = targetAngle - STATE.playerGroup.rotation.y;
-      while (diff < -Math.PI)
-        diff += Math.PI * 2;
-      while (diff > Math.PI)
-        diff -= Math.PI * 2;
-      STATE.playerGroup.rotation.y += diff * Math.min(1, dt * 10);
-      const turnRoll = -diff * 0.35;
-      STATE.playerGroup.rotation.x = MathUtils.lerp(STATE.playerGroup.rotation.x, turnRoll, 0.1);
-    }
-    STATE.currentDrag = STATE.drag;
     setThrusterSound(true);
   } else {
-    if (STATE.playerGroup) {
-      STATE.playerGroup.rotation.x = MathUtils.lerp(STATE.playerGroup.rotation.x, 0, 0.1);
-    }
-    STATE.currentDrag = STATE.brakeDrag;
     setThrusterSound(false);
+  }
+  if (isRetroBraking) {
+    const curSpeed = STATE.playerVelocity.length();
+    if (curSpeed > 0.4) {
+      const counterDir = STATE.playerVelocity.clone().normalize().negate();
+      STATE.playerAcceleration.addScaledVector(counterDir, STATE.retroThrustStrength);
+    } else {
+      STATE.playerAcceleration.addScaledVector(forwardDir, -effectiveThrust * 0.4);
+    }
+    if (hasEnergy) {
+      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.8 * dt);
+    }
+  }
+  if (STATE.flightAssist) {
+    if (!isThrusting && !isRetroBraking) {
+      STATE.currentDrag = 0.85;
+    } else {
+      STATE.currentDrag = STATE.drag;
+    }
+  } else {
+    STATE.currentDrag = STATE.drag;
+  }
+  if (STATE.playerGroup) {
+    STATE.playerGroup.rotation.y = STATE.shipHeading;
+    const targetRoll = -turnInput * 0.28;
+    STATE.playerGroup.rotation.z = MathUtils.lerp(STATE.playerGroup.rotation.z, targetRoll, Math.min(1, dt * 6));
+    const targetPitch = isThrusting ? 0.05 : isRetroBraking ? -0.05 : 0;
+    STATE.playerGroup.rotation.x = MathUtils.lerp(STATE.playerGroup.rotation.x, targetPitch, Math.min(1, dt * 6));
   }
 }
 
@@ -35770,7 +35837,7 @@ function clearExplosionFX() {
 // src/engine/physics.ts
 var _predPos2 = new Vector3;
 var _bounceDir = new Vector3;
-var _inputDir2 = new Vector3;
+var _inputDir = new Vector3;
 function updatePhysics(dt) {
   activePlanets.forEach((p) => {
     if (!p.isMoon) {
@@ -35924,8 +35991,13 @@ function updatePhysics(dt) {
     }
   }
   STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
+  const maxSpeed = 35;
+  if (STATE.playerVelocity.lengthSq() > maxSpeed * maxSpeed) {
+    STATE.playerVelocity.setLength(maxSpeed);
+  }
   STATE.playerVelocity.multiplyScalar(Math.exp(-STATE.currentDrag * dt));
   STATE.playerPosition.addScaledVector(STATE.playerVelocity, dt);
+  STATE.shipSpeed = STATE.playerVelocity.length();
   const maxBound = 500;
   if (STATE.playerPosition.x > maxBound) {
     STATE.playerPosition.x = -maxBound;

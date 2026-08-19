@@ -23,6 +23,9 @@ export function setupControls() {
             toggleTelepathy();
             e.preventDefault();
         }
+        if (key === 'z') {
+            toggleFlightAssist();
+        }
         if (key === 'm') {
             toggleGalaxyMap();
         }
@@ -283,17 +286,28 @@ export function toggleTelepathy() {
     }
 }
 
+export function toggleFlightAssist() {
+    STATE.flightAssist = !STATE.flightAssist;
+    if (STATE.flightAssist) {
+        addLogEntry("SYSTEM", "🕹️ Flug-Assistent AKTIVIERT: Automatische Trägheitsbremsen online.");
+    } else {
+        addLogEntry("SYSTEM", "🌌 Newton'scher DRIFT-Modus: Trägheitsdämpfer deaktiviert. Reines Gleiten.");
+    }
+}
+
 export function processInput(dt: number) {
     // Reset acceleration each frame (input adds thrust, then physics adds gravity)
     STATE.playerAcceleration.set(0, 0, 0);
 
-    const inputVec = new THREE.Vector3(0, 0, 0);
+    let isThrusting = false;
+    let isRetroBraking = false;
+    let turnInput = 0; // -1 = Left (CCW), +1 = Right (CW)
 
     // 1. Keyboard Input
-    if (STATE.keys.w) inputVec.z -= 1;
-    if (STATE.keys.s) inputVec.z += 1;
-    if (STATE.keys.a) inputVec.x -= 1;
-    if (STATE.keys.d) inputVec.x += 1;
+    if (STATE.keys.w) isThrusting = true;
+    if (STATE.keys.s) isRetroBraking = true;
+    if (STATE.keys.a) turnInput += 1;
+    if (STATE.keys.d) turnInput -= 1;
 
     // 2. Gamepad Input
     let gp: Gamepad | null = null;
@@ -311,26 +325,12 @@ export function processInput(dt: number) {
         const deadzone = 0.15;
         let stickX = gp.axes[0] || 0;
         let stickY = gp.axes[1] || 0;
-        if (Math.abs(stickX) < deadzone) stickX = 0;
-        if (Math.abs(stickY) < deadzone) stickY = 0;
+        let rtVal = (gp.buttons[7] ? gp.buttons[7].value : 0);
+        let ltVal = (gp.buttons[6] ? gp.buttons[6].value : 0);
 
-        // D-Pad buttons
-        if (gp.buttons[12] && gp.buttons[12].pressed) stickY = -1.0;
-        if (gp.buttons[13] && gp.buttons[13].pressed) stickY = 1.0;
-        if (gp.buttons[14] && gp.buttons[14].pressed) stickX = -1.0;
-        if (gp.buttons[15] && gp.buttons[15].pressed) stickX = 1.0;
-
-        if (inputVec.lengthSq() === 0 && (Math.abs(stickX) > 0 || Math.abs(stickY) > 0)) {
-            inputVec.set(stickX, 0, stickY);
-        }
-
-        // Left Trigger (Button 6) = Hold Telepathic Calming Field
-        const ltPressed = (gp.buttons[6] && gp.buttons[6].pressed) || (gp.buttons[6] && gp.buttons[6].value > 0.3);
-        if (ltPressed && !STATE.telepathyActive) {
-            toggleTelepathy();
-        } else if (!ltPressed && STATE.telepathyActive && !STATE.keys.Space) {
-            toggleTelepathy();
-        }
+        if (Math.abs(stickX) > deadzone) turnInput -= stickX;
+        if (stickY < -0.3 || rtVal > 0.2) isThrusting = true;
+        if (stickY > 0.3 || ltVal > 0.2) isRetroBraking = true;
 
         // Edge-triggered Buttons
         function isPressedEdge(btnIdx: number) {
@@ -366,6 +366,7 @@ export function processInput(dt: number) {
         if (isPressedEdge(4)) cycleTarget(-1); // LB
         if (isPressedEdge(5)) cycleTarget(1);  // RB
         if (isPressedEdge(8)) toggleGalaxyMap(); // Select
+        if (isPressedEdge(10)) toggleFlightAssist(); // L3
 
         if (isPressedEdge(9)) { // Start / Menu
             const mainMenu = document.getElementById('main-menu');
@@ -377,49 +378,70 @@ export function processInput(dt: number) {
         prevGpButtons = gp.buttons.map(b => b ? (b.pressed || b.value > 0.5) : false);
     }
 
-    // 3. Movement Integration (via Acceleration, not direct Velocity)
-    const isThrusting = inputVec.lengthSq() > 0;
+    // 3. Yaw Steering & Heading Dynamics
+    if (turnInput !== 0) {
+        STATE.shipAngularVelocity = turnInput * STATE.turnSpeed;
+    } else {
+        STATE.shipAngularVelocity = THREE.MathUtils.lerp(STATE.shipAngularVelocity || 0, 0, Math.min(1.0, dt * 8.0));
+    }
+    STATE.shipHeading = (STATE.shipHeading || 0) + STATE.shipAngularVelocity * dt;
+
+    // 4. Main Forward Thrust (Along Ship Nose Vector)
+    const hasEnergy = STATE.bioEnergy > 0;
+    const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
+
+    const forwardX = Math.cos(STATE.shipHeading);
+    const forwardZ = -Math.sin(STATE.shipHeading);
+    const forwardDir = new THREE.Vector3(forwardX, 0, forwardZ);
+
     if (isThrusting) {
-        inputVec.normalize();
+        STATE.playerAcceleration.addScaledVector(forwardDir, effectiveThrust);
 
-        const hasEnergy = STATE.bioEnergy > 0;
-        const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
-
-        // Apply thrust as acceleration (integrated later in physics.ts)
-        STATE.playerAcceleration.addScaledVector(inputVec, effectiveThrust);
-
-        // Fuel consumption: 3.2 Bio-Energy/s during active thrusting
         if (hasEnergy) {
-            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.2 * dt);
+            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 2.8 * dt);
         }
-
-        // Rotate ship towards movement direction smoothly (natural flight orientation)
-        if (STATE.playerGroup) {
-            // Ship nose is along +X in local space. Angle to point +X along (inputVec.x, inputVec.z):
-            const targetAngle = -Math.atan2(inputVec.z, inputVec.x);
-            let diff = targetAngle - STATE.playerGroup.rotation.y;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            STATE.playerGroup.rotation.y += diff * Math.min(1.0, dt * 10.0);
-
-            // Natural organic banking roll into turns
-            const turnRoll = -diff * 0.35;
-            STATE.playerGroup.rotation.x = THREE.MathUtils.lerp(STATE.playerGroup.rotation.x, turnRoll, 0.1);
-        }
-
-        // Thrusting drag (low - responsive flight)
-        STATE.currentDrag = STATE.drag;
 
         setThrusterSound(true);
     } else {
-        // Level out banking roll
-        if (STATE.playerGroup) {
-            STATE.playerGroup.rotation.x = THREE.MathUtils.lerp(STATE.playerGroup.rotation.x, 0, 0.1);
+        setThrusterSound(false);
+    }
+
+    // 5. Active Retro-Braking (Counter-Thrust on 'S')
+    if (isRetroBraking) {
+        const curSpeed = STATE.playerVelocity.length();
+        if (curSpeed > 0.4) {
+            const counterDir = STATE.playerVelocity.clone().normalize().negate();
+            STATE.playerAcceleration.addScaledVector(counterDir, STATE.retroThrustStrength);
+        } else {
+            STATE.playerAcceleration.addScaledVector(forwardDir, -effectiveThrust * 0.4);
         }
 
-        // Retro-dampening (high drag - ship brakes when not thrusting)
-        STATE.currentDrag = STATE.brakeDrag;
+        if (hasEnergy) {
+            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.8 * dt);
+        }
+    }
 
-        setThrusterSound(false);
+    // 6. Space Drag & Flight Assist Integration
+    if (STATE.flightAssist) {
+        // Flight Assist ON: Gentle retro-dampening only when no keys are pressed
+        if (!isThrusting && !isRetroBraking) {
+            STATE.currentDrag = 0.85;
+        } else {
+            STATE.currentDrag = STATE.drag;
+        }
+    } else {
+        // Newtonian Drift Mode: Pure vacuum inertia (0.005 drag)
+        STATE.currentDrag = STATE.drag;
+    }
+
+    // 7. Alien Ship 3D Orientation & Organic Banking Roll
+    if (STATE.playerGroup) {
+        STATE.playerGroup.rotation.y = STATE.shipHeading;
+
+        const targetRoll = -turnInput * 0.28;
+        STATE.playerGroup.rotation.z = THREE.MathUtils.lerp(STATE.playerGroup.rotation.z, targetRoll, Math.min(1.0, dt * 6.0));
+
+        const targetPitch = isThrusting ? 0.05 : (isRetroBraking ? -0.05 : 0.0);
+        STATE.playerGroup.rotation.x = THREE.MathUtils.lerp(STATE.playerGroup.rotation.x, targetPitch, Math.min(1.0, dt * 6.0));
     }
 }
