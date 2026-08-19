@@ -29894,6 +29894,7 @@ var _predVel = new Vector3;
 var _predAcc = new Vector3;
 var _segmentStart = new Vector3;
 var _segmentEnd = new Vector3;
+var _impactPos = new Vector3;
 function initTrajectory() {
   const vertexCount = DASH_SEGMENTS * 2;
   trajectoryGeometry = new BufferGeometry;
@@ -29914,10 +29915,11 @@ function initTrajectory() {
   trajectoryLines.renderOrder = 999;
   scene.add(trajectoryLines);
 }
-function calculateGravityAt(pos, simTime, outAcc) {
+function calculateGravityAndCheckCollision(pos, simTime, outAcc, outImpactPoint) {
   outAcc.set(0, 0, 0);
   const sources = STATE.gravitySources;
   const count = sources.length;
+  let collided = false;
   for (let s = 0;s < count; s++) {
     const source = sources[s];
     if (source.isAbsorbed)
@@ -29935,6 +29937,15 @@ function calculateGravityAt(pos, simTime, outAcc) {
     const dx = sourceX - pos.x;
     const dz = sourceZ - pos.z;
     const distSq = dx * dx + dz * dz;
+    const impactClearance = source.type === "star" ? source.radius + 1.2 : source.radius + 0.6;
+    if (distSq <= impactClearance * impactClearance) {
+      collided = true;
+      if (outImpactPoint) {
+        const dist = Math.max(0.01, Math.sqrt(distSq));
+        outImpactPoint.set(sourceX - dx / dist * impactClearance, 0.25, sourceZ - dz / dist * impactClearance);
+      }
+      break;
+    }
     const rangeSq = source.gravityRange * source.gravityRange;
     if (distSq < rangeSq) {
       const distance = Math.sqrt(distSq);
@@ -29944,6 +29955,7 @@ function calculateGravityAt(pos, simTime, outAcc) {
       outAcc.z += dz * invDist * forceStrength;
     }
   }
+  return collided;
 }
 function updateTrajectory() {
   if (!trajectoryLines)
@@ -29958,22 +29970,48 @@ function updateTrajectory() {
     const fZ = -Math.sin(STATE.shipHeading || 0);
     _predVel.set(fX * 0.5, 0, fZ * 0.5);
   }
+  let hasImpacted = false;
   for (let seg = 0;seg < DASH_SEGMENTS; seg++) {
-    const simTime = seg * TRAJECTORY_DT;
-    _segmentStart.copy(_predPos);
-    const dashDt = TRAJECTORY_DT * DASH_RATIO;
-    calculateGravityAt(_predPos, simTime, _predAcc);
-    _predVel.addScaledVector(_predAcc, dashDt);
-    _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * dashDt));
-    _predPos.addScaledVector(_predVel, dashDt);
-    _segmentEnd.copy(_predPos);
-    const gapDt = TRAJECTORY_DT * (1 - DASH_RATIO);
-    calculateGravityAt(_predPos, simTime + dashDt, _predAcc);
-    _predVel.addScaledVector(_predAcc, gapDt);
-    _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * gapDt));
-    _predPos.addScaledVector(_predVel, gapDt);
     const v0 = seg * 2;
     const v1 = seg * 2 + 1;
+    if (hasImpacted) {
+      trajectoryPositions[v0 * 3 + 0] = _impactPos.x;
+      trajectoryPositions[v0 * 3 + 1] = 0.25;
+      trajectoryPositions[v0 * 3 + 2] = _impactPos.z;
+      trajectoryPositions[v1 * 3 + 0] = _impactPos.x;
+      trajectoryPositions[v1 * 3 + 1] = 0.25;
+      trajectoryPositions[v1 * 3 + 2] = _impactPos.z;
+      trajectoryColors[v0 * 3 + 0] = 0;
+      trajectoryColors[v0 * 3 + 1] = 0;
+      trajectoryColors[v0 * 3 + 2] = 0;
+      trajectoryColors[v1 * 3 + 0] = 0;
+      trajectoryColors[v1 * 3 + 1] = 0;
+      trajectoryColors[v1 * 3 + 2] = 0;
+      continue;
+    }
+    const simTime = seg * TRAJECTORY_DT;
+    _segmentStart.copy(_predPos);
+    if (calculateGravityAndCheckCollision(_segmentStart, simTime, _predAcc, _impactPos)) {
+      hasImpacted = true;
+      _segmentStart.copy(_impactPos);
+      _segmentEnd.copy(_impactPos);
+    } else {
+      const dashDt = TRAJECTORY_DT * DASH_RATIO;
+      _predVel.addScaledVector(_predAcc, dashDt);
+      _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * dashDt));
+      _predPos.addScaledVector(_predVel, dashDt);
+      _segmentEnd.copy(_predPos);
+      if (calculateGravityAndCheckCollision(_segmentEnd, simTime + dashDt, _predAcc, _impactPos)) {
+        hasImpacted = true;
+        _segmentEnd.copy(_impactPos);
+      } else {
+        const gapDt = TRAJECTORY_DT * (1 - DASH_RATIO);
+        calculateGravityAndCheckCollision(_predPos, simTime + dashDt, _predAcc);
+        _predVel.addScaledVector(_predAcc, gapDt);
+        _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * gapDt));
+        _predPos.addScaledVector(_predVel, gapDt);
+      }
+    }
     trajectoryPositions[v0 * 3 + 0] = _segmentStart.x;
     trajectoryPositions[v0 * 3 + 1] = 0.25;
     trajectoryPositions[v0 * 3 + 2] = _segmentStart.z;
