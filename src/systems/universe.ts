@@ -281,6 +281,8 @@ export function spawnPlanetsAndAsteroids() {
         let bodyMesh: THREE.Object3D | null = null;
         let cloudMesh: THREE.Mesh | null = null;
         let psioAuraMesh: THREE.Mesh | null = null;
+        let generated: any = null;
+        let finalSpecies: any = null;
 
         const isConstruct = p.type === 'Vorläufer-Konstrukt';
         const isPlasmaVortex = p.type === 'Plasma-Wirbel';
@@ -313,8 +315,8 @@ export function spawnPlanetsAndAsteroids() {
             const capturedLight = new THREE.PointLight(parseInt(p.color), 1.8, 45, 1.2);
             planetGroup.add(capturedLight);
         } else {
-            const generated = generatePlanetAttributes(p);
-            let finalSpecies = p.species || generated.species;
+            generated = generatePlanetAttributes(p);
+            finalSpecies = p.species || generated.species;
             if (isHab && (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0)) {
                 finalSpecies = generated.species;
             }
@@ -418,11 +420,11 @@ export function spawnPlanetsAndAsteroids() {
             isMoon: false,
             scanned: false,
             attributes: {
-                atmos: p.atmos,
-                temp: p.temp,
-                bio: p.bio,
-                res: p.res,
-                species: p.species || null
+                atmos: p.atmos || (generated ? generated.atmos : "Vakuum"),
+                temp: p.temp || (generated ? generated.temp : "0°C"),
+                bio: p.bio || (generated ? generated.bio : "Steril"),
+                res: p.res || (generated ? generated.res : "Gestein"),
+                species: finalSpecies || p.species || null
             }
         };
         activePlanets.push(planetEntry);

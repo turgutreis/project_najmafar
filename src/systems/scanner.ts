@@ -11,7 +11,7 @@ let scanOsc: OscillatorNode | null = null;
 let scanGain: GainNode | null = null;
 
 export function generatePlanetAttributes(p: any) {
-    if (p.atmos && p.temp && p.bio && p.res) {
+    if (p.atmos && p.temp && p.bio && p.res && (p.type !== 'Habitable' || (p.species && p.species.candidates && p.species.candidates.length > 0))) {
         return {
             atmos: p.atmos,
             temp: p.temp,

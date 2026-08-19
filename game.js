@@ -32147,7 +32147,7 @@ function closeDiplomacyComms() {
 var scanOsc = null;
 var scanGain = null;
 function generatePlanetAttributes(p) {
-  if (p.atmos && p.temp && p.bio && p.res) {
+  if (p.atmos && p.temp && p.bio && p.res && (p.type !== "Habitable" || p.species && p.species.candidates && p.species.candidates.length > 0)) {
     return {
       atmos: p.atmos,
       temp: p.temp,
@@ -33309,6 +33309,8 @@ function spawnPlanetsAndAsteroids() {
     let bodyMesh = null;
     let cloudMesh = null;
     let psioAuraMesh = null;
+    let generated = null;
+    let finalSpecies = null;
     const isConstruct = p.type === "Vorläufer-Konstrukt";
     const isPlasmaVortex = p.type === "Plasma-Wirbel";
     const isCapturedStar = p.type === "Gefangener Stern";
@@ -33338,8 +33340,8 @@ function spawnPlanetsAndAsteroids() {
       const capturedLight = new PointLight(parseInt(p.color), 1.8, 45, 1.2);
       planetGroup.add(capturedLight);
     } else {
-      const generated = generatePlanetAttributes(p);
-      let finalSpecies = p.species || generated.species;
+      generated = generatePlanetAttributes(p);
+      finalSpecies = p.species || generated.species;
       if (isHab && (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0)) {
         finalSpecies = generated.species;
       }
@@ -33432,11 +33434,11 @@ function spawnPlanetsAndAsteroids() {
       isMoon: false,
       scanned: false,
       attributes: {
-        atmos: p.atmos,
-        temp: p.temp,
-        bio: p.bio,
-        res: p.res,
-        species: p.species || null
+        atmos: p.atmos || (generated ? generated.atmos : "Vakuum"),
+        temp: p.temp || (generated ? generated.temp : "0°C"),
+        bio: p.bio || (generated ? generated.bio : "Steril"),
+        res: p.res || (generated ? generated.res : "Gestein"),
+        species: finalSpecies || p.species || null
       }
     };
     activePlanets.push(planetEntry);
@@ -35056,13 +35058,22 @@ function triggerAbductStart() {
     addLogEntry("SYSTEM", `Psionischer Transfer blockiert: Kokon-Kapazität voll (${STATE.crew.length} / ${STATE.maxCrewCapacity})! Erweitere Kapazität im Evolutions-Deck.`);
     return;
   }
-  const dx = STATE.playerPosition.x - STATE.nearestPlanet.mesh.position.x;
-  const dz = STATE.playerPosition.z - STATE.nearestPlanet.mesh.position.z;
-  const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist >= 20)
-    return;
   const p = STATE.nearestPlanet;
-  if (!p.attributes.species || p.attributes.species.population <= 0) {
+  const dx = STATE.playerPosition.x - p.mesh.position.x;
+  const dz = STATE.playerPosition.z - p.mesh.position.z;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  const maxStartDist = Math.max(26, (p.size || 3) * 5);
+  if (dist > maxStartDist) {
+    addLogEntry("SYSTEM", `Zu weit entfernt für psionischen Traktorstrahl (Distanz: ${dist.toFixed(1)} / Max ${maxStartDist.toFixed(0)}).`);
+    return;
+  }
+  if (!p.attributes.species || !p.attributes.species.candidates || p.attributes.species.candidates.length === 0) {
+    const generated = generatePlanetAttributes(p);
+    if (generated.species && generated.species.candidates && generated.species.candidates.length > 0) {
+      p.attributes.species = generated.species;
+    }
+  }
+  if (!p.attributes.species || !p.attributes.species.candidates || p.attributes.species.candidates.length === 0) {
     addLogEntry("SYSTEM", `Keine vernunftbegabten Individuen auf ${p.name} für psionische Entführung verfügbar.`);
     return;
   }
@@ -35082,12 +35093,13 @@ function updateAbduction(dt) {
   const dx = STATE.playerPosition.x - STATE.abductTarget.mesh.position.x;
   const dz = STATE.playerPosition.z - STATE.abductTarget.mesh.position.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist > 25) {
-    cancelAbduction("Ziel außer Reichweite (> 25)");
+  const maxHoldDist = Math.max(38, (STATE.abductTarget.size || 3) * 6.5);
+  if (dist > maxHoldDist) {
+    cancelAbduction(`Ziel außer Reichweite (Distanz: ${dist.toFixed(1)} > ${maxHoldDist.toFixed(0)})`);
     return;
   }
   updateAbductBeam(STATE.playerPosition, STATE.abductTarget.mesh.position);
-  STATE.abductProgress += dt * 35;
+  STATE.abductProgress += dt * 45;
   const bar = document.getElementById("abduct-progress-bar");
   const text = document.getElementById("abduct-progress-text");
   if (bar)
@@ -35116,17 +35128,28 @@ function completeAbduction() {
   if (progContainer)
     progContainer.style.display = "none";
   const planet = STATE.abductTarget;
-  if (planet && planet.attributes.species && planet.attributes.species.candidates.length > 0) {
-    const candidate = planet.attributes.species.candidates.shift();
-    planet.attributes.species.population = planet.attributes.species.candidates.length;
-    STATE.crew.push(candidate);
-    STATE.crewSatietyTimer = 0;
-    calculateCrewBuffs();
-    addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.roleName || candidate.role}) in Kokon-Kammer transferiert.`);
-    addLogEntry("CREW", `Traum-Matrix initialisiert. ${candidate.name} aktiviert Rolle: ${candidate.buffDesc}!`);
-    renderCrewUI();
-    if (STATE.nearestPlanet === planet) {
-      updateScannerUI(planet, 10);
+  if (planet) {
+    if (!planet.attributes.species || !planet.attributes.species.candidates || planet.attributes.species.candidates.length === 0) {
+      const gen = generatePlanetAttributes(planet);
+      if (gen.species && gen.species.candidates && gen.species.candidates.length > 0) {
+        planet.attributes.species = gen.species;
+      }
+    }
+    if (planet.attributes.species && planet.attributes.species.candidates && planet.attributes.species.candidates.length > 0) {
+      const candidate = planet.attributes.species.candidates.shift();
+      if (candidate) {
+        STATE.crew.push(candidate);
+        STATE.crewSatietyTimer = 0;
+        calculateCrewBuffs();
+        addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.roleName || candidate.role}) in Kokon-Kammer transferiert.`);
+        addLogEntry("CREW", `Traum-Matrix initialisiert. ${candidate.name} aktiviert Rolle: ${candidate.buffDesc}!`);
+        renderCrewUI();
+        if (STATE.nearestPlanet === planet) {
+          updateScannerUI(planet, 10);
+        }
+      }
+    } else {
+      addLogEntry("SYSTEM", `Transfer fehlgeschlagen: Kein psionischer Wirt auf ${planet.name} identifiziert.`);
     }
   }
   STATE.abductActive = false;
