@@ -9,7 +9,7 @@ function createWindow() {
     const win = new BrowserWindow({
         width: 1200,
         height: 800,
-        title: "Project Najmafar",
+        title: "Najmafar: Pillars of The Void",
         backgroundColor: '#030712',
         webPreferences: {
             nodeIntegration: false,

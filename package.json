@@ -1,7 +1,7 @@
 {
   "name": "project-najmafar",
   "version": "0.5.1-alpha",
-  "description": "Project Najmafar - A Cosmic Survival Game",
+  "description": "Najmafar: Pillars of The Void - A Cosmic Survival Game",
   "author": "Ali Mazlum <a_mazlum@web.de>",
   "main": "main.js",
   "scripts": {
@@ -26,7 +26,7 @@
   },
   "build": {
     "appId": "com.najmafar.game",
-    "productName": "Project Najmafar",
+    "productName": "Najmafar - Pillars of The Void",
     "directories": {
       "output": "dist"
     },
