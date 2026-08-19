@@ -33929,7 +33929,7 @@ async function checkUniverseData() {
       if (startBtn) {
         startBtn.removeAttribute("disabled");
         startBtn.style.opacity = "1";
-        startBtn.innerText = "Die Leere Betreten";
+        startBtn.innerText = "\uD83E\uDDEC Bewusstsein entfalten";
       }
       const status = document.getElementById("generation-status");
       const mapBadge = document.getElementById("galaxy-provenance-badge");

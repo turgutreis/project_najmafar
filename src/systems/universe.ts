@@ -57,7 +57,7 @@ export async function checkUniverseData() {
             if (startBtn) {
                 startBtn.removeAttribute('disabled');
                 startBtn.style.opacity = '1';
-                startBtn.innerText = "Najmafar betreten";
+                startBtn.innerText = "🧬 Bewusstsein entfalten";
             }
 
             const status = document.getElementById('generation-status');
