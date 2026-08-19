@@ -119,11 +119,28 @@ export interface PlanetData {
     moons?: MoonData[];
 }
 
+export type SectorId = 'sector_outer_rim' | 'sector_mid_rim' | 'sector_core';
+
+export interface SectorInfo {
+    id: SectorId;
+    name: string;
+    description: string;
+    act: 1 | 2 | 3;
+    minRadius: number;
+    maxRadius: number;
+    color: string;
+    hazardLevel: 'Low' | 'Moderate' | 'High' | 'Extreme';
+}
+
 export interface StarSystem {
     id: number;
     name: string;
     x: number;
     z: number;
+    sectorId?: SectorId | string;
+    sectorName?: string;
+    anomalyType?: 'none' | 'flare_star' | 'dark_energy_rift' | 'pulsar' | 'ancient_beacon' | 'supermassive_black_hole' | string;
+    isCoreAnchor?: boolean;
     star: StarData;
     planets: PlanetData[];
     asteroids?: any[];

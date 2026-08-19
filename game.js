@@ -28640,7 +28640,7 @@ var STATE = {
     x: false
   },
   universe: null,
-  currentSystemId: 0,
+  currentSystemId: 1,
   nearestPlanet: null,
   lockedTarget: null,
   scanningPlanet: null,
@@ -33340,13 +33340,46 @@ function renderGalaxyMap() {
     ctx.moveTo(0, centerY);
     ctx.lineTo(width, centerY);
     ctx.stroke();
-    const coreGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 50 * currentScale);
-    coreGrad.addColorStop(0, "rgba(168, 85, 247, 0.15)");
+    const coreR = 110 * currentScale;
+    const coreGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreR);
+    coreGrad.addColorStop(0, "rgba(234, 179, 8, 0.18)");
+    coreGrad.addColorStop(0.5, "rgba(168, 85, 247, 0.08)");
     coreGrad.addColorStop(1, "rgba(168, 85, 247, 0)");
     ctx.fillStyle = coreGrad;
     ctx.beginPath();
-    ctx.arc(centerX, centerY, 50 * currentScale, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, coreR, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = "rgba(234, 179, 8, 0.25)";
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, coreR, 0, Math.PI * 2);
+    ctx.stroke();
+    const midR = 265 * currentScale;
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 8]);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, midR, 0, Math.PI * 2);
+    ctx.stroke();
+    const outerR = 430 * currentScale;
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.15)";
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash([8, 10]);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, outerR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (mapZoom > 0.7) {
+      ctx.font = "bold 9px Orbitron, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillStyle = "rgba(234, 179, 8, 0.5)";
+      ctx.fillText("SEKTOR 3: GALAKTISCHER KERN (SAGITTARIUS A*)", centerX + 12, centerY - coreR + 15);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.45)";
+      ctx.fillText("SEKTOR 2: ORION-ZYKLUS (ZIVILISATIONS-GÜRTEL)", centerX + 12, centerY - midR + 15);
+      ctx.fillStyle = "rgba(148, 163, 184, 0.35)";
+      ctx.fillText("SEKTOR 1: PERSEUS-RAND (DAS ERWACHEN)", centerX + 12, centerY - outerR + 15);
+    }
     const currentSys = systems.find((s) => s.id === STATE.currentSystemId) || systems[0];
     if (currentSys) {
       const curScreenX = centerX + currentSys.x * currentScale;
@@ -33369,7 +33402,7 @@ function renderGalaxyMap() {
       ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(curScreenX, curScreenY, 14 * Math.min(1.5, Math.max(0.7, mapZoom)) + Math.sin(Date.now() * 0.006) * 3, 0, Math.PI * 2);
+      ctx.arc(curScreenX, curScreenY, 12 * Math.min(1.5, Math.max(0.7, mapZoom)) + Math.sin(Date.now() * 0.006) * 3, 0, Math.PI * 2);
       ctx.stroke();
     }
     hoverSystem = null;
@@ -33392,46 +33425,32 @@ function renderGalaxyMap() {
       const hasSentient = sys.planets.some((p) => p.type === "Habitable" || p.species && p.species.hasSentient);
       const showLifeBeacon = hasSentient && inPsionicRange;
       if (filterLifeOnly && !showLifeBeacon && !isActive && !isSelected) {
-        ctx.globalAlpha = 0.08;
+        ctx.globalAlpha = 0.06;
       } else if (!inWarpRange && !isActive && !isSelected) {
-        ctx.globalAlpha = 0.45;
+        ctx.globalAlpha = sys.isCoreAnchor ? 0.9 : 0.4;
       } else {
         ctx.globalAlpha = 1;
       }
-      let baseSize = 2.8 * Math.min(1.6, Math.max(0.7, mapZoom));
+      let baseSize = 2.4 * Math.min(1.5, Math.max(0.6, mapZoom));
       if (isActive)
-        baseSize = 4.8;
+        baseSize = 4.5;
       if (isSelected)
-        baseSize = 6;
+        baseSize = 5.5;
+      if (sys.isCoreAnchor)
+        baseSize = 6.5;
       if (dist < 10) {
         hoverSystem = sys;
-        baseSize += 2.5;
+        baseSize += 2;
       }
       if (showLifeBeacon) {
-        const glowR = (baseSize + 14) * Math.min(1.4, Math.max(0.8, mapZoom));
+        const glowR = (baseSize + 12) * Math.min(1.4, Math.max(0.8, mapZoom));
         const glowGrad = ctx.createRadialGradient(screenX, screenY, baseSize, screenX, screenY, glowR);
-        glowGrad.addColorStop(0, "rgba(217, 70, 239, 0.45)");
-        glowGrad.addColorStop(0.6, "rgba(168, 85, 247, 0.15)");
+        glowGrad.addColorStop(0, "rgba(217, 70, 239, 0.4)");
         glowGrad.addColorStop(1, "rgba(217, 70, 239, 0)");
         ctx.fillStyle = glowGrad;
         ctx.beginPath();
         ctx.arc(screenX, screenY, glowR, 0, Math.PI * 2);
         ctx.fill();
-        const timeSec = Date.now() % 2400 / 2400;
-        for (let w = 0;w < 2; w++) {
-          const waveProg = (timeSec + w * 0.5) % 1;
-          const waveR = baseSize + 2 + waveProg * 14 * Math.min(1.4, Math.max(0.8, mapZoom));
-          const waveAlpha = (1 - waveProg) * 0.85;
-          ctx.strokeStyle = `rgba(217, 70, 239, ${waveAlpha})`;
-          ctx.lineWidth = 1.4;
-          ctx.beginPath();
-          ctx.arc(screenX, screenY, waveR, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        ctx.fillStyle = "#f472b6";
-        ctx.font = "bold 8px Orbitron, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("\uD83E\uDDE0", screenX, screenY + baseSize + 9);
       }
       let starColor = "#f59e0b";
       if (sys.star.type === "Blue Giant")
@@ -33442,30 +33461,37 @@ function renderGalaxyMap() {
         starColor = "#cbd5e1";
       if (sys.star.type === "Black Hole")
         starColor = "#8b5cf6";
+      if (sys.isCoreAnchor) {
+        ctx.strokeStyle = "#eab308";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, baseSize + 5 + Math.sin(Date.now() * 0.005) * 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       if (isSelected) {
         ctx.fillStyle = inWarpRange ? "rgba(168, 85, 247, 0.4)" : "rgba(239, 68, 68, 0.3)";
         ctx.beginPath();
-        ctx.arc(screenX, screenY, baseSize + 6, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY, baseSize + 5, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = inWarpRange ? "#e879f9" : "#f87171";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(screenX, screenY, baseSize + 3, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY, baseSize + 2, 0, Math.PI * 2);
         ctx.stroke();
       } else if (isActive) {
         ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
         ctx.beginPath();
-        ctx.arc(screenX, screenY, baseSize + 4, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY, baseSize + 3, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.fillStyle = starColor;
       ctx.beginPath();
       ctx.arc(screenX, screenY, baseSize, 0, Math.PI * 2);
       ctx.fill();
-      const shouldShowLabel = isSelected || isActive || dist < 10 || mapZoom > 2 || showLifeBeacon && mapZoom > 1.2;
+      const shouldShowLabel = isSelected || isActive || dist < 10 || sys.isCoreAnchor || mapZoom > 2.2 || showLifeBeacon && mapZoom > 1.4;
       if (shouldShowLabel) {
-        ctx.fillStyle = isSelected ? inWarpRange ? "#e879f9" : "#f87171" : isActive ? "#38bdf8" : showLifeBeacon ? "#f8fafc" : "#94a3b8";
-        ctx.font = isSelected ? "bold 9px Orbitron, sans-serif" : "8px Orbitron, sans-serif";
+        ctx.fillStyle = isSelected ? inWarpRange ? "#e879f9" : "#f87171" : isActive ? "#38bdf8" : sys.isCoreAnchor ? "#eab308" : showLifeBeacon ? "#f8fafc" : "#94a3b8";
+        ctx.font = isSelected || sys.isCoreAnchor ? "bold 9px Orbitron, sans-serif" : "8px Orbitron, sans-serif";
         ctx.textAlign = "center";
         ctx.fillText(sys.name, screenX, screenY - baseSize - 4);
       }
@@ -33478,7 +33504,18 @@ function renderGalaxyMap() {
       const tooltipX = mouseX + 15;
       const tooltipY = mouseY - 15;
       const hasSentient = hoverSystem.planets.some((p) => p.type === "Habitable" || p.species && p.species.hasSentient);
-      const text = `${hoverSystem.name} (${hoverSystem.star.type}) ${hasSentient ? "\uD83E\uDDE0 Leben" : ""}`;
+      let anomalyIcon = "";
+      if (hoverSystem.anomalyType === "flare_star")
+        anomalyIcon = " ⚡";
+      else if (hoverSystem.anomalyType === "dark_energy_rift")
+        anomalyIcon = " \uD83C\uDF00";
+      else if (hoverSystem.anomalyType === "ancient_beacon")
+        anomalyIcon = " \uD83C\uDFDB️";
+      else if (hoverSystem.anomalyType === "pulsar")
+        anomalyIcon = " \uD83D\uDCAB";
+      else if (hoverSystem.isCoreAnchor)
+        anomalyIcon = " \uD83D\uDD73️";
+      const text = `${hoverSystem.name} (${hoverSystem.star.type})${anomalyIcon}${hasSentient ? " \uD83E\uDDE0" : ""}`;
       ctx.font = "9.5px Orbitron, sans-serif";
       const textWidth = ctx.measureText(text).width;
       ctx.beginPath();
@@ -33497,7 +33534,7 @@ function renderGalaxyMap() {
   canvas.onwheel = (e) => {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
-    const newZoom = Math.min(5, Math.max(0.6, mapZoom * zoomFactor));
+    const newZoom = Math.min(6, Math.max(0.5, mapZoom * zoomFactor));
     mapZoom = newZoom;
   };
   canvas.onmousedown = (e) => {
@@ -33631,6 +33668,9 @@ function updateSystemDetails(sys) {
   const inWarpRange = distFromCur <= STATE.warpRange;
   const inPsionicRange = distFromCur <= STATE.psionicRange;
   const nameEl = document.getElementById("detail-system-name");
+  const sectorEl = document.getElementById("val-sector-name");
+  const anomalyRow = document.getElementById("row-anomaly");
+  const anomalyEl = document.getElementById("val-anomaly-type");
   const coordXEl = document.getElementById("val-coord-x");
   const coordZEl = document.getElementById("val-coord-z");
   const starTypeEl = document.getElementById("val-star-type");
@@ -33638,6 +33678,34 @@ function updateSystemDetails(sys) {
   const planetCountEl = document.getElementById("val-planet-count");
   if (nameEl)
     nameEl.innerText = sys.name;
+  if (sectorEl) {
+    sectorEl.innerText = sys.sectorName || "Unkartierter Sektor";
+    if (sys.sectorId === "sector_core")
+      sectorEl.style.color = "#eab308";
+    else if (sys.sectorId === "sector_mid_rim")
+      sectorEl.style.color = "#38bdf8";
+    else
+      sectorEl.style.color = "#94a3b8";
+  }
+  if (anomalyRow && anomalyEl) {
+    if (sys.anomalyType && sys.anomalyType !== "none") {
+      anomalyRow.style.display = "flex";
+      let label = sys.anomalyType;
+      if (sys.anomalyType === "flare_star")
+        label = "⚡ Instabiler Sonnensturm";
+      else if (sys.anomalyType === "dark_energy_rift")
+        label = "\uD83C\uDF00 Dunkle-Energie-Verzerrung";
+      else if (sys.anomalyType === "ancient_beacon")
+        label = "\uD83C\uDFDB️ Vorläufer-Relikt-Bake";
+      else if (sys.anomalyType === "pulsar")
+        label = "\uD83D\uDCAB Hochenergetischer Pulsar";
+      else if (sys.anomalyType === "supermassive_black_hole")
+        label = "\uD83D\uDD73️ Supermassereiche Singularität";
+      anomalyEl.innerText = label;
+    } else {
+      anomalyRow.style.display = "none";
+    }
+  }
   if (coordXEl)
     coordXEl.innerText = String(sys.x);
   if (coordZEl)
@@ -33716,41 +33784,38 @@ function warpToSystem(systemId) {
   const dx = targetSys.x - currentSys.x;
   const dz = targetSys.z - currentSys.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist > STATE.warpRange) {
-    addLogEntry("SYSTEM", `Hypersprung abgebrochen: Distanz zu ${targetSys.name} (${dist.toFixed(0)} LJ) überschreitet maximale Faltungsreichweite (${STATE.warpRange} LJ)!`);
-    return;
-  }
   const costMult = STATE.mutations.folddrive && STATE.mutations.folddrive.purchased ? 0.7 : 1;
   const warpCost = Math.round((15 + dist * 0.15) * costMult);
-  if (STATE.bioEnergy < warpCost) {
-    addLogEntry("SYSTEM", `Hypersprung abgebrochen: Nicht genügend Bio-Energie (${warpCost}% benötigt, aktuell ${Math.round(STATE.bioEnergy)}%)!`);
+  if (dist > STATE.warpRange || STATE.bioEnergy < warpCost) {
+    playCrashSound();
+    addLogEntry("SYSTEM", `Warp-Fehlschlag: Ziel außerhalb der Faltungsreichweite oder unzureichende Bio-Energie!`);
     return;
   }
-  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - warpCost);
+  STATE.bioEnergy -= warpCost;
+  STATE.currentSystemId = targetSys.id;
+  STATE.systemsVisited++;
   const warpOverlay = document.getElementById("warp-overlay");
   if (warpOverlay) {
-    warpOverlay.style.display = "flex";
+    warpOverlay.style.display = "block";
     warpOverlay.style.opacity = "1";
   }
-  setThrusterSound(false);
-  playCrashSound();
+  playSiliconCollectSound();
+  setThrusterSound(true);
+  addLogEntry("SYSTEM", `\uD83C\uDF0C RAUMZEIT GEFALTET: Transit nach ${targetSys.name} (${targetSys.sectorName || "Sektor"}). -${warpCost}% Bio-Energie.`);
   setTimeout(() => {
-    STATE.currentSystemId = systemId;
-    STATE.systemsVisited++;
-    const activeSystem = STATE.universe.systems[systemId];
     clearActiveSystem();
     spawnPlanetsAndAsteroids();
-    STATE.playerPosition.set(0, 0, 75);
-    STATE.playerVelocity.set(5.2, 0, 0);
-    if (STATE.playerGroup) {
-      STATE.playerGroup.position.set(0, 0, 75);
-    }
-    addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} (${dist.toFixed(0)} LJ, -${warpCost}% Energie) stabilisiert.`);
     if (warpOverlay) {
-      warpOverlay.style.display = "none";
+      warpOverlay.style.opacity = "0";
+      setTimeout(() => {
+        warpOverlay.style.display = "none";
+      }, 600);
     }
-    toggleGalaxyMap();
-  }, 600);
+    setThrusterSound(false);
+    if (mapOpen) {
+      toggleGalaxyMap();
+    }
+  }, 1200);
 }
 
 // src/systems/crew.ts
