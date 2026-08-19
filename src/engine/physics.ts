@@ -205,8 +205,8 @@ export function updatePhysics(dt: number) {
     const effectiveDrag = STATE.currentDrag;
     STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
 
-    // Top Speed Clamp
-    const maxSpeed = 35.0;
+    // Top Speed Clamp (Majestic cosmic cruise speed)
+    const maxSpeed = 22.0;
     const curSpeed = STATE.playerVelocity.length();
     if (curSpeed > maxSpeed) {
         STATE.playerVelocity.multiplyScalar(maxSpeed / curSpeed);
@@ -219,8 +219,8 @@ export function updatePhysics(dt: number) {
     STATE.playerPosition.x += STATE.playerVelocity.x * dt;
     STATE.playerPosition.z += STATE.playerVelocity.z * dt;
 
-    // Boundary wrapping
-    const maxBound = 500;
+    // Boundary wrapping (Vast Solar System Scale)
+    const maxBound = 850;
     if (STATE.playerPosition.x > maxBound) { STATE.playerPosition.x = -maxBound; }
     if (STATE.playerPosition.x < -maxBound) { STATE.playerPosition.x = maxBound; }
     if (STATE.playerPosition.z > maxBound) { STATE.playerPosition.z = -maxBound; }

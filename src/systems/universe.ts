@@ -270,7 +270,7 @@ export function spawnPlanetsAndAsteroids() {
 
     // 2. Celestial Bodies (Planets, Constructs, Vortices, Captured Stars)
     activeSystem.planets.forEach((p, idx) => {
-        const scaledDist = 38.0 + (p.distance * 1.55) + (idx * 12.0);
+        const scaledDist = 65.0 + (p.distance * 2.8) + (idx * 24.0);
         const angle = (idx * 1.8) + (STATE.currentSystemId * 0.5);
         const px = scaledDist * Math.cos(angle);
         const pz = scaledDist * Math.sin(angle);
@@ -542,7 +542,7 @@ export function spawnPlanetsAndAsteroids() {
         });
 
         const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(ast.x, (Math.random() - 0.5) * 1.5, ast.z);
+        mesh.position.set(ast.x * 2.2, (Math.random() - 0.5) * 1.5, ast.z * 2.2);
         scene.add(mesh);
 
         const astRange = size * 2.8;

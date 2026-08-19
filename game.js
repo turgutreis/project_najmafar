@@ -28746,16 +28746,16 @@ var STATE = {
     folddrive: { purchased: false, bioCost: 380, siliconCost: 420 },
     translator: { purchased: false, bioCost: 120, siliconCost: 80 }
   },
-  playerPosition: new Vector3(0, 0, 75),
-  playerVelocity: new Vector3(2, 0, 0),
+  playerPosition: new Vector3(0, 0, 95),
+  playerVelocity: new Vector3(1.5, 0, 0),
   playerAcceleration: new Vector3(0, 0, 0),
-  thrustStrength: 20,
-  retroThrustStrength: 16,
-  turnSpeed: 2.6,
+  thrustStrength: 12.5,
+  retroThrustStrength: 10,
+  turnSpeed: 2.1,
   shipHeading: 0,
   shipAngularVelocity: 0,
   flightAssist: false,
-  shipSpeed: 2,
+  shipSpeed: 1.5,
   progradeVector: new Vector3(1, 0, 0),
   drag: 0.005,
   brakeDrag: 1.2,
@@ -31555,7 +31555,7 @@ function updateMinimap() {
   const height = minimapCanvas.height;
   const cx = width / 2;
   const cy = height / 2;
-  const range = 250;
+  const range = 450;
   minimapCtx.fillStyle = "rgba(3, 7, 18, 0.85)";
   minimapCtx.fillRect(0, 0, width, height);
   const radius = width / 2 - 4;
@@ -33466,7 +33466,7 @@ function spawnPlanetsAndAsteroids() {
     starSource.ringMesh = createGravityRing(0, 0, starRange, parseInt(starData.color), 0.06);
   }
   activeSystem.planets.forEach((p, idx) => {
-    const scaledDist = 38 + p.distance * 1.55 + idx * 12;
+    const scaledDist = 65 + p.distance * 2.8 + idx * 24;
     const angle = idx * 1.8 + STATE.currentSystemId * 0.5;
     const px2 = scaledDist * Math.cos(angle);
     const pz2 = scaledDist * Math.sin(angle);
@@ -33706,7 +33706,7 @@ function spawnPlanetsAndAsteroids() {
       emissive: isOrganic ? 13073 : 8755
     });
     const mesh = new Mesh(geo, mat);
-    mesh.position.set(ast.x, (Math.random() - 0.5) * 1.5, ast.z);
+    mesh.position.set(ast.x * 2.2, (Math.random() - 0.5) * 1.5, ast.z * 2.2);
     scene.add(mesh);
     const astRange = size * 2.8;
     const sourceObj = {
@@ -36129,7 +36129,7 @@ function updatePhysics(dt) {
   STATE.playerVelocity.z += netGz * dt;
   const effectiveDrag = STATE.currentDrag;
   STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
-  const maxSpeed = 35;
+  const maxSpeed = 22;
   const curSpeed = STATE.playerVelocity.length();
   if (curSpeed > maxSpeed) {
     STATE.playerVelocity.multiplyScalar(maxSpeed / curSpeed);
@@ -36137,7 +36137,7 @@ function updatePhysics(dt) {
   STATE.shipSpeed = curSpeed;
   STATE.playerPosition.x += STATE.playerVelocity.x * dt;
   STATE.playerPosition.z += STATE.playerVelocity.z * dt;
-  const maxBound = 500;
+  const maxBound = 850;
   if (STATE.playerPosition.x > maxBound) {
     STATE.playerPosition.x = -maxBound;
   }

@@ -104,7 +104,7 @@ export function updateMinimap() {
     const height = minimapCanvas.height;
     const cx = width / 2;
     const cy = height / 2;
-    const range = 250;
+    const range = 450;
 
     minimapCtx.fillStyle = 'rgba(3, 7, 18, 0.85)';
     minimapCtx.fillRect(0, 0, width, height);
