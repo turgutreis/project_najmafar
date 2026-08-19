@@ -29881,14 +29881,13 @@ function onWindowResize() {
 }
 
 // src/engine/trajectory.ts
-var TRAJECTORY_STEPS = 80;
-var TRAJECTORY_DT = 0.065;
-var SOFTENING_SQ = 12;
-var trajectoryPoints;
+var TRAJECTORY_STEPS = 120;
+var TRAJECTORY_DT = 0.07;
+var SOFTENING_SQ = 16;
 var trajectoryGeometry;
+var trajectoryLine;
 var trajectoryPositions;
 var trajectoryColors;
-var trajectorySizes;
 var _predPos = new Vector3;
 var _predVel = new Vector3;
 var _predAcc = new Vector3;
@@ -29896,77 +29895,51 @@ function initTrajectory() {
   trajectoryGeometry = new BufferGeometry;
   trajectoryPositions = new Float32Array(TRAJECTORY_STEPS * 3);
   trajectoryColors = new Float32Array(TRAJECTORY_STEPS * 3);
-  trajectorySizes = new Float32Array(TRAJECTORY_STEPS);
   trajectoryGeometry.setAttribute("position", new BufferAttribute(trajectoryPositions, 3));
   trajectoryGeometry.setAttribute("color", new BufferAttribute(trajectoryColors, 3));
-  trajectoryGeometry.setAttribute("size", new BufferAttribute(trajectorySizes, 1));
-  const canvas = document.createElement("canvas");
-  canvas.width = 32;
-  canvas.height = 32;
-  const ctx = canvas.getContext("2d");
-  const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  grad.addColorStop(0, "rgba(255, 255, 255, 1)");
-  grad.addColorStop(0.3, "rgba(56, 189, 248, 0.85)");
-  grad.addColorStop(0.7, "rgba(56, 189, 248, 0.25)");
-  grad.addColorStop(1, "rgba(56, 189, 248, 0)");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 32, 32);
-  const dotTexture = new CanvasTexture(canvas);
-  const material = new PointsMaterial({
-    size: 2.2,
+  const material = new LineBasicMaterial({
     vertexColors: true,
-    map: dotTexture,
     transparent: true,
     opacity: 0.9,
+    linewidth: 2,
     blending: AdditiveBlending,
-    depthWrite: false,
-    sizeAttenuation: true
+    depthWrite: false
   });
-  trajectoryPoints = new Points(trajectoryGeometry, material);
-  scene.add(trajectoryPoints);
+  trajectoryLine = new Line(trajectoryGeometry, material);
+  scene.add(trajectoryLine);
 }
 function updateTrajectory() {
-  if (!trajectoryPoints)
+  if (!trajectoryLine)
     return;
-  const curSpeed = STATE.playerVelocity.length();
-  const isThrusting = STATE.keys ? STATE.keys.w : false;
-  if (curSpeed < 0.3 && !isThrusting) {
-    trajectoryPoints.visible = false;
-    return;
-  }
-  trajectoryPoints.visible = true;
+  trajectoryLine.visible = true;
   _predPos.copy(STATE.playerPosition);
   _predVel.copy(STATE.playerVelocity);
+  const isThrusting = STATE.keys ? STATE.keys.w : false;
+  const isBraking = STATE.keys ? STATE.keys.s : false;
   if (isThrusting) {
     const hasEnergy = STATE.bioEnergy > 0;
     const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
     const fX = Math.cos(STATE.shipHeading || 0);
     const fZ = -Math.sin(STATE.shipHeading || 0);
-    _predVel.x += fX * effectiveThrust * 0.15;
-    _predVel.z += fZ * effectiveThrust * 0.15;
+    _predVel.x += fX * effectiveThrust * 0.25;
+    _predVel.z += fZ * effectiveThrust * 0.25;
   }
   const sources = STATE.gravitySources;
   const sourceCount = sources.length;
-  let hitSurface = false;
   for (let step = 0;step < TRAJECTORY_STEPS; step++) {
-    if (hitSurface) {
-      trajectoryPositions[step * 3 + 0] = _predPos.x;
-      trajectoryPositions[step * 3 + 1] = -100;
-      trajectoryPositions[step * 3 + 2] = _predPos.z;
-      trajectoryColors[step * 3 + 0] = 0;
-      trajectoryColors[step * 3 + 1] = 0;
-      trajectoryColors[step * 3 + 2] = 0;
-      continue;
-    }
     trajectoryPositions[step * 3 + 0] = _predPos.x;
     trajectoryPositions[step * 3 + 1] = 0.2;
     trajectoryPositions[step * 3 + 2] = _predPos.z;
     const progress = step / TRAJECTORY_STEPS;
-    const alpha = Math.pow(1 - progress, 1.2);
+    const alpha = Math.max(0.05, Math.pow(1 - progress, 1.1) * 0.9);
     if (isThrusting) {
-      trajectoryColors[step * 3 + 0] = 0.1 * alpha;
+      trajectoryColors[step * 3 + 0] = 0.05 * alpha;
       trajectoryColors[step * 3 + 1] = 0.95 * alpha;
-      trajectoryColors[step * 3 + 2] = 0.6 * alpha;
+      trajectoryColors[step * 3 + 2] = 0.55 * alpha;
+    } else if (isBraking) {
+      trajectoryColors[step * 3 + 0] = 0.95 * alpha;
+      trajectoryColors[step * 3 + 1] = 0.4 * alpha;
+      trajectoryColors[step * 3 + 2] = 0.2 * alpha;
     } else {
       trajectoryColors[step * 3 + 0] = 0.2 * alpha;
       trajectoryColors[step * 3 + 1] = 0.75 * alpha;
@@ -29991,10 +29964,6 @@ function updateTrajectory() {
       const dx = sourceX - _predPos.x;
       const dz = sourceZ - _predPos.z;
       const distSq = dx * dx + dz * dz;
-      if (distSq <= source.radius * source.radius) {
-        hitSurface = true;
-        break;
-      }
       const rangeSq = source.gravityRange * source.gravityRange;
       if (distSq < rangeSq) {
         const distance = Math.sqrt(distSq);
