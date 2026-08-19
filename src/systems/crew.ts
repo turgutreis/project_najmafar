@@ -86,19 +86,24 @@ export function updateCrewSimulation(dt: number) {
         targetLoneliness = 100;
     } else if (totalCrew === 1) {
         STATE.crewSatietyTimer += dt;
-        const decay = Math.min(25, (STATE.crewSatietyTimer / 90) * 25);
-        targetLoneliness = 40 + decay;
-    } else if (uniqueRoles === 2) {
-        targetLoneliness = 25;
-    } else if (uniqueRoles >= 3) {
-        targetLoneliness = 5;
-        isHarmony = true;
+        const decay = Math.min(20, (STATE.crewSatietyTimer / 120) * 20);
+        targetLoneliness = 45 + decay; // Single companion: 45-65% loneliness
+    } else if (totalCrew === 2) {
+        targetLoneliness = uniqueRoles === 2 ? 20 : 30; // 2 crew: 20-30% loneliness
+    } else if (totalCrew >= 3) {
+        if (uniqueRoles >= 3) {
+            targetLoneliness = Math.max(0, 5 - (totalCrew - 3) * 2);
+            isHarmony = true; // Complete Trio Harmony
+        } else {
+            targetLoneliness = Math.max(5, 15 - (totalCrew - 3) * 3);
+            if (totalCrew >= 4) isHarmony = true;
+        }
     }
 
     if (STATE.loneliness < targetLoneliness) {
-        STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
+        STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 3 * dt);
     } else if (STATE.loneliness > targetLoneliness) {
-        STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
+        STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 18 * dt);
     }
 
     if (isHarmony) {

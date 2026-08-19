@@ -1,7 +1,7 @@
 import { STATE } from '../core/state';
 import { createAbductBeam, removeAbductBeam, updateAbductBeam } from '../procedural/meshes';
 import { getAudioContext } from '../engine/audio';
-import { addLogEntry } from '../ui/hud';
+import { addLogEntry, updateHUDStats } from '../ui/hud';
 import { calculateCrewBuffs, renderCrewUI } from './crew';
 import { updateScannerUI, generatePlanetAttributes } from './scanner';
 
@@ -116,10 +116,16 @@ export function completeAbduction() {
                 STATE.crewSatietyTimer = 0;
                 calculateCrewBuffs();
 
+                // Immediate Loneliness Drop on successful Abduction
+                const crewCount = STATE.crew.length;
+                const instantTarget = crewCount >= 3 ? 5 : (crewCount === 2 ? 25 : 45);
+                STATE.loneliness = Math.min(STATE.loneliness, instantTarget);
+
                 addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.roleName || candidate.role}) in Kokon-Kammer transferiert.`);
-                addLogEntry("CREW", `Traum-Matrix initialisiert. ${candidate.name} aktiviert Rolle: ${candidate.buffDesc}!`);
+                addLogEntry("CREW", `Traum-Matrix initialisiert: ${candidate.name} lindert deine Einsamkeit! (${Math.round(STATE.loneliness)}% Einsamkeit)`);
 
                 renderCrewUI();
+                updateHUDStats();
                 if (STATE.nearestPlanet === planet) {
                     updateScannerUI(planet, 10);
                 }

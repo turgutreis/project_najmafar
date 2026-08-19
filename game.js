@@ -34655,18 +34655,24 @@ function updateCrewSimulation(dt) {
     targetLoneliness = 100;
   } else if (totalCrew === 1) {
     STATE.crewSatietyTimer += dt;
-    const decay = Math.min(25, STATE.crewSatietyTimer / 90 * 25);
-    targetLoneliness = 40 + decay;
-  } else if (uniqueRoles === 2) {
-    targetLoneliness = 25;
-  } else if (uniqueRoles >= 3) {
-    targetLoneliness = 5;
-    isHarmony = true;
+    const decay = Math.min(20, STATE.crewSatietyTimer / 120 * 20);
+    targetLoneliness = 45 + decay;
+  } else if (totalCrew === 2) {
+    targetLoneliness = uniqueRoles === 2 ? 20 : 30;
+  } else if (totalCrew >= 3) {
+    if (uniqueRoles >= 3) {
+      targetLoneliness = Math.max(0, 5 - (totalCrew - 3) * 2);
+      isHarmony = true;
+    } else {
+      targetLoneliness = Math.max(5, 15 - (totalCrew - 3) * 3);
+      if (totalCrew >= 4)
+        isHarmony = true;
+    }
   }
   if (STATE.loneliness < targetLoneliness) {
-    STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 4 * dt);
+    STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 3 * dt);
   } else if (STATE.loneliness > targetLoneliness) {
-    STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 8 * dt);
+    STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 18 * dt);
   }
   if (isHarmony) {
     STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
@@ -35321,9 +35327,13 @@ function completeAbduction() {
         STATE.crew.push(candidate);
         STATE.crewSatietyTimer = 0;
         calculateCrewBuffs();
+        const crewCount = STATE.crew.length;
+        const instantTarget = crewCount >= 3 ? 5 : crewCount === 2 ? 25 : 45;
+        STATE.loneliness = Math.min(STATE.loneliness, instantTarget);
         addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.roleName || candidate.role}) in Kokon-Kammer transferiert.`);
-        addLogEntry("CREW", `Traum-Matrix initialisiert. ${candidate.name} aktiviert Rolle: ${candidate.buffDesc}!`);
+        addLogEntry("CREW", `Traum-Matrix initialisiert: ${candidate.name} lindert deine Einsamkeit! (${Math.round(STATE.loneliness)}% Einsamkeit)`);
         renderCrewUI();
+        updateHUDStats();
         if (STATE.nearestPlanet === planet) {
           updateScannerUI(planet, 10);
         }
