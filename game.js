@@ -33719,7 +33719,25 @@ function renderGalaxyMap() {
       ctx.arc(curScreenX, curScreenY, 12 * Math.min(1.5, Math.max(0.7, mapZoom)) + Math.sin(Date.now() * 0.006) * 3, 0, Math.PI * 2);
       ctx.stroke();
     }
+    let minHoverDist = 14;
     hoverSystem = null;
+    if (mouseX >= 0 && mouseY >= 0) {
+      for (let i = 0;i < systems.length; i++) {
+        const sys = systems[i];
+        const screenX = centerX + sys.x * currentScale;
+        const screenY = centerY + sys.z * currentScale;
+        if (screenX < -30 || screenX > width + 30 || screenY < -30 || screenY > height + 30) {
+          continue;
+        }
+        const dx = mouseX - screenX;
+        const dy = mouseY - screenY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minHoverDist) {
+          minHoverDist = dist;
+          hoverSystem = sys;
+        }
+      }
+    }
     systems.forEach((sys) => {
       const screenX = centerX + sys.x * currentScale;
       const screenY = centerY + sys.z * currentScale;
@@ -33731,11 +33749,9 @@ function renderGalaxyMap() {
       const distFromCur = Math.sqrt(dxFromCur * dxFromCur + dzFromCur * dzFromCur);
       const inWarpRange = distFromCur <= STATE.warpRange;
       const inPsionicRange = distFromCur <= STATE.psionicRange;
-      const dx = mouseX - screenX;
-      const dy = mouseY - screenY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
       const isSelected = selectedSystem && selectedSystem.id === sys.id;
       const isActive = STATE.currentSystemId === sys.id;
+      const isHovered = hoverSystem && hoverSystem.id === sys.id;
       const hasSentient = sys.planets.some((p) => p.type === "Habitable" || p.species && p.species.hasSentient);
       const showLifeBeacon = hasSentient && inPsionicRange;
       if (filterLifeOnly && !showLifeBeacon && !isActive && !isSelected) {
@@ -33752,9 +33768,8 @@ function renderGalaxyMap() {
         baseSize = 5.5;
       if (sys.isCoreAnchor)
         baseSize = 6.5;
-      if (dist < 10) {
-        hoverSystem = sys;
-        baseSize += 2;
+      if (isHovered) {
+        baseSize += 2.5;
       }
       if (showLifeBeacon) {
         const glowR = (baseSize + 12) * Math.min(1.4, Math.max(0.8, mapZoom));
@@ -33802,10 +33817,10 @@ function renderGalaxyMap() {
       ctx.beginPath();
       ctx.arc(screenX, screenY, baseSize, 0, Math.PI * 2);
       ctx.fill();
-      const shouldShowLabel = isSelected || isActive || dist < 10 || sys.isCoreAnchor || mapZoom > 2.2 || showLifeBeacon && mapZoom > 1.4;
+      const shouldShowLabel = isSelected || isActive || isHovered || sys.isCoreAnchor || mapZoom > 2.2 || showLifeBeacon && mapZoom > 1.4;
       if (shouldShowLabel) {
         ctx.fillStyle = isSelected ? inWarpRange ? "#e879f9" : "#f87171" : isActive ? "#38bdf8" : sys.isCoreAnchor ? "#eab308" : showLifeBeacon ? "#f8fafc" : "#94a3b8";
-        ctx.font = isSelected || sys.isCoreAnchor ? "bold 9px Orbitron, sans-serif" : "8px Orbitron, sans-serif";
+        ctx.font = isSelected || sys.isCoreAnchor || isHovered ? "bold 9px Orbitron, sans-serif" : "8px Orbitron, sans-serif";
         ctx.textAlign = "center";
         ctx.fillText(sys.name, screenX, screenY - baseSize - 4);
       }
@@ -33851,18 +33866,24 @@ function renderGalaxyMap() {
     const newZoom = Math.min(6, Math.max(0.5, mapZoom * zoomFactor));
     mapZoom = newZoom;
   };
+  let mouseDownX = 0;
+  let mouseDownY = 0;
   canvas.onmousedown = (e) => {
     isDraggingMap = true;
     dragStartX = e.clientX - mapPanX;
     dragStartY = e.clientY - mapPanY;
+    mouseDownX = e.clientX;
+    mouseDownY = e.clientY;
   };
   window.addEventListener("mouseup", () => {
     isDraggingMap = false;
   });
   canvas.onmousemove = (e) => {
     const mRect = canvas.getBoundingClientRect();
-    mapMouseX = e.clientX - mRect.left;
-    mapMouseY = e.clientY - mRect.top;
+    const scaleX = canvas.width / (mRect.width || 1);
+    const scaleY = canvas.height / (mRect.height || 1);
+    mapMouseX = (e.clientX - mRect.left) * scaleX;
+    mapMouseY = (e.clientY - mRect.top) * scaleY;
     if (isDraggingMap) {
       mapPanX = e.clientX - dragStartX;
       mapPanY = e.clientY - dragStartY;
@@ -33877,9 +33898,35 @@ function renderGalaxyMap() {
     mapMouseX = -1;
     mapMouseY = -1;
   };
-  canvas.onclick = () => {
-    if (hoverSystem) {
-      selectedSystem = hoverSystem;
+  canvas.onclick = (e) => {
+    const dragDist = Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY);
+    if (dragDist > 5) {
+      return;
+    }
+    const mRect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / (mRect.width || 1);
+    const scaleY = canvas.height / (mRect.height || 1);
+    const clickX = (e.clientX - mRect.left) * scaleX;
+    const clickY = (e.clientY - mRect.top) * scaleY;
+    const currentScale = baseScale * mapZoom;
+    const centerX = width / 2 + mapPanX;
+    const centerY = height / 2 + mapPanY;
+    let closestSys = null;
+    let closestDist = 16;
+    for (let i = 0;i < systems.length; i++) {
+      const sys = systems[i];
+      const screenX = centerX + sys.x * currentScale;
+      const screenY = centerY + sys.z * currentScale;
+      const dx = clickX - screenX;
+      const dy = clickY - screenY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestSys = sys;
+      }
+    }
+    if (closestSys) {
+      selectedSystem = closestSys;
       updateSystemDetails(selectedSystem);
       populateQuickBeaconsList();
       playSiliconCollectSound();

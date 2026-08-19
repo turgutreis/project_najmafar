@@ -204,7 +204,29 @@ export function renderGalaxyMap() {
             ctx.stroke();
         }
 
+        // Pre-calculate Hover System: Find the closest star to the cursor within hit radius
+        let minHoverDist = 14;
         hoverSystem = null;
+        if (mouseX >= 0 && mouseY >= 0) {
+            for (let i = 0; i < systems.length; i++) {
+                const sys = systems[i];
+                const screenX = centerX + sys.x * currentScale;
+                const screenY = centerY + sys.z * currentScale;
+
+                if (screenX < -30 || screenX > width + 30 || screenY < -30 || screenY > height + 30) {
+                    continue;
+                }
+
+                const dx = mouseX - screenX;
+                const dy = mouseY - screenY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < minHoverDist) {
+                    minHoverDist = dist;
+                    hoverSystem = sys;
+                }
+            }
+        }
 
         // 4. Render 1,000+ Star Systems
         systems.forEach(sys => {
@@ -222,12 +244,9 @@ export function renderGalaxyMap() {
             const inWarpRange = distFromCur <= STATE.warpRange;
             const inPsionicRange = distFromCur <= STATE.psionicRange;
 
-            const dx = mouseX - screenX;
-            const dy = mouseY - screenY;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
             const isSelected = selectedSystem && selectedSystem.id === sys.id;
             const isActive = STATE.currentSystemId === sys.id;
+            const isHovered = hoverSystem && hoverSystem.id === sys.id;
             const hasSentient = sys.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
 
             const showLifeBeacon = hasSentient && inPsionicRange;
@@ -245,9 +264,8 @@ export function renderGalaxyMap() {
             if (isSelected) baseSize = 5.5;
             if (sys.isCoreAnchor) baseSize = 6.5;
 
-            if (dist < 10) {
-                hoverSystem = sys;
-                baseSize += 2.0;
+            if (isHovered) {
+                baseSize += 2.5;
             }
 
             // Life Beacon Glow
@@ -301,11 +319,11 @@ export function renderGalaxyMap() {
             ctx.arc(screenX, screenY, baseSize, 0, Math.PI * 2);
             ctx.fill();
 
-            // Smart LOD Labeling: Only show labels if selected, active, hovered, or when zoomed in!
-            const shouldShowLabel = isSelected || isActive || dist < 10 || sys.isCoreAnchor || (mapZoom > 2.2) || (showLifeBeacon && mapZoom > 1.4);
+            // Smart LOD Labeling
+            const shouldShowLabel = isSelected || isActive || isHovered || sys.isCoreAnchor || (mapZoom > 2.2) || (showLifeBeacon && mapZoom > 1.4);
             if (shouldShowLabel) {
                 ctx.fillStyle = isSelected ? (inWarpRange ? '#e879f9' : '#f87171') : (isActive ? '#38bdf8' : (sys.isCoreAnchor ? '#eab308' : (showLifeBeacon ? '#f8fafc' : '#94a3b8')));
-                ctx.font = (isSelected || sys.isCoreAnchor) ? 'bold 9px Orbitron, sans-serif' : '8px Orbitron, sans-serif';
+                ctx.font = (isSelected || sys.isCoreAnchor || isHovered) ? 'bold 9px Orbitron, sans-serif' : '8px Orbitron, sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillText(sys.name, screenX, screenY - baseSize - 4);
             }
@@ -358,10 +376,15 @@ export function renderGalaxyMap() {
         mapZoom = newZoom;
     };
 
+    let mouseDownX = 0;
+    let mouseDownY = 0;
+
     canvas.onmousedown = (e) => {
         isDraggingMap = true;
         dragStartX = e.clientX - mapPanX;
         dragStartY = e.clientY - mapPanY;
+        mouseDownX = e.clientX;
+        mouseDownY = e.clientY;
     };
 
     window.addEventListener('mouseup', () => {
@@ -370,8 +393,10 @@ export function renderGalaxyMap() {
 
     canvas.onmousemove = (e) => {
         const mRect = canvas.getBoundingClientRect();
-        mapMouseX = e.clientX - mRect.left;
-        mapMouseY = e.clientY - mRect.top;
+        const scaleX = canvas.width / (mRect.width || 1);
+        const scaleY = canvas.height / (mRect.height || 1);
+        mapMouseX = (e.clientX - mRect.left) * scaleX;
+        mapMouseY = (e.clientY - mRect.top) * scaleY;
 
         if (isDraggingMap) {
             mapPanX = e.clientX - dragStartX;
@@ -390,9 +415,42 @@ export function renderGalaxyMap() {
         mapMouseY = -1;
     };
 
-    canvas.onclick = () => {
-        if (hoverSystem) {
-            selectedSystem = hoverSystem;
+    canvas.onclick = (e) => {
+        const dragDist = Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY);
+        if (dragDist > 5) {
+            return; // Ignore click if user was panning the map
+        }
+
+        const mRect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / (mRect.width || 1);
+        const scaleY = canvas.height / (mRect.height || 1);
+        const clickX = (e.clientX - mRect.left) * scaleX;
+        const clickY = (e.clientY - mRect.top) * scaleY;
+
+        const currentScale = baseScale * mapZoom;
+        const centerX = width / 2 + mapPanX;
+        const centerY = height / 2 + mapPanY;
+
+        let closestSys: StarSystem | null = null;
+        let closestDist = 16;
+
+        for (let i = 0; i < systems.length; i++) {
+            const sys = systems[i];
+            const screenX = centerX + sys.x * currentScale;
+            const screenY = centerY + sys.z * currentScale;
+
+            const dx = clickX - screenX;
+            const dy = clickY - screenY;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < closestDist) {
+                closestDist = dist;
+                closestSys = sys;
+            }
+        }
+
+        if (closestSys) {
+            selectedSystem = closestSys;
             updateSystemDetails(selectedSystem);
             populateQuickBeaconsList();
             playSiliconCollectSound();
