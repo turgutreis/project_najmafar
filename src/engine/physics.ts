@@ -7,6 +7,7 @@ import { addLogEntry, updateHUDStats } from '../ui/hud';
 import { updateScannerUI } from '../systems/scanner';
 import { updateMutationUI } from '../ui/deck';
 import { triggerGameOver } from './game-over';
+import { updateSpaceDust } from './space-dust';
 
 // Cached vectors for zero GC pressure
 const _predPos = new THREE.Vector3();
@@ -190,10 +191,25 @@ export function updatePhysics(dt: number) {
         }
     }
 
-    // 6. Integrate Equations of Motion (Euler with exponential drag)
+    // 6. Integrate Equations of Motion (Euler with vacuum inertia and exponential drag)
     STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
+
+    // Dynamic top speed clamp
+    const maxSpeed = 80.0;
+    if (STATE.playerVelocity.lengthSq() > maxSpeed * maxSpeed) {
+        STATE.playerVelocity.setLength(maxSpeed);
+    }
+
     STATE.playerVelocity.multiplyScalar(Math.exp(-STATE.currentDrag * dt));
     STATE.playerPosition.addScaledVector(STATE.playerVelocity, dt);
+
+    STATE.shipSpeed = STATE.playerVelocity.length();
+    if (STATE.shipSpeed > 0.05) {
+        STATE.progradeVector.copy(STATE.playerVelocity).normalize();
+    }
+
+    // Update Stardust particles
+    updateSpaceDust(dt);
 
     // Boundary wrapping
     const maxBound = 500;

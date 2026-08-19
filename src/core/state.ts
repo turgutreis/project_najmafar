@@ -47,14 +47,22 @@ export const STATE: GameState = {
         translator: { purchased: false, bioCost: 120, siliconCost: 80 }
     },
 
-    // Physics
+    // Physics & Space Flight Dynamics
     playerPosition: new THREE.Vector3(0, 0, 75),
     playerVelocity: new THREE.Vector3(5.2, 0, 0),
     playerAcceleration: new THREE.Vector3(0, 0, 0),
-    thrustStrength: 25.0,
-    drag: 0.4,
-    brakeDrag: 2.2,
-    currentDrag: 0.4,
+    thrustStrength: 28.0,
+    retroThrustStrength: 22.0,
+    turnSpeed: 3.4,
+    shipHeading: 0.0,
+    shipAngularVelocity: 0.0,
+    flightAssist: false,
+    spaceBrakeActive: false,
+    shipSpeed: 5.2,
+    progradeVector: new THREE.Vector3(1, 0, 0),
+    drag: 0.005,
+    brakeDrag: 1.6,
+    currentDrag: 0.005,
     gConstant: 15.0,
     collisionCooldown: 0,
     keys: {
@@ -63,7 +71,9 @@ export const STATE: GameState = {
         a: false,
         d: false,
         Space: false,
-        x: false
+        x: false,
+        z: false,
+        Shift: false
     },
 
     // Quantum Universe

@@ -28749,10 +28749,18 @@ var STATE = {
   playerPosition: new Vector3(0, 0, 75),
   playerVelocity: new Vector3(5.2, 0, 0),
   playerAcceleration: new Vector3(0, 0, 0),
-  thrustStrength: 25,
-  drag: 0.4,
-  brakeDrag: 2.2,
-  currentDrag: 0.4,
+  thrustStrength: 28,
+  retroThrustStrength: 22,
+  turnSpeed: 3.4,
+  shipHeading: 0,
+  shipAngularVelocity: 0,
+  flightAssist: false,
+  spaceBrakeActive: false,
+  shipSpeed: 5.2,
+  progradeVector: new Vector3(1, 0, 0),
+  drag: 0.005,
+  brakeDrag: 1.6,
+  currentDrag: 0.005,
   gConstant: 15,
   collisionCooldown: 0,
   keys: {
@@ -28761,7 +28769,9 @@ var STATE = {
     a: false,
     d: false,
     Space: false,
-    x: false
+    x: false,
+    z: false,
+    Shift: false
   },
   universe: null,
   currentSystemId: 1,
@@ -29964,6 +29974,75 @@ function updateTrajectory() {
   }
   trajectoryGeometry.attributes.position.needsUpdate = true;
   trajectoryGeometry.attributes.color.needsUpdate = true;
+}
+
+// src/engine/space-dust.ts
+var dustPoints = null;
+var dustGeo = null;
+var DUST_COUNT = 450;
+var DUST_BOUNDS = 75;
+function initSpaceDust() {
+  if (dustPoints)
+    return;
+  dustGeo = new BufferGeometry;
+  const positions = new Float32Array(DUST_COUNT * 3);
+  const colors = new Float32Array(DUST_COUNT * 3);
+  for (let i = 0;i < DUST_COUNT; i++) {
+    positions[i * 3 + 0] = (Math.random() - 0.5) * DUST_BOUNDS * 2;
+    positions[i * 3 + 1] = (Math.random() - 0.5) * 16;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * DUST_BOUNDS * 2;
+    const r = 0.3 + Math.random() * 0.4;
+    const g = 0.7 + Math.random() * 0.3;
+    const b = 0.95 + Math.random() * 0.05;
+    colors[i * 3 + 0] = r;
+    colors[i * 3 + 1] = g;
+    colors[i * 3 + 2] = b;
+  }
+  dustGeo.setAttribute("position", new BufferAttribute(positions, 3));
+  dustGeo.setAttribute("color", new BufferAttribute(colors, 3));
+  const canvas = document.createElement("canvas");
+  canvas.width = 32;
+  canvas.height = 32;
+  const ctx = canvas.getContext("2d");
+  const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  grad.addColorStop(0, "rgba(255, 255, 255, 1)");
+  grad.addColorStop(0.3, "rgba(56, 189, 248, 0.7)");
+  grad.addColorStop(1, "rgba(56, 189, 248, 0)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 32, 32);
+  const dustTex = new CanvasTexture(canvas);
+  const dustMat = new PointsMaterial({
+    size: 1.9,
+    vertexColors: true,
+    map: dustTex,
+    transparent: true,
+    opacity: 0.8,
+    blending: AdditiveBlending,
+    depthWrite: false
+  });
+  dustPoints = new Points(dustGeo, dustMat);
+  scene.add(dustPoints);
+}
+function updateSpaceDust(dt) {
+  if (!dustPoints || !dustGeo)
+    return;
+  const posAttr = dustGeo.getAttribute("position");
+  const posArray = posAttr.array;
+  const px2 = STATE.playerPosition.x;
+  const pz2 = STATE.playerPosition.z;
+  for (let i = 0;i < DUST_COUNT; i++) {
+    let x = posArray[i * 3 + 0];
+    let z = posArray[i * 3 + 2];
+    if (x - px2 > DUST_BOUNDS)
+      posArray[i * 3 + 0] -= DUST_BOUNDS * 2;
+    if (x - px2 < -DUST_BOUNDS)
+      posArray[i * 3 + 0] += DUST_BOUNDS * 2;
+    if (z - pz2 > DUST_BOUNDS)
+      posArray[i * 3 + 2] -= DUST_BOUNDS * 2;
+    if (z - pz2 < -DUST_BOUNDS)
+      posArray[i * 3 + 2] += DUST_BOUNDS * 2;
+  }
+  posAttr.needsUpdate = true;
 }
 
 // src/procedural/textures.ts
@@ -31473,6 +31552,24 @@ function updateHUDStats(isHarmony = false) {
     else if (STATE.loneliness < 70)
       loneState = "Geistige Sättigung";
     loneTxt.innerText = `${Math.round(STATE.loneliness)}% (${loneState})`;
+  }
+  const speedVal = document.getElementById("flight-speed-val");
+  const modeText = document.getElementById("flight-mode-text");
+  const brakeIndicator = document.getElementById("space-brake-indicator");
+  if (speedVal) {
+    speedVal.innerText = (STATE.shipSpeed || 0).toFixed(1);
+  }
+  if (modeText) {
+    if (STATE.flightAssist) {
+      modeText.innerHTML = "\uD83D\uDD79️ ASSIST <span style='font-size: 0.58rem; color: #94a3b8;'>[Z]</span>";
+      modeText.style.color = "#10b981";
+    } else {
+      modeText.innerHTML = "\uD83C\uDF0C DRIFT <span style='font-size: 0.58rem; color: #94a3b8;'>[Z]</span>";
+      modeText.style.color = "#38bdf8";
+    }
+  }
+  if (brakeIndicator) {
+    brakeIndicator.style.display = STATE.spaceBrakeActive ? "inline" : "none";
   }
 }
 function updateMinimap() {
@@ -35200,9 +35297,11 @@ var prevGpButtons = [];
 function setupControls() {
   window.addEventListener("keydown", (e) => {
     let key = e.key.toLowerCase();
-    if (key === " " || e.code === "Space") {
-      toggleTelepathy();
+    if (key === " " || e.code === "Space" || e.key.startsWith("Arrow")) {
       e.preventDefault();
+    }
+    if (key === "z") {
+      toggleFlightAssist();
     }
     if (key === "m") {
       toggleGalaxyMap();
@@ -35218,7 +35317,7 @@ function setupControls() {
     }
     if (key === "c") {
       const target = STATE.lockedTarget || STATE.nearestPlanet;
-      if (target && target.attributes.species) {
+      if (target && target.attributes && target.attributes.species) {
         openDiplomacyComms(target);
       }
     }
@@ -35253,6 +35352,10 @@ function setupControls() {
       STATE.keys.a = true;
     if (key === "d" || e.key === "ArrowRight")
       STATE.keys.d = true;
+    if (key === " " || e.code === "Space")
+      STATE.keys.Space = true;
+    if (key === "shift" || e.key === "Shift")
+      STATE.keys.Shift = true;
   });
   window.addEventListener("keyup", (e) => {
     let key = e.key.toLowerCase();
@@ -35264,7 +35367,15 @@ function setupControls() {
       STATE.keys.a = false;
     if (key === "d" || e.key === "ArrowRight")
       STATE.keys.d = false;
+    if (key === " " || e.code === "Space")
+      STATE.keys.Space = false;
+    if (key === "shift" || e.key === "Shift")
+      STATE.keys.Shift = false;
   });
+  const assistBtn = document.getElementById("flight-mode-toggle-btn") || document.getElementById("flight-dynamics-hud");
+  if (assistBtn) {
+    assistBtn.addEventListener("click", toggleFlightAssist);
+  }
   const btn = document.getElementById("telepathy-toggle-btn");
   if (btn) {
     btn.addEventListener("click", toggleTelepathy);
@@ -35296,66 +35407,38 @@ function setupControls() {
   };
   window.addEventListener("click", startAudioOnInteraction);
   window.addEventListener("keydown", startAudioOnInteraction);
-  document.querySelectorAll(".mut-btn").forEach((btn2) => {
-    btn2.addEventListener("click", (e) => {
-      const type = e.target.dataset.mutation;
-      if (type)
-        buyMutation(type);
-    });
-  });
-  setupTargetRaycasting();
-  window.addEventListener("wheel", (e) => {
-    if (e.target && e.target.closest("#main-menu, #how-to-play-modal, #deck-container, #diplomacy-overlay")) {
-      return;
-    }
-    const delta = Math.sign(e.deltaY) * 6;
-    STATE.targetCameraHeight = Math.max(30, Math.min(130, (STATE.targetCameraHeight || 65) + delta));
-  }, { passive: true });
-}
-function setupTargetRaycasting() {
-  let pointerDownPos = { x: 0, y: 0 };
   window.addEventListener("pointerdown", (e) => {
-    pointerDownPos = { x: e.clientX, y: e.clientY };
-  });
-  window.addEventListener("pointerup", (e) => {
-    const dx = e.clientX - pointerDownPos.x;
-    const dy = e.clientY - pointerDownPos.y;
-    if (Math.sqrt(dx * dx + dy * dy) > 8)
+    if (!STATE.gameStarted || isMapOpen())
       return;
-    if (e.target && e.target.closest("#hud-container, #galaxy-map-overlay, #main-menu, #how-to-play-modal")) {
+    const target = e.target;
+    if (target.closest(".glass-panel") || target.closest("button") || target.closest(".modal-overlay")) {
       return;
     }
-    if (!STATE.gameStarted || !renderer || !camera)
-      return;
     mouseVec.x = e.clientX / window.innerWidth * 2 - 1;
     mouseVec.y = -(e.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouseVec, camera);
-    const targetMeshes = [];
+    const clickableMeshes = [];
     activePlanets.forEach((p) => {
       if (p.mesh)
-        targetMeshes.push(p.mesh);
+        clickableMeshes.push(p.mesh);
+      if (p.bodyMesh)
+        clickableMeshes.push(p.bodyMesh);
     });
-    const intersects2 = raycaster.intersectObjects(targetMeshes, true);
+    const intersects2 = raycaster.intersectObjects(clickableMeshes, true);
     if (intersects2.length > 0) {
-      const hitObject = intersects2[0].object;
-      const target = activePlanets.find((p) => {
-        if (p.mesh === hitObject || p.bodyMesh === hitObject)
-          return true;
-        let cur = hitObject;
-        while (cur) {
-          if (cur === p.mesh)
-            return true;
-          cur = cur.parent;
+      let hitObj = intersects2[0].object;
+      while (hitObj && hitObj.parent && hitObj.parent.type === "Group" && hitObj.parent !== camera) {
+        const matchedPlanet = activePlanets.find((p) => p.mesh === hitObj);
+        if (matchedPlanet) {
+          setLockedTarget(matchedPlanet);
+          return;
         }
-        return false;
-      });
-      if (target) {
-        setLockedTarget(target);
-        return;
+        hitObj = hitObj.parent;
       }
-    }
-    if (STATE.lockedTarget) {
-      clearLockedTarget();
+      const directMatch = activePlanets.find((p) => p.mesh === hitObj || p.bodyMesh === hitObj);
+      if (directMatch) {
+        setLockedTarget(directMatch);
+      }
     }
   });
   const unlockBtn = document.getElementById("unlock-target-btn");
@@ -35365,25 +35448,44 @@ function setupTargetRaycasting() {
       clearLockedTarget();
     });
   }
+  window.addEventListener("wheel", (e) => {
+    if (!STATE.gameStarted || isMapOpen())
+      return;
+    const target = e.target;
+    if (target.closest(".scanner-scroll-body") || target.closest(".log-container") || target.closest(".deck-scroll-container")) {
+      return;
+    }
+    const zoomDelta = e.deltaY * 0.08;
+    const minHeight = 35;
+    const maxHeight = 135;
+    STATE.targetCameraHeight = Math.min(maxHeight, Math.max(minHeight, (STATE.targetCameraHeight || 65) + zoomDelta));
+  }, { passive: true });
 }
-function setLockedTarget(target) {
-  if (!target)
+function toggleFlightAssist() {
+  STATE.flightAssist = !STATE.flightAssist;
+  if (STATE.flightAssist) {
+    addLogEntry("SYSTEM", "\uD83D\uDD79️ FLUG-ASSISTENT AKTIV: Automatische Bremsdüsen stabilisieren das Schiff.");
+  } else {
+    addLogEntry("SYSTEM", "\uD83C\uDF0C NEWTONSCHER DRIFT AKTIV: Vakuum-Trägheit freigeschaltet (Endloses Gleiten).");
+  }
+}
+function setLockedTarget(planet) {
+  if (STATE.lockedTarget === planet)
     return;
-  STATE.lockedTarget = target;
+  STATE.lockedTarget = planet;
   playLockOnSound();
-  const typeLabel = target.isMoon ? `Mond (${target.type})` : target.type;
-  addLogEntry("SYSTEM", `\uD83C\uDFAF ZIEL MANUELL FIXIERT: ${target.name} [${typeLabel}]. Scanner ausgerichtet.`);
+  addLogEntry("SYSTEM", `Zielerfassung fixiert auf: ${planet.name} (${planet.type}).`);
   updateTargetLockBadgeUI();
 }
 function clearLockedTarget() {
-  if (STATE.lockedTarget) {
-    addLogEntry("SYSTEM", `Ziel fixierung aufgehoben. Automatischer Distanz-Sensor aktiv.`);
-  }
+  if (!STATE.lockedTarget)
+    return;
+  addLogEntry("SYSTEM", `Zielerfassung auf ${STATE.lockedTarget.name} aufgehoben.`);
   STATE.lockedTarget = null;
   updateTargetLockBadgeUI();
 }
 function cycleTarget(direction = 1) {
-  if (!activePlanets || activePlanets.length === 0)
+  if (activePlanets.length === 0)
     return;
   const sorted = [...activePlanets].sort((a, b) => {
     const da = a.mesh.position.distanceTo(STATE.playerPosition);
@@ -35452,15 +35554,20 @@ function toggleTelepathy() {
 }
 function processInput(dt) {
   STATE.playerAcceleration.set(0, 0, 0);
-  const inputVec = new Vector3(0, 0, 0);
+  let isThrusting = false;
+  let isRetroBraking = false;
+  let turnInput = 0;
+  STATE.spaceBrakeActive = false;
   if (STATE.keys.w)
-    inputVec.z -= 1;
+    isThrusting = true;
   if (STATE.keys.s)
-    inputVec.z += 1;
+    isRetroBraking = true;
   if (STATE.keys.a)
-    inputVec.x -= 1;
+    turnInput += 1;
   if (STATE.keys.d)
-    inputVec.x += 1;
+    turnInput -= 1;
+  if (STATE.keys.Space || STATE.keys.Shift)
+    STATE.spaceBrakeActive = true;
   let gp = null;
   if (navigator.getGamepads) {
     const gamepads = navigator.getGamepads();
@@ -35481,27 +35588,16 @@ function processInput(dt) {
     const deadzone = 0.15;
     let stickX = gp.axes[0] || 0;
     let stickY = gp.axes[1] || 0;
-    if (Math.abs(stickX) < deadzone)
-      stickX = 0;
-    if (Math.abs(stickY) < deadzone)
-      stickY = 0;
-    if (gp.buttons[12] && gp.buttons[12].pressed)
-      stickY = -1;
-    if (gp.buttons[13] && gp.buttons[13].pressed)
-      stickY = 1;
-    if (gp.buttons[14] && gp.buttons[14].pressed)
-      stickX = -1;
-    if (gp.buttons[15] && gp.buttons[15].pressed)
-      stickX = 1;
-    if (inputVec.lengthSq() === 0 && (Math.abs(stickX) > 0 || Math.abs(stickY) > 0)) {
-      inputVec.set(stickX, 0, stickY);
-    }
-    const ltPressed = gp.buttons[6] && gp.buttons[6].pressed || gp.buttons[6] && gp.buttons[6].value > 0.3;
-    if (ltPressed && !STATE.telepathyActive) {
-      toggleTelepathy();
-    } else if (!ltPressed && STATE.telepathyActive && !STATE.keys.Space) {
-      toggleTelepathy();
-    }
+    let rtVal = gp.buttons[7] ? gp.buttons[7].value : 0;
+    let ltVal = gp.buttons[6] ? gp.buttons[6].value : 0;
+    if (Math.abs(stickX) > deadzone)
+      turnInput -= stickX;
+    if (stickY < -0.3 || rtVal > 0.2)
+      isThrusting = true;
+    if (stickY > 0.3 || ltVal > 0.2)
+      isRetroBraking = true;
+    if (gp.buttons[1] && gp.buttons[1].pressed)
+      STATE.spaceBrakeActive = true;
     if (isPressedEdge(0)) {
       if (STATE.nearestPlanet) {
         const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets && STATE.scannedPlanets[STATE.nearestPlanet.name];
@@ -35518,19 +35614,14 @@ function processInput(dt) {
       triggerHarvestStart();
     if (isPressedEdge(3))
       triggerPsionicSonar();
-    if (isPressedEdge(1)) {
-      if (isMapOpen()) {
-        toggleGalaxyMap();
-      } else if (STATE.lockedTarget) {
-        clearLockedTarget();
-      }
-    }
     if (isPressedEdge(4))
       cycleTarget(-1);
     if (isPressedEdge(5))
       cycleTarget(1);
     if (isPressedEdge(8))
       toggleGalaxyMap();
+    if (isPressedEdge(10))
+      toggleFlightAssist();
     if (isPressedEdge(9)) {
       const mainMenu = document.getElementById("main-menu");
       if (mainMenu && STATE.gameStarted) {
@@ -35539,34 +35630,62 @@ function processInput(dt) {
     }
     prevGpButtons = gp.buttons.map((b) => b ? b.pressed || b.value > 0.5 : false);
   }
-  const isThrusting = inputVec.lengthSq() > 0;
+  if (turnInput !== 0) {
+    STATE.shipAngularVelocity = turnInput * STATE.turnSpeed;
+  } else {
+    STATE.shipAngularVelocity = MathUtils.lerp(STATE.shipAngularVelocity || 0, 0, Math.min(1, dt * 8));
+  }
+  STATE.shipHeading = (STATE.shipHeading || 0) + STATE.shipAngularVelocity * dt;
+  const hasEnergy = STATE.bioEnergy > 0;
+  const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
+  const forwardX = Math.cos(STATE.shipHeading);
+  const forwardZ = -Math.sin(STATE.shipHeading);
+  const forwardDir = new Vector3(forwardX, 0, forwardZ);
   if (isThrusting) {
-    inputVec.normalize();
-    const hasEnergy = STATE.bioEnergy > 0;
-    const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
-    STATE.playerAcceleration.addScaledVector(inputVec, effectiveThrust);
+    STATE.playerAcceleration.addScaledVector(forwardDir, effectiveThrust);
     if (hasEnergy) {
-      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.2 * dt);
+      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 2.6 * dt);
     }
-    if (STATE.playerGroup) {
-      const targetAngle = -Math.atan2(inputVec.z, inputVec.x);
-      let diff = targetAngle - STATE.playerGroup.rotation.y;
-      while (diff < -Math.PI)
-        diff += Math.PI * 2;
-      while (diff > Math.PI)
-        diff -= Math.PI * 2;
-      STATE.playerGroup.rotation.y += diff * Math.min(1, dt * 10);
-      const turnRoll = -diff * 0.35;
-      STATE.playerGroup.rotation.x = MathUtils.lerp(STATE.playerGroup.rotation.x, turnRoll, 0.1);
-    }
-    STATE.currentDrag = STATE.drag;
     setThrusterSound(true);
   } else {
-    if (STATE.playerGroup) {
-      STATE.playerGroup.rotation.x = MathUtils.lerp(STATE.playerGroup.rotation.x, 0, 0.1);
-    }
-    STATE.currentDrag = STATE.brakeDrag;
     setThrusterSound(false);
+  }
+  if (isRetroBraking) {
+    const curSpeed = STATE.playerVelocity.length();
+    if (curSpeed > 0.4) {
+      const counterDir = STATE.playerVelocity.clone().normalize().negate();
+      STATE.playerAcceleration.addScaledVector(counterDir, STATE.retroThrustStrength);
+    } else {
+      STATE.playerAcceleration.addScaledVector(forwardDir, -effectiveThrust * 0.4);
+    }
+    if (hasEnergy) {
+      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.8 * dt);
+    }
+  }
+  if (STATE.spaceBrakeActive) {
+    const curSpeed = STATE.playerVelocity.length();
+    if (curSpeed > 0.1) {
+      const counterDir = STATE.playerVelocity.clone().normalize().negate();
+      STATE.playerAcceleration.addScaledVector(counterDir, STATE.retroThrustStrength * 1.6);
+    }
+  }
+  if (STATE.spaceBrakeActive) {
+    STATE.currentDrag = STATE.brakeDrag;
+  } else if (STATE.flightAssist) {
+    if (!isThrusting && !isRetroBraking) {
+      STATE.currentDrag = 0.85;
+    } else {
+      STATE.currentDrag = STATE.drag;
+    }
+  } else {
+    STATE.currentDrag = STATE.drag;
+  }
+  if (STATE.playerGroup) {
+    STATE.playerGroup.rotation.y = STATE.shipHeading;
+    const targetRoll = -turnInput * 0.32;
+    STATE.playerGroup.rotation.z = MathUtils.lerp(STATE.playerGroup.rotation.z, targetRoll, Math.min(1, dt * 6));
+    const targetPitch = isThrusting ? 0.06 : isRetroBraking ? -0.06 : 0;
+    STATE.playerGroup.rotation.x = MathUtils.lerp(STATE.playerGroup.rotation.x, targetPitch, Math.min(1, dt * 6));
   }
 }
 
@@ -35923,8 +36042,17 @@ function updatePhysics(dt) {
     }
   }
   STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
+  const maxSpeed = 80;
+  if (STATE.playerVelocity.lengthSq() > maxSpeed * maxSpeed) {
+    STATE.playerVelocity.setLength(maxSpeed);
+  }
   STATE.playerVelocity.multiplyScalar(Math.exp(-STATE.currentDrag * dt));
   STATE.playerPosition.addScaledVector(STATE.playerVelocity, dt);
+  STATE.shipSpeed = STATE.playerVelocity.length();
+  if (STATE.shipSpeed > 0.05) {
+    STATE.progradeVector.copy(STATE.playerVelocity).normalize();
+  }
+  updateSpaceDust(dt);
   const maxBound = 500;
   if (STATE.playerPosition.x > maxBound) {
     STATE.playerPosition.x = -maxBound;
@@ -36140,6 +36268,7 @@ function init() {
   initPostProcessing();
   createPlayerMesh();
   initTrajectory();
+  initSpaceDust();
   setupControls();
   initHUD();
   initDeckUI();

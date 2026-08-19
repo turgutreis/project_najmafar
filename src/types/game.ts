@@ -287,11 +287,19 @@ export interface GameState {
         translator: MutationItem;
     };
 
-    // Physics
+    // Physics & Space Flight Dynamics
     playerPosition: THREE.Vector3;
     playerVelocity: THREE.Vector3;
     playerAcceleration: THREE.Vector3;
     thrustStrength: number;
+    retroThrustStrength: number;
+    turnSpeed: number;
+    shipHeading: number;
+    shipAngularVelocity: number;
+    flightAssist: boolean;
+    spaceBrakeActive: boolean;
+    shipSpeed: number;
+    progradeVector: THREE.Vector3;
     drag: number;
     brakeDrag: number;
     currentDrag: number;
@@ -304,6 +312,8 @@ export interface GameState {
         d: boolean;
         Space: boolean;
         x: boolean;
+        z: boolean;
+        Shift: boolean;
     };
 
     // Quantum Universe
