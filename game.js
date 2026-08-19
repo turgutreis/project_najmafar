@@ -28747,16 +28747,16 @@ var STATE = {
     translator: { purchased: false, bioCost: 120, siliconCost: 80 }
   },
   playerPosition: new Vector3(0, 0, 75),
-  playerVelocity: new Vector3(5.2, 0, 0),
+  playerVelocity: new Vector3(2.5, 0, 0),
   playerAcceleration: new Vector3(0, 0, 0),
-  thrustStrength: 28,
-  retroThrustStrength: 22,
-  turnSpeed: 3.4,
+  thrustStrength: 15,
+  retroThrustStrength: 13,
+  turnSpeed: 2.2,
   shipHeading: 0,
   shipAngularVelocity: 0,
   flightAssist: false,
   spaceBrakeActive: false,
-  shipSpeed: 5.2,
+  shipSpeed: 2.5,
   progradeVector: new Vector3(1, 0, 0),
   drag: 0.005,
   brakeDrag: 1.6,
@@ -36048,7 +36048,7 @@ function updatePhysics(dt) {
     }
   }
   STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
-  const maxSpeed = 80;
+  const maxSpeed = 36;
   if (STATE.playerVelocity.lengthSq() > maxSpeed * maxSpeed) {
     STATE.playerVelocity.setLength(maxSpeed);
   }
@@ -36301,7 +36301,7 @@ function setupMenuListeners() {
         clearActiveSystem();
         spawnPlanetsAndAsteroids();
         STATE.playerPosition.set(0, 0, 65);
-        STATE.playerVelocity.set(5, 0, 0);
+        STATE.playerVelocity.set(2.5, 0, 0);
         if (STATE.playerGroup) {
           STATE.playerGroup.position.set(0, 0, 65);
         }
