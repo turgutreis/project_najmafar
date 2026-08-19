@@ -29881,7 +29881,7 @@ function onWindowResize() {
 }
 
 // src/engine/trajectory.ts
-var DASH_SEGMENTS = 130;
+var DASH_SEGMENTS = 140;
 var TRAJECTORY_DT = 0.08;
 var DASH_RATIO = 0.65;
 var SOFTENING_SQ = 25;
@@ -29904,7 +29904,7 @@ function initTrajectory() {
   const material = new LineBasicMaterial({
     vertexColors: true,
     transparent: true,
-    opacity: 0.92,
+    opacity: 0.9,
     linewidth: 2,
     blending: AdditiveBlending,
     depthWrite: false
@@ -29946,19 +29946,14 @@ function calculateGravityAt(pos, simTime, outAcc) {
 function updateTrajectory() {
   if (!trajectoryLines)
     return;
+  const curSpeed = STATE.playerVelocity.length();
+  if (curSpeed < 0.15) {
+    trajectoryLines.visible = false;
+    return;
+  }
   trajectoryLines.visible = true;
   _predPos.copy(STATE.playerPosition);
   _predVel.copy(STATE.playerVelocity);
-  const isThrusting = STATE.keys ? STATE.keys.w : false;
-  const isBraking = STATE.keys ? STATE.keys.s : false;
-  if (isThrusting) {
-    const hasEnergy = STATE.bioEnergy > 0;
-    const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
-    const fX = Math.cos(STATE.shipHeading || 0);
-    const fZ = -Math.sin(STATE.shipHeading || 0);
-    _predVel.x += fX * effectiveThrust * 0.22;
-    _predVel.z += fZ * effectiveThrust * 0.22;
-  }
   for (let seg = 0;seg < DASH_SEGMENTS; seg++) {
     const simTime = seg * TRAJECTORY_DT;
     _segmentStart.copy(_predPos);
@@ -29982,23 +29977,16 @@ function updateTrajectory() {
     trajectoryPositions[v1 * 3 + 1] = 0.25;
     trajectoryPositions[v1 * 3 + 2] = _segmentEnd.z;
     const progress = seg / DASH_SEGMENTS;
-    const alpha = Math.max(0.08, Math.pow(1 - progress, 1.15) * 0.95);
-    let r = 0.22, g = 0.78, b = 0.98;
-    if (isThrusting) {
-      r = 0.05;
-      g = 0.95;
-      b = 0.55;
-    } else if (isBraking) {
-      r = 0.95;
-      g = 0.4;
-      b = 0.2;
-    }
-    trajectoryColors[v0 * 3 + 0] = r * alpha;
-    trajectoryColors[v0 * 3 + 1] = g * alpha;
-    trajectoryColors[v0 * 3 + 2] = b * alpha;
-    trajectoryColors[v1 * 3 + 0] = r * alpha;
-    trajectoryColors[v1 * 3 + 1] = g * alpha;
-    trajectoryColors[v1 * 3 + 2] = b * alpha;
+    const alpha = Math.max(0.06, Math.pow(1 - progress, 1.2) * 0.92);
+    const r = 0.2 * alpha;
+    const g = 0.76 * alpha;
+    const b = 0.98 * alpha;
+    trajectoryColors[v0 * 3 + 0] = r;
+    trajectoryColors[v0 * 3 + 1] = g;
+    trajectoryColors[v0 * 3 + 2] = b;
+    trajectoryColors[v1 * 3 + 0] = r;
+    trajectoryColors[v1 * 3 + 1] = g;
+    trajectoryColors[v1 * 3 + 2] = b;
   }
   trajectoryGeometry.attributes.position.needsUpdate = true;
   trajectoryGeometry.attributes.color.needsUpdate = true;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
 import { scene } from './scene';
 
-const DASH_SEGMENTS = 130; // 130 dashed road segments (260 vertices)
+const DASH_SEGMENTS = 140; // 140 dashed road segments (280 vertices)
 const TRAJECTORY_DT = 0.08;
 const DASH_RATIO = 0.65; // 65% dash, 35% gap
 const SOFTENING_SQ = 25.0;
@@ -19,7 +19,6 @@ const _segmentStart = new THREE.Vector3();
 const _segmentEnd = new THREE.Vector3();
 
 export function initTrajectory() {
-    // 2 vertices per segment
     const vertexCount = DASH_SEGMENTS * 2;
     trajectoryGeometry = new THREE.BufferGeometry();
     trajectoryPositions = new Float32Array(vertexCount * 3);
@@ -31,7 +30,7 @@ export function initTrajectory() {
     const material = new THREE.LineBasicMaterial({
         vertexColors: true,
         transparent: true,
-        opacity: 0.92,
+        opacity: 0.9,
         linewidth: 2.0,
         blending: THREE.AdditiveBlending,
         depthWrite: false
@@ -53,7 +52,7 @@ function calculateGravityAt(pos: THREE.Vector3, simTime: number, outAcc: THREE.V
         let sourceX = source.position.x;
         let sourceZ = source.position.z;
 
-        // Predict orbital planetary motion
+        // Predict moving planetary orbits in future simulation time
         if (source.type === 'planet') {
             const planetEntry = activePlanets.find(p => p.source === source);
             if (planetEntry && !planetEntry.isMoon) {
@@ -70,7 +69,7 @@ function calculateGravityAt(pos: THREE.Vector3, simTime: number, outAcc: THREE.V
 
         if (distSq < rangeSq) {
             const distance = Math.sqrt(distSq);
-            // Softened inverse-square law
+            // Softened Plummer gravity: F = G*M / (r^2 + r_soft^2)
             const forceStrength = (STATE.gConstant * source.mass) / (distSq + SOFTENING_SQ);
             const invDist = 1 / Math.max(0.1, distance);
 
@@ -82,28 +81,24 @@ function calculateGravityAt(pos: THREE.Vector3, simTime: number, outAcc: THREE.V
 
 export function updateTrajectory() {
     if (!trajectoryLines) return;
+
+    const curSpeed = STATE.playerVelocity.length();
+
+    // Hide trajectory if ship is nearly stationary
+    if (curSpeed < 0.15) {
+        trajectoryLines.visible = false;
+        return;
+    }
     trajectoryLines.visible = true;
 
+    // Pure ballistic orbital trajectory based strictly on current position & velocity
     _predPos.copy(STATE.playerPosition);
     _predVel.copy(STATE.playerVelocity);
-
-    const isThrusting = STATE.keys ? STATE.keys.w : false;
-    const isBraking = STATE.keys ? STATE.keys.s : false;
-
-    // Apply immediate forward impulse when holding W
-    if (isThrusting) {
-        const hasEnergy = STATE.bioEnergy > 0;
-        const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
-        const fX = Math.cos(STATE.shipHeading || 0);
-        const fZ = -Math.sin(STATE.shipHeading || 0);
-        _predVel.x += fX * effectiveThrust * 0.22;
-        _predVel.z += fZ * effectiveThrust * 0.22;
-    }
 
     for (let seg = 0; seg < DASH_SEGMENTS; seg++) {
         const simTime = seg * TRAJECTORY_DT;
 
-        // 1. Dash Start Vertex
+        // 1. Dash Start
         _segmentStart.copy(_predPos);
 
         // Advance sub-step for the dash segment length
@@ -113,7 +108,7 @@ export function updateTrajectory() {
         _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * dashDt));
         _predPos.addScaledVector(_predVel, dashDt);
 
-        // 2. Dash End Vertex
+        // 2. Dash End
         _segmentEnd.copy(_predPos);
 
         // Advance sub-step for the gap
@@ -123,7 +118,7 @@ export function updateTrajectory() {
         _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * gapDt));
         _predPos.addScaledVector(_predVel, gapDt);
 
-        // Store segment vertices (2 vertices per dash)
+        // Store vertices (2 vertices per dash segment)
         const v0 = seg * 2;
         const v1 = seg * 2 + 1;
 
@@ -137,23 +132,20 @@ export function updateTrajectory() {
 
         // Smooth alpha fade across distance
         const progress = seg / DASH_SEGMENTS;
-        const alpha = Math.max(0.08, Math.pow(1.0 - progress, 1.15) * 0.95);
+        const alpha = Math.max(0.06, Math.pow(1.0 - progress, 1.2) * 0.92);
 
-        let r = 0.22, g = 0.78, b = 0.98; // Cyan / Azure default orbital drift
-        if (isThrusting) {
-            r = 0.05; g = 0.95; b = 0.55; // Emerald on thrust
-        } else if (isBraking) {
-            r = 0.95; g = 0.40; b = 0.20; // Amber / Red on retro-brake
-        }
+        // Holographic Azure / Electric Cyan
+        const r = 0.20 * alpha;
+        const g = 0.76 * alpha;
+        const b = 0.98 * alpha;
 
-        // Apply vertex colors with distance fade
-        trajectoryColors[v0 * 3 + 0] = r * alpha;
-        trajectoryColors[v0 * 3 + 1] = g * alpha;
-        trajectoryColors[v0 * 3 + 2] = b * alpha;
+        trajectoryColors[v0 * 3 + 0] = r;
+        trajectoryColors[v0 * 3 + 1] = g;
+        trajectoryColors[v0 * 3 + 2] = b;
 
-        trajectoryColors[v1 * 3 + 0] = r * alpha;
-        trajectoryColors[v1 * 3 + 1] = g * alpha;
-        trajectoryColors[v1 * 3 + 2] = b * alpha;
+        trajectoryColors[v1 * 3 + 0] = r;
+        trajectoryColors[v1 * 3 + 1] = g;
+        trajectoryColors[v1 * 3 + 2] = b;
     }
 
     trajectoryGeometry.attributes.position.needsUpdate = true;
