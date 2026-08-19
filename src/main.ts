@@ -3,7 +3,6 @@ import { STATE } from './core/state';
 import { initScene, starfieldController, renderer, scene, camera } from './engine/scene';
 import { initPostProcessing, renderPostProcessing } from './engine/postprocessing';
 import { initTrajectory, updateTrajectory } from './engine/trajectory';
-import { initSpaceDust } from './engine/space-dust';
 import { createPlayerMesh, playerMesh, playerGlowMesh, playerLight, thrustLight, empLight, alienShipController, gravityCircles } from './procedural/meshes';
 import { setupControls, processInput } from './input/controls';
 import { checkUniverseData, clearActiveSystem, spawnPlanetsAndAsteroids, updateUniverseShaders } from './systems/universe';
@@ -103,10 +102,9 @@ function init() {
     initScene(container);
     initPostProcessing();
 
-    // 2. Meshes, Trajectory & Space Dust
+    // 2. Meshes & Trajectory
     createPlayerMesh();
     initTrajectory();
-    initSpaceDust();
 
     // 3. UI & Controls
     setupControls();
