@@ -33929,7 +33929,7 @@ async function checkUniverseData() {
       if (startBtn) {
         startBtn.removeAttribute("disabled");
         startBtn.style.opacity = "1";
-        startBtn.innerText = "Najmafar betreten";
+        startBtn.innerText = "Die Leere Betreten";
       }
       const status = document.getElementById("generation-status");
       const mapBadge = document.getElementById("galaxy-provenance-badge");
