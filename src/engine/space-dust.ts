@@ -4,8 +4,8 @@ import { scene } from './scene';
 
 let dustPoints: THREE.Points | null = null;
 let dustGeo: THREE.BufferGeometry | null = null;
-const DUST_COUNT = 450;
-const DUST_BOUNDS = 75;
+const DUST_COUNT = 90;
+const DUST_BOUNDS = 90;
 
 export function initSpaceDust() {
     if (dustPoints) return;
@@ -16,12 +16,12 @@ export function initSpaceDust() {
 
     for (let i = 0; i < DUST_COUNT; i++) {
         positions[i * 3 + 0] = (Math.random() - 0.5) * DUST_BOUNDS * 2;
-        positions[i * 3 + 1] = (Math.random() - 0.5) * 16;
+        positions[i * 3 + 1] = (Math.random() - 0.5) * 12;
         positions[i * 3 + 2] = (Math.random() - 0.5) * DUST_BOUNDS * 2;
 
-        const r = 0.3 + Math.random() * 0.4;
-        const g = 0.7 + Math.random() * 0.3;
-        const b = 0.95 + Math.random() * 0.05;
+        const r = 0.4 + Math.random() * 0.3;
+        const g = 0.7 + Math.random() * 0.2;
+        const b = 0.9 + Math.random() * 0.1;
 
         colors[i * 3 + 0] = r;
         colors[i * 3 + 1] = g;
@@ -32,24 +32,24 @@ export function initSpaceDust() {
     dustGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
     const canvas = document.createElement('canvas');
-    canvas.width = 32;
-    canvas.height = 32;
+    canvas.width = 16;
+    canvas.height = 16;
     const ctx = canvas.getContext('2d')!;
-    const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    grad.addColorStop(0.3, 'rgba(56, 189, 248, 0.7)');
+    const grad = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+    grad.addColorStop(0.4, 'rgba(56, 189, 248, 0.4)');
     grad.addColorStop(1, 'rgba(56, 189, 248, 0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 32, 32);
+    ctx.fillRect(0, 0, 16, 16);
 
     const dustTex = new THREE.CanvasTexture(canvas);
 
     const dustMat = new THREE.PointsMaterial({
-        size: 1.9,
+        size: 0.85,
         vertexColors: true,
         map: dustTex,
         transparent: true,
-        opacity: 0.8,
+        opacity: 0.28,
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });

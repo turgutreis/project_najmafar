@@ -29884,8 +29884,8 @@ function onWindowResize() {
 }
 
 // src/engine/trajectory.ts
-var TRAJECTORY_STEPS = 160;
-var TRAJECTORY_DT = 0.08;
+var TRAJECTORY_STEPS = 65;
+var TRAJECTORY_DT = 0.055;
 var trajectoryGeometry;
 var trajectoryLine;
 var trajectoryPositions;
@@ -29893,8 +29893,6 @@ var trajectoryColors;
 var _predPos = new Vector3;
 var _predVel = new Vector3;
 var _predAcc = new Vector3;
-var _thrustAcc = new Vector3;
-var _inputDir = new Vector3;
 function initTrajectory() {
   trajectoryGeometry = new BufferGeometry;
   trajectoryPositions = new Float32Array(TRAJECTORY_STEPS * 3);
@@ -29904,9 +29902,10 @@ function initTrajectory() {
   const material = new LineBasicMaterial({
     vertexColors: true,
     transparent: true,
-    opacity: 0.85,
-    linewidth: 1.5,
-    blending: AdditiveBlending
+    opacity: 0.7,
+    linewidth: 1.2,
+    blending: AdditiveBlending,
+    depthWrite: false
   });
   trajectoryLine = new Line(trajectoryGeometry, material);
   scene.add(trajectoryLine);
@@ -29914,43 +29913,26 @@ function initTrajectory() {
 function updateTrajectory() {
   if (!trajectoryLine)
     return;
+  const curSpeed = STATE.playerVelocity.length();
+  if (curSpeed < 0.4) {
+    trajectoryLine.visible = false;
+    return;
+  }
+  trajectoryLine.visible = true;
   _predPos.copy(STATE.playerPosition);
   _predVel.copy(STATE.playerVelocity);
-  _inputDir.set(0, 0, 0);
-  if (STATE.keys.w)
-    _inputDir.z -= 1;
-  if (STATE.keys.s)
-    _inputDir.z += 1;
-  if (STATE.keys.a)
-    _inputDir.x -= 1;
-  if (STATE.keys.d)
-    _inputDir.x += 1;
-  const isThrusting = _inputDir.lengthSq() > 0;
-  if (isThrusting) {
-    _inputDir.normalize();
-    const thrustMult = STATE.crewBuffs ? STATE.crewBuffs.thrust : 1;
-    _thrustAcc.copy(_inputDir).multiplyScalar(STATE.thrustStrength * thrustMult);
-  } else {
-    _thrustAcc.set(0, 0, 0);
-  }
   const sources = STATE.gravitySources;
   const sourceCount = sources.length;
   for (let step = 0;step < TRAJECTORY_STEPS; step++) {
-    trajectoryPositions[step * 3] = _predPos.x;
+    trajectoryPositions[step * 3 + 0] = _predPos.x;
     trajectoryPositions[step * 3 + 1] = 0.1;
     trajectoryPositions[step * 3 + 2] = _predPos.z;
-    const progress = step / TRAJECTORY_STEPS;
-    const alpha = 1 - progress * 0.9;
-    if (isThrusting) {
-      trajectoryColors[step * 3] = 0 * alpha;
-      trajectoryColors[step * 3 + 1] = 1 * alpha;
-      trajectoryColors[step * 3 + 2] = 0.53 * alpha;
-    } else {
-      trajectoryColors[step * 3] = 0.22 * alpha;
-      trajectoryColors[step * 3 + 1] = 0.74 * alpha;
-      trajectoryColors[step * 3 + 2] = 0.97 * alpha;
-    }
-    _predAcc.copy(_thrustAcc);
+    const t = step / TRAJECTORY_STEPS;
+    const alpha = Math.pow(1 - t, 1.8) * Math.min(1, (curSpeed - 0.4) * 2);
+    trajectoryColors[step * 3 + 0] = 0.22 * alpha;
+    trajectoryColors[step * 3 + 1] = 0.75 * alpha;
+    trajectoryColors[step * 3 + 2] = 0.98 * alpha;
+    _predAcc.set(0, 0, 0);
     for (let s = 0;s < sourceCount; s++) {
       const source = sources[s];
       if (source.isAbsorbed)
@@ -29961,7 +29943,7 @@ function updateTrajectory() {
       const rangeSq = source.gravityRange * source.gravityRange;
       if (distSq < rangeSq && distSq > 0.01) {
         const distance = Math.sqrt(distSq);
-        const clampedDist = Math.max(distance, source.radius * 1.1);
+        const clampedDist = Math.max(distance, source.radius * 1.15);
         const forceStrength = STATE.gConstant * source.mass / (clampedDist * clampedDist);
         const invDist = 1 / distance;
         _predAcc.x += dx * invDist * forceStrength;
@@ -29979,8 +29961,8 @@ function updateTrajectory() {
 // src/engine/space-dust.ts
 var dustPoints = null;
 var dustGeo = null;
-var DUST_COUNT = 450;
-var DUST_BOUNDS = 75;
+var DUST_COUNT = 90;
+var DUST_BOUNDS = 90;
 function initSpaceDust() {
   if (dustPoints)
     return;
@@ -29989,11 +29971,11 @@ function initSpaceDust() {
   const colors = new Float32Array(DUST_COUNT * 3);
   for (let i = 0;i < DUST_COUNT; i++) {
     positions[i * 3 + 0] = (Math.random() - 0.5) * DUST_BOUNDS * 2;
-    positions[i * 3 + 1] = (Math.random() - 0.5) * 16;
+    positions[i * 3 + 1] = (Math.random() - 0.5) * 12;
     positions[i * 3 + 2] = (Math.random() - 0.5) * DUST_BOUNDS * 2;
-    const r = 0.3 + Math.random() * 0.4;
-    const g = 0.7 + Math.random() * 0.3;
-    const b = 0.95 + Math.random() * 0.05;
+    const r = 0.4 + Math.random() * 0.3;
+    const g = 0.7 + Math.random() * 0.2;
+    const b = 0.9 + Math.random() * 0.1;
     colors[i * 3 + 0] = r;
     colors[i * 3 + 1] = g;
     colors[i * 3 + 2] = b;
@@ -30001,22 +29983,22 @@ function initSpaceDust() {
   dustGeo.setAttribute("position", new BufferAttribute(positions, 3));
   dustGeo.setAttribute("color", new BufferAttribute(colors, 3));
   const canvas = document.createElement("canvas");
-  canvas.width = 32;
-  canvas.height = 32;
+  canvas.width = 16;
+  canvas.height = 16;
   const ctx = canvas.getContext("2d");
-  const grad = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  grad.addColorStop(0, "rgba(255, 255, 255, 1)");
-  grad.addColorStop(0.3, "rgba(56, 189, 248, 0.7)");
+  const grad = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+  grad.addColorStop(0, "rgba(255, 255, 255, 0.8)");
+  grad.addColorStop(0.4, "rgba(56, 189, 248, 0.4)");
   grad.addColorStop(1, "rgba(56, 189, 248, 0)");
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 32, 32);
+  ctx.fillRect(0, 0, 16, 16);
   const dustTex = new CanvasTexture(canvas);
   const dustMat = new PointsMaterial({
-    size: 1.9,
+    size: 0.85,
     vertexColors: true,
     map: dustTex,
     transparent: true,
-    opacity: 0.8,
+    opacity: 0.28,
     blending: AdditiveBlending,
     depthWrite: false
   });
@@ -35888,7 +35870,7 @@ function clearExplosionFX() {
 // src/engine/physics.ts
 var _predPos2 = new Vector3;
 var _bounceDir = new Vector3;
-var _inputDir2 = new Vector3;
+var _inputDir = new Vector3;
 function updatePhysics(dt) {
   activePlanets.forEach((p) => {
     if (!p.isMoon) {

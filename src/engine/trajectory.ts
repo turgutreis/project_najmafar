@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { STATE } from '../core/state';
 import { scene } from './scene';
 
-const TRAJECTORY_STEPS = 160;
-const TRAJECTORY_DT = 0.08;
+const TRAJECTORY_STEPS = 65;
+const TRAJECTORY_DT = 0.055;
 
 let trajectoryGeometry: THREE.BufferGeometry;
 let trajectoryLine: THREE.Line;
@@ -13,8 +13,6 @@ let trajectoryColors: Float32Array;
 const _predPos = new THREE.Vector3();
 const _predVel = new THREE.Vector3();
 const _predAcc = new THREE.Vector3();
-const _thrustAcc = new THREE.Vector3();
-const _inputDir = new THREE.Vector3();
 
 export function initTrajectory() {
     trajectoryGeometry = new THREE.BufferGeometry();
@@ -27,9 +25,10 @@ export function initTrajectory() {
     const material = new THREE.LineBasicMaterial({
         vertexColors: true,
         transparent: true,
-        opacity: 0.85,
-        linewidth: 1.5,
-        blending: THREE.AdditiveBlending
+        opacity: 0.7,
+        linewidth: 1.2,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
     });
 
     trajectoryLine = new THREE.Line(trajectoryGeometry, material);
@@ -39,46 +38,37 @@ export function initTrajectory() {
 export function updateTrajectory() {
     if (!trajectoryLine) return;
 
+    const curSpeed = STATE.playerVelocity.length();
+
+    // Hide or collapse trajectory when ship is nearly motionless
+    if (curSpeed < 0.4) {
+        trajectoryLine.visible = false;
+        return;
+    }
+    trajectoryLine.visible = true;
+
     _predPos.copy(STATE.playerPosition);
     _predVel.copy(STATE.playerVelocity);
-
-    _inputDir.set(0, 0, 0);
-    if (STATE.keys.w) _inputDir.z -= 1;
-    if (STATE.keys.s) _inputDir.z += 1;
-    if (STATE.keys.a) _inputDir.x -= 1;
-    if (STATE.keys.d) _inputDir.x += 1;
-
-    const isThrusting = _inputDir.lengthSq() > 0;
-    if (isThrusting) {
-        _inputDir.normalize();
-        const thrustMult = (STATE.crewBuffs ? STATE.crewBuffs.thrust : 1.0);
-        _thrustAcc.copy(_inputDir).multiplyScalar(STATE.thrustStrength * thrustMult);
-    } else {
-        _thrustAcc.set(0, 0, 0);
-    }
 
     const sources = STATE.gravitySources;
     const sourceCount = sources.length;
 
     for (let step = 0; step < TRAJECTORY_STEPS; step++) {
-        trajectoryPositions[step * 3] = _predPos.x;
+        trajectoryPositions[step * 3 + 0] = _predPos.x;
         trajectoryPositions[step * 3 + 1] = 0.1;
         trajectoryPositions[step * 3 + 2] = _predPos.z;
 
-        const progress = step / TRAJECTORY_STEPS;
-        const alpha = 1.0 - progress * 0.9;
+        // Smooth quadratic alpha fade-out into the distance
+        const t = step / TRAJECTORY_STEPS;
+        const alpha = Math.pow(1.0 - t, 1.8) * Math.min(1.0, (curSpeed - 0.4) * 2.0);
 
-        if (isThrusting) {
-            trajectoryColors[step * 3] = 0.0 * alpha;
-            trajectoryColors[step * 3 + 1] = 1.0 * alpha;
-            trajectoryColors[step * 3 + 2] = 0.53 * alpha;
-        } else {
-            trajectoryColors[step * 3] = 0.22 * alpha;
-            trajectoryColors[step * 3 + 1] = 0.74 * alpha;
-            trajectoryColors[step * 3 + 2] = 0.97 * alpha;
-        }
+        // Soft Cyan / Psionic Azure line color
+        trajectoryColors[step * 3 + 0] = 0.22 * alpha;
+        trajectoryColors[step * 3 + 1] = 0.75 * alpha;
+        trajectoryColors[step * 3 + 2] = 0.98 * alpha;
 
-        _predAcc.copy(_thrustAcc);
+        // Gravitational prediction across planetary/solar wells
+        _predAcc.set(0, 0, 0);
 
         for (let s = 0; s < sourceCount; s++) {
             const source = sources[s];
@@ -91,7 +81,7 @@ export function updateTrajectory() {
 
             if (distSq < rangeSq && distSq > 0.01) {
                 const distance = Math.sqrt(distSq);
-                const clampedDist = Math.max(distance, source.radius * 1.1);
+                const clampedDist = Math.max(distance, source.radius * 1.15);
                 const forceStrength = (STATE.gConstant * source.mass) / (clampedDist * clampedDist);
                 const invDist = 1 / distance;
 
