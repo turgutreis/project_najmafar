@@ -36129,52 +36129,55 @@ function updatePhysics(dt) {
   if (STATE.playerGroup) {
     STATE.playerGroup.position.copy(STATE.playerPosition);
   }
-  let nearestBody = null;
-  let nearestBodyDist = Infinity;
+  let nearestPlanet = null;
+  let nearestPlanetDist = Infinity;
   activePlanets.forEach((p) => {
-    const dx = STATE.playerPosition.x - p.mesh.position.x;
-    const dz = STATE.playerPosition.z - p.mesh.position.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < nearestBodyDist) {
-      nearestBodyDist = dist;
-      nearestBody = p;
+    if (!p.isMoon) {
+      const dx = STATE.playerPosition.x - p.mesh.position.x;
+      const dz = STATE.playerPosition.z - p.mesh.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < nearestPlanetDist) {
+        nearestPlanetDist = dist;
+        nearestPlanet = p;
+      }
     }
   });
   let targetCamX = STATE.playerPosition.x;
   let targetCamZ = STATE.playerPosition.z;
-  if (nearestBody) {
-    const orbitTriggerDist = Math.max(22, (nearestBody.size || 2.5) * 5.2);
-    if (nearestBodyDist < orbitTriggerDist) {
+  if (nearestPlanet) {
+    const orbitTriggerDist = Math.max(48, (nearestPlanet.size || 2.5) * 14);
+    if (nearestPlanetDist < orbitTriggerDist) {
       STATE.isInPlanetOrbit = true;
-      STATE.orbitPlanet = nearestBody;
-      const rawProximity = Math.max(0, Math.min(1, 1 - nearestBodyDist / orbitTriggerDist));
-      STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, rawProximity, Math.min(1, dt * 3.5));
-      const minOrbitHeight = Math.max(24, (nearestBody.size || 2.5) * 6.5);
-      STATE.targetCameraHeight = MathUtils.lerp(70, minOrbitHeight, STATE.orbitZoomFactor);
-      const framingWeight = 0.24 * STATE.orbitZoomFactor;
-      targetCamX = MathUtils.lerp(STATE.playerPosition.x, nearestBody.mesh.position.x, framingWeight);
-      targetCamZ = MathUtils.lerp(STATE.playerPosition.z, nearestBody.mesh.position.z, framingWeight);
-      const targetFov = MathUtils.lerp(60, 48, STATE.orbitZoomFactor);
+      STATE.orbitPlanet = nearestPlanet;
+      const rawProximity = Math.max(0, Math.min(1, 1 - nearestPlanetDist / orbitTriggerDist));
+      const easedProximity = Math.sin(rawProximity * Math.PI / 2);
+      STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1, dt * 4.5));
+      const minOrbitHeight = Math.max(20, (nearestPlanet.size || 2.5) * 5.5);
+      STATE.targetCameraHeight = MathUtils.lerp(75, minOrbitHeight, STATE.orbitZoomFactor);
+      const framingWeight = 0.32 * STATE.orbitZoomFactor;
+      targetCamX = MathUtils.lerp(STATE.playerPosition.x, nearestPlanet.mesh.position.x, framingWeight);
+      targetCamZ = MathUtils.lerp(STATE.playerPosition.z, nearestPlanet.mesh.position.z, framingWeight);
+      const targetFov = MathUtils.lerp(60, 42, STATE.orbitZoomFactor);
       if (Math.abs(camera.fov - targetFov) > 0.05) {
         camera.fov = targetFov;
         camera.updateProjectionMatrix();
       }
     } else {
       STATE.isInPlanetOrbit = false;
-      STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1, dt * 2.5));
-      STATE.targetCameraHeight = 70;
+      STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1, dt * 3.5));
+      STATE.targetCameraHeight = 75;
       if (camera.fov !== 60) {
-        camera.fov = MathUtils.lerp(camera.fov, 60, Math.min(1, dt * 2.5));
+        camera.fov = MathUtils.lerp(camera.fov, 60, Math.min(1, dt * 3.5));
         camera.updateProjectionMatrix();
       }
     }
   } else {
     STATE.isInPlanetOrbit = false;
-    STATE.targetCameraHeight = 70;
+    STATE.targetCameraHeight = 75;
   }
-  camera.position.x = MathUtils.lerp(camera.position.x, targetCamX, Math.min(1, dt * 4.5));
-  camera.position.z = MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1, dt * 4.5));
-  STATE.cameraHeight = MathUtils.lerp(STATE.cameraHeight || 70, STATE.targetCameraHeight || 70, Math.min(1, dt * 4));
+  camera.position.x = MathUtils.lerp(camera.position.x, targetCamX, Math.min(1, dt * 5.5));
+  camera.position.z = MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1, dt * 5.5));
+  STATE.cameraHeight = MathUtils.lerp(STATE.cameraHeight || 75, STATE.targetCameraHeight || 75, Math.min(1, dt * 5));
   camera.position.y = STATE.cameraHeight;
   if (STATE.health <= 0 && !STATE.isGameOver && STATE.gameStarted) {
     triggerGameOver("Biologischer Zellkern kollabiert durch extreme Umwelteinflüsse & Hüllenschaden.");

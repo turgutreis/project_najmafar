@@ -589,8 +589,8 @@ export function updateActivePlanets(dt: number) {
             // Dynamic Sub-System Expansion: Expand moon distance when zooming into planetary orbit
             const isOrbitFocus = !!(STATE.isInPlanetOrbit && (STATE.orbitPlanet === p.parentPlanet || STATE.orbitPlanet === p));
             const baseDist = p.baseDistance || 6.0;
-            const targetDist = isOrbitFocus ? (baseDist * 2.2 + 5.0) : baseDist;
-            p.distance = THREE.MathUtils.lerp(p.distance, targetDist, Math.min(1.0, dt * 3.0));
+            const targetDist = isOrbitFocus ? (baseDist * 3.2 + 8.0) : baseDist;
+            p.distance = THREE.MathUtils.lerp(p.distance, targetDist, Math.min(1.0, dt * 4.0));
 
             p.angle += p.speed * dt;
             const parentPos = p.parentPlanet.mesh.position;
