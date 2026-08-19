@@ -29884,8 +29884,9 @@ function onWindowResize() {
 }
 
 // src/engine/trajectory.ts
-var TRAJECTORY_STEPS = 140;
-var TRAJECTORY_DT = 0.08;
+var TRAJECTORY_STEPS = 85;
+var TRAJECTORY_DT = 0.07;
+var SOFTENING_SQ = 9;
 var trajectoryGeometry;
 var trajectoryLine;
 var trajectoryPositions;
@@ -29893,7 +29894,6 @@ var trajectoryColors;
 var _predPos = new Vector3;
 var _predVel = new Vector3;
 var _predAcc = new Vector3;
-var _thrustAcc = new Vector3;
 function initTrajectory() {
   trajectoryGeometry = new BufferGeometry;
   trajectoryPositions = new Float32Array(TRAJECTORY_STEPS * 3);
@@ -29914,61 +29914,83 @@ function initTrajectory() {
 function updateTrajectory() {
   if (!trajectoryLine)
     return;
-  _predPos.copy(STATE.playerPosition);
-  _predVel.copy(STATE.playerVelocity);
+  const curSpeed = STATE.playerVelocity.length();
   const isThrusting = STATE.keys ? STATE.keys.w : false;
   const isBraking = STATE.keys ? STATE.keys.s || STATE.spaceBrakeActive : false;
+  if (curSpeed < 0.2 && !isThrusting) {
+    trajectoryLine.visible = false;
+    return;
+  }
+  trajectoryLine.visible = true;
+  _predPos.copy(STATE.playerPosition);
+  _predVel.copy(STATE.playerVelocity);
   if (isThrusting) {
     const hasEnergy = STATE.bioEnergy > 0;
     const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
-    const thrustMult = STATE.crewBuffs ? STATE.crewBuffs.thrust : 1;
     const fX = Math.cos(STATE.shipHeading || 0);
     const fZ = -Math.sin(STATE.shipHeading || 0);
-    _thrustAcc.set(fX, 0, fZ).multiplyScalar(effectiveThrust * thrustMult);
-  } else if (isBraking) {
-    if (_predVel.lengthSq() > 0.1) {
-      _thrustAcc.copy(_predVel).normalize().negate().multiplyScalar(STATE.retroThrustStrength);
-    } else {
-      _thrustAcc.set(0, 0, 0);
-    }
-  } else {
-    _thrustAcc.set(0, 0, 0);
+    _predVel.x += fX * effectiveThrust * 0.12;
+    _predVel.z += fZ * effectiveThrust * 0.12;
   }
   const sources = STATE.gravitySources;
   const sourceCount = sources.length;
+  let hitBody = false;
   for (let step = 0;step < TRAJECTORY_STEPS; step++) {
+    if (hitBody) {
+      trajectoryPositions[step * 3 + 0] = _predPos.x;
+      trajectoryPositions[step * 3 + 1] = 0.1;
+      trajectoryPositions[step * 3 + 2] = _predPos.z;
+      trajectoryColors[step * 3 + 0] = 0;
+      trajectoryColors[step * 3 + 1] = 0;
+      trajectoryColors[step * 3 + 2] = 0;
+      continue;
+    }
     trajectoryPositions[step * 3 + 0] = _predPos.x;
     trajectoryPositions[step * 3 + 1] = 0.1;
     trajectoryPositions[step * 3 + 2] = _predPos.z;
     const progress = step / TRAJECTORY_STEPS;
-    const alpha = Math.pow(1 - progress, 1.2) * 0.9;
+    const alpha = Math.pow(1 - progress, 1.4) * 0.95;
     if (isThrusting) {
-      trajectoryColors[step * 3 + 0] = 0.05 * alpha;
+      trajectoryColors[step * 3 + 0] = 0.1 * alpha;
       trajectoryColors[step * 3 + 1] = 0.95 * alpha;
       trajectoryColors[step * 3 + 2] = 0.65 * alpha;
     } else if (isBraking) {
       trajectoryColors[step * 3 + 0] = 0.95 * alpha;
-      trajectoryColors[step * 3 + 1] = 0.25 * alpha;
+      trajectoryColors[step * 3 + 1] = 0.3 * alpha;
       trajectoryColors[step * 3 + 2] = 0.35 * alpha;
     } else {
-      trajectoryColors[step * 3 + 0] = 0.2 * alpha;
+      trajectoryColors[step * 3 + 0] = 0.22 * alpha;
       trajectoryColors[step * 3 + 1] = 0.75 * alpha;
       trajectoryColors[step * 3 + 2] = 0.98 * alpha;
     }
-    _predAcc.copy(_thrustAcc);
+    _predAcc.set(0, 0, 0);
+    const simTime = step * TRAJECTORY_DT;
     for (let s = 0;s < sourceCount; s++) {
       const source = sources[s];
       if (source.isAbsorbed)
         continue;
-      const dx = source.position.x - _predPos.x;
-      const dz = source.position.z - _predPos.z;
+      let sourceX = source.position.x;
+      let sourceZ = source.position.z;
+      if (source.type === "planet") {
+        const planetEntry = activePlanets.find((p) => p.source === source);
+        if (planetEntry && !planetEntry.isMoon) {
+          const futureAngle = planetEntry.angle + planetEntry.speed * simTime;
+          sourceX = planetEntry.distance * Math.cos(futureAngle);
+          sourceZ = planetEntry.distance * Math.sin(futureAngle);
+        }
+      }
+      const dx = sourceX - _predPos.x;
+      const dz = sourceZ - _predPos.z;
       const distSq = dx * dx + dz * dz;
+      if (distSq <= source.radius * source.radius) {
+        hitBody = true;
+        break;
+      }
       const rangeSq = source.gravityRange * source.gravityRange;
-      if (distSq < rangeSq && distSq > 0.01) {
+      if (distSq < rangeSq) {
         const distance = Math.sqrt(distSq);
-        const clampedDist = Math.max(distance, source.radius * 1.15);
-        const forceStrength = STATE.gConstant * source.mass / (clampedDist * clampedDist);
-        const invDist = 1 / distance;
+        const forceStrength = STATE.gConstant * source.mass / (distSq + SOFTENING_SQ);
+        const invDist = 1 / Math.max(0.1, distance);
         _predAcc.x += dx * invDist * forceStrength;
         _predAcc.z += dz * invDist * forceStrength;
       }
