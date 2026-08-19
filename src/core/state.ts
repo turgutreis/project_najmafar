@@ -13,6 +13,7 @@ export const STATE: GameState = {
     gameStarted: false,
     isGameOver: false,
     systemsVisited: 1,
+    visitedSystemIds: [1],
 
     // Evolution Resources
     bioRes: 0,
@@ -67,7 +68,7 @@ export const STATE: GameState = {
 
     // Quantum Universe
     universe: null,
-    currentSystemId: 0,
+    currentSystemId: 1, // Start in Perseus-Rand (Outer Rim)
 
     // Scanner, Harvesting & Abduction System
     nearestPlanet: null,

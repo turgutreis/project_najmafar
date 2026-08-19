@@ -10808,6 +10808,66 @@ function toJSON$1(shapes, options, data) {
     data.options.extrudePath = options.extrudePath.toJSON();
   return data;
 }
+class OctahedronGeometry extends PolyhedronGeometry {
+  constructor(radius = 1, detail = 0) {
+    const vertices = [
+      1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      -1
+    ];
+    const indices = [
+      0,
+      2,
+      4,
+      0,
+      4,
+      3,
+      0,
+      3,
+      5,
+      0,
+      5,
+      2,
+      1,
+      2,
+      5,
+      1,
+      5,
+      3,
+      1,
+      3,
+      4,
+      1,
+      4,
+      2
+    ];
+    super(vertices, indices, radius, detail);
+    this.type = "OctahedronGeometry";
+    this.parameters = {
+      radius,
+      detail
+    };
+  }
+  static fromJSON(data) {
+    return new OctahedronGeometry(data.radius, data.detail);
+  }
+}
+
 class PlaneGeometry extends BufferGeometry {
   constructor(width = 1, height = 1, widthSegments = 1, heightSegments = 1) {
     super();
@@ -11042,6 +11102,69 @@ class TetrahedronGeometry extends PolyhedronGeometry {
   }
   static fromJSON(data) {
     return new TetrahedronGeometry(data.radius, data.detail);
+  }
+}
+
+class TorusGeometry extends BufferGeometry {
+  constructor(radius = 1, tube = 0.4, radialSegments = 12, tubularSegments = 48, arc = Math.PI * 2, thetaStart = 0, thetaLength = Math.PI * 2) {
+    super();
+    this.type = "TorusGeometry";
+    this.parameters = {
+      radius,
+      tube,
+      radialSegments,
+      tubularSegments,
+      arc,
+      thetaStart,
+      thetaLength
+    };
+    radialSegments = Math.floor(radialSegments);
+    tubularSegments = Math.floor(tubularSegments);
+    const indices = [];
+    const vertices = [];
+    const normals = [];
+    const uvs = [];
+    const center = new Vector3;
+    const vertex = new Vector3;
+    const normal = new Vector3;
+    for (let j = 0;j <= radialSegments; j++) {
+      const v = thetaStart + j / radialSegments * thetaLength;
+      for (let i = 0;i <= tubularSegments; i++) {
+        const u = i / tubularSegments * arc;
+        vertex.x = (radius + tube * Math.cos(v)) * Math.cos(u);
+        vertex.y = (radius + tube * Math.cos(v)) * Math.sin(u);
+        vertex.z = tube * Math.sin(v);
+        vertices.push(vertex.x, vertex.y, vertex.z);
+        center.x = radius * Math.cos(u);
+        center.y = radius * Math.sin(u);
+        normal.subVectors(vertex, center).normalize();
+        normals.push(normal.x, normal.y, normal.z);
+        uvs.push(i / tubularSegments);
+        uvs.push(j / radialSegments);
+      }
+    }
+    for (let j = 1;j <= radialSegments; j++) {
+      for (let i = 1;i <= tubularSegments; i++) {
+        const a = (tubularSegments + 1) * j + i - 1;
+        const b = (tubularSegments + 1) * (j - 1) + i - 1;
+        const c = (tubularSegments + 1) * (j - 1) + i;
+        const d = (tubularSegments + 1) * j + i;
+        indices.push(a, b, d);
+        indices.push(b, c, d);
+      }
+    }
+    this.setIndex(indices);
+    this.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+    this.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+    this.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+  }
+  copy(source) {
+    super.copy(source);
+    this.parameters = Object.assign({}, source.parameters);
+    return this;
+  }
+  static fromJSON(data) {
+    return new TorusGeometry(data.radius, data.tube, data.radialSegments, data.tubularSegments, data.arc);
   }
 }
 function cloneUniforms(src) {
@@ -28598,6 +28721,7 @@ var STATE = {
   gameStarted: false,
   isGameOver: false,
   systemsVisited: 1,
+  visitedSystemIds: [1],
   bioRes: 0,
   siliconRes: 0,
   psionicRange: 75,
@@ -28640,7 +28764,7 @@ var STATE = {
     x: false
   },
   universe: null,
-  currentSystemId: 0,
+  currentSystemId: 1,
   nearestPlanet: null,
   lockedTarget: null,
   scanningPlanet: null,
@@ -30841,6 +30965,146 @@ function removeScanVisuals() {
     scanPlanetRingMesh = null;
   }
 }
+function createBlackHoleMesh(size) {
+  const group = new Group;
+  const horizonGeo = new SphereGeometry(size, 48, 48);
+  const horizonMat = new MeshBasicMaterial({ color: 0 });
+  const horizonMesh = new Mesh(horizonGeo, horizonMat);
+  group.add(horizonMesh);
+  const photonGeo = new RingGeometry(size * 1.02, size * 1.12, 64);
+  photonGeo.rotateX(Math.PI / 2.3);
+  const photonMat = new MeshBasicMaterial({
+    color: 16777215,
+    transparent: true,
+    opacity: 0.95,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  const photonRing = new Mesh(photonGeo, photonMat);
+  group.add(photonRing);
+  const diskGeo = new RingGeometry(size * 1.15, size * 3.8, 64);
+  diskGeo.rotateX(Math.PI / 2.3);
+  const diskMat = new MeshBasicMaterial({
+    color: 16096779,
+    transparent: true,
+    opacity: 0.85,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  const accretionDisk = new Mesh(diskGeo, diskMat);
+  group.add(accretionDisk);
+  const lensGeo = new RingGeometry(size * 1.2, size * 5.2, 64);
+  lensGeo.rotateX(Math.PI / 2.3);
+  const lensMat = new MeshBasicMaterial({
+    color: 11032055,
+    transparent: true,
+    opacity: 0.35,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  const lensRing = new Mesh(lensGeo, lensMat);
+  group.add(lensRing);
+  const jetGeo = new CylinderGeometry(0.15, size * 0.9, size * 9, 16);
+  const jetMat = new MeshBasicMaterial({
+    color: 3718648,
+    transparent: true,
+    opacity: 0.45,
+    blending: AdditiveBlending
+  });
+  const topJet = new Mesh(jetGeo, jetMat);
+  topJet.position.y = size * 4.5;
+  group.add(topJet);
+  const bottomJet = topJet.clone();
+  bottomJet.position.y = -size * 4.5;
+  bottomJet.rotation.z = Math.PI;
+  group.add(bottomJet);
+  return {
+    group,
+    update: (dt) => {
+      accretionDisk.rotation.z += 0.8 * dt;
+      lensRing.rotation.z -= 0.3 * dt;
+      photonRing.rotation.z += 1.2 * dt;
+      topJet.material.opacity = 0.35 + Math.sin(Date.now() * 0.008) * 0.15;
+      bottomJet.material.opacity = 0.35 + Math.sin(Date.now() * 0.008) * 0.15;
+    }
+  };
+}
+function createPrecursorConstructMesh(size) {
+  const group = new Group;
+  const coreGeo = new OctahedronGeometry(size * 0.8, 0);
+  const coreMat = new MeshStandardMaterial({
+    color: 988970,
+    emissive: 440020,
+    emissiveIntensity: 0.8,
+    roughness: 0.15,
+    metalness: 0.95
+  });
+  const coreMesh = new Mesh(coreGeo, coreMat);
+  group.add(coreMesh);
+  const ring1Geo = new TorusGeometry(size * 1.3, 0.08, 16, 48);
+  const ring1Mat = new MeshStandardMaterial({
+    color: 3718648,
+    emissive: 3718648,
+    emissiveIntensity: 1.2,
+    roughness: 0.1,
+    metalness: 0.9
+  });
+  const ring1 = new Mesh(ring1Geo, ring1Mat);
+  group.add(ring1);
+  const ring2Geo = new TorusGeometry(size * 1.8, 0.1, 16, 64);
+  const ring2Mat = new MeshStandardMaterial({
+    color: 65416,
+    emissive: 65416,
+    emissiveIntensity: 0.9,
+    roughness: 0.1,
+    metalness: 0.9
+  });
+  const ring2 = new Mesh(ring2Geo, ring2Mat);
+  ring2.rotation.x = Math.PI / 3;
+  group.add(ring2);
+  return {
+    group,
+    update: (dt) => {
+      coreMesh.rotation.y += 0.4 * dt;
+      coreMesh.rotation.x += 0.2 * dt;
+      ring1.rotation.x += 0.8 * dt;
+      ring1.rotation.y += 0.5 * dt;
+      ring2.rotation.y -= 0.6 * dt;
+      ring2.rotation.z += 0.4 * dt;
+    }
+  };
+}
+function createPlasmaVortexMesh(size, colorHex) {
+  const group = new Group;
+  const sphereGeo = new SphereGeometry(size, 24, 24);
+  const sphereMat = new MeshBasicMaterial({
+    color: colorHex,
+    transparent: true,
+    opacity: 0.9,
+    blending: AdditiveBlending
+  });
+  const sphereMesh = new Mesh(sphereGeo, sphereMat);
+  group.add(sphereMesh);
+  const auraGeo = new RingGeometry(size * 1.05, size * 2.2, 32);
+  auraGeo.rotateX(Math.PI / 2);
+  const auraMat = new MeshBasicMaterial({
+    color: colorHex,
+    transparent: true,
+    opacity: 0.6,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  const auraMesh = new Mesh(auraGeo, auraMat);
+  group.add(auraMesh);
+  return {
+    group,
+    update: (dt) => {
+      sphereMesh.rotation.y += 1.4 * dt;
+      auraMesh.rotation.z += 2 * dt;
+      sphereMesh.material.opacity = 0.75 + Math.sin(Date.now() * 0.01) * 0.2;
+    }
+  };
+}
 
 // src/engine/audio.ts
 var audioCtx = null;
@@ -31883,6 +32147,15 @@ function closeDiplomacyComms() {
 var scanOsc = null;
 var scanGain = null;
 function generatePlanetAttributes(p) {
+  if (p.atmos && p.temp && p.bio && p.res) {
+    return {
+      atmos: p.atmos,
+      temp: p.temp,
+      bio: p.bio,
+      res: p.res,
+      species: p.species || null
+    };
+  }
   const hash = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
   let atmos, temp, bio, res, species;
   if (p.type === "Habitable") {
@@ -31979,34 +32252,6 @@ function generatePlanetAttributes(p) {
     species = null;
   }
   return { atmos, temp, bio, res, species };
-}
-function generateFallbackMoons(p) {
-  const hash = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  let count = 0;
-  if (p.type === "Gas Giant")
-    count = 1 + hash % 3;
-  else if (p.type === "Habitable")
-    count = hash % 3;
-  else
-    count = hash % 2;
-  const moons = [];
-  for (let i = 0;i < count; i++) {
-    const mType = p.type === "Gas Giant" || (hash + i) % 3 === 0 ? "Eismond" : (hash + i) % 3 === 1 ? "Vulkanmond" : "Kratermond";
-    const mColor = mType === "Eismond" ? "0x38bdf8" : mType === "Vulkanmond" ? "0xf97316" : "0x94a3b8";
-    moons.push({
-      name: `${p.name}-${String.fromCharCode(73 + i)}`,
-      type: mType,
-      size: 0.7 + (hash + i) % 5 * 0.1,
-      distance: p.size + 3.2 + i * 2.5,
-      speed: 0.9 + (hash + i) % 6 * 0.15,
-      color: mColor,
-      temp: mType === "Eismond" ? "-170°C" : mType === "Vulkanmond" ? "+220°C" : "-40°C",
-      atmos: mType === "Eismond" ? "Subglazialer Wasserdampf" : mType === "Vulkanmond" ? "Schwefeldioxid-Ausgasungen" : "Vakuum",
-      bio: mType === "Eismond" ? "Kryophile Mikroben" : mType === "Vulkanmond" ? "Schwefel-Synthetisierer" : "Steril",
-      res: mType === "Eismond" ? "Reich an Deuterium-Eis" : mType === "Vulkanmond" ? "Geschmolzenes Titan & Silizium" : "Regolith & Schwermetalle"
-    });
-  }
-  return moons;
 }
 function triggerScanStart() {
   if (!STATE.gameStarted || STATE.scanningPlanet || STATE.extractingPlanet || !STATE.nearestPlanet)
@@ -32871,6 +33116,7 @@ async function checkUniverseData() {
     if (data && data.systems && data.systems.length > 0) {
       STATE.universe = data;
       const sysCount = data.systems.length;
+      const meta = data.meta;
       const startBtn = document.getElementById("start-game-btn");
       if (startBtn) {
         startBtn.removeAttribute("disabled");
@@ -32878,9 +33124,25 @@ async function checkUniverseData() {
         startBtn.innerText = "Najmafar betreten";
       }
       const status = document.getElementById("generation-status");
-      if (status) {
-        status.innerText = `Galaxie aktiv (${sysCount} Sternensysteme).`;
-        status.style.color = "#10b981";
+      const mapBadge = document.getElementById("galaxy-provenance-badge");
+      if (meta) {
+        const isQpu = meta.generatorMode === "IBM_QPU";
+        const label = isQpu ? `\uD83C\uDF0C IBM Quantum QPU (${meta.backendName})` : `\uD83D\uDD2C Qiskit Simulator (${meta.backendName || "basic_simulator"})`;
+        if (status) {
+          status.innerText = `Galaxie aktiv (${sysCount} Systeme) — ${label}`;
+          status.style.color = isQpu ? "#34d399" : "#38bdf8";
+        }
+        if (mapBadge) {
+          mapBadge.innerText = `${label} • ${sysCount} Systeme`;
+          mapBadge.style.color = isQpu ? "#34d399" : "#38bdf8";
+          mapBadge.style.borderColor = isQpu ? "rgba(52, 211, 153, 0.4)" : "rgba(56, 189, 248, 0.3)";
+          mapBadge.style.background = isQpu ? "rgba(52, 211, 153, 0.15)" : "rgba(56, 189, 248, 0.15)";
+        }
+      } else {
+        if (status) {
+          status.innerText = `Galaxie aktiv (${sysCount} Sternensysteme).`;
+          status.style.color = "#10b981";
+        }
       }
       clearActiveSystem();
       spawnPlanetsAndAsteroids();
@@ -32891,28 +33153,53 @@ async function checkUniverseData() {
     console.error("Najmafar: Error loading universe data:", e);
   }
 }
+function disposeObject3D(obj) {
+  if (!obj)
+    return;
+  obj.traverse((child) => {
+    if (child.geometry && typeof child.geometry.dispose === "function") {
+      child.geometry.dispose();
+    }
+    if (child.material) {
+      if (Array.isArray(child.material)) {
+        child.material.forEach((m) => m && typeof m.dispose === "function" && m.dispose());
+      } else if (typeof child.material.dispose === "function") {
+        child.material.dispose();
+      }
+    }
+  });
+}
 function clearActiveSystem() {
   activePlanets.forEach((p) => {
-    if (p.mesh)
+    if (p.mesh) {
       scene.remove(p.mesh);
-    if (p.ringMesh)
+      disposeObject3D(p.mesh);
+    }
+    if (p.ringMesh) {
       scene.remove(p.ringMesh);
+      disposeObject3D(p.ringMesh);
+    }
+  });
+  STATE.gravitySources.forEach((s) => {
+    if (s.ringMesh) {
+      scene.remove(s.ringMesh);
+      disposeObject3D(s.ringMesh);
+    }
+    if (s.mesh) {
+      scene.remove(s.mesh);
+      disposeObject3D(s.mesh);
+    }
   });
   STATE.asteroids.forEach((a) => {
-    if (a.mesh)
+    if (a.mesh) {
       scene.remove(a.mesh);
-    if (a.ringMesh)
-      scene.remove(a.ringMesh);
-  });
-  STATE.gravitySources.forEach((source) => {
-    if (source.mesh && source.mesh !== STATE.playerGroup) {
-      scene.remove(source.mesh);
-    }
-    if (source.ringMesh) {
-      scene.remove(source.ringMesh);
+      disposeObject3D(a.mesh);
     }
   });
-  activeCoronaMeshes.forEach((m) => scene.remove(m));
+  activeCoronaMeshes.forEach((m) => {
+    scene.remove(m);
+    disposeObject3D(m);
+  });
   activeCoronaMeshes.length = 0;
   activeCoronaUpdaters.length = 0;
   activeStarLights.forEach((l) => scene.remove(l));
@@ -32951,7 +33238,29 @@ function spawnPlanetsAndAsteroids() {
   if (!activeSystem)
     return;
   const starData = activeSystem.star;
-  if (starData.type !== "Black Hole") {
+  if (starData.type === "Black Hole") {
+    const blackHole = createBlackHoleMesh(starData.size);
+    scene.add(blackHole.group);
+    activeCoronaMeshes.push(blackHole.group);
+    activeCoronaUpdaters.push(blackHole.update);
+    const starLight = new PointLight(11032055, 2.5, 0, 0);
+    starLight.position.set(0, 0, 0);
+    scene.add(starLight);
+    activeStarLights.push(starLight);
+    starData.colorCss = "#7c3aed";
+    const starRange = 42;
+    const starSource = {
+      mesh: blackHole.group,
+      type: "star",
+      name: `${activeSystem.name} (Ereignishorizont)`,
+      mass: starData.mass * 0.5,
+      radius: starData.size,
+      gravityRange: starRange,
+      position: new Vector3(0, 0, 0)
+    };
+    STATE.gravitySources.push(starSource);
+    starSource.ringMesh = createGravityRing(0, 0, starRange, 8141549, 0.14);
+  } else {
     const starSeed = STATE.currentSystemId * 1337 + 42;
     const starTex = createStarTexture(starData.color, starSeed);
     const starGeo = new SphereGeometry(starData.size, 32, 32);
@@ -32995,70 +33304,100 @@ function spawnPlanetsAndAsteroids() {
     const px2 = scaledDist * Math.cos(angle);
     const pz2 = scaledDist * Math.sin(angle);
     const seed = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) + idx * 77;
-    const isGas = p.type === "Gas Giant";
-    const isHab = p.type === "Habitable";
-    const generated = generatePlanetAttributes(p);
-    let finalSpecies = p.species || generated.species;
-    if (p.type === "Habitable" && (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0)) {
-      finalSpecies = generated.species;
-    }
-    let texData;
-    let cloudTexture = null;
-    let cityLightsTexture = null;
-    if (isHab) {
-      texData = createHabitableTextures(p.color, seed);
-      cloudTexture = createCloudTexture(seed + 999);
-      if (finalSpecies && finalSpecies.population > 0) {
-        cityLightsTexture = createCityLightsTexture(seed, finalSpecies.techLevel || "Spacefaring");
-      }
-    } else if (isGas) {
-      texData = createGasGiantTextures(p.color, seed);
-    } else {
-      texData = createRockyTextures(p.color, seed);
-    }
-    const geo = new SphereGeometry(p.size, 32, 32);
-    const mat = new MeshStandardMaterial({
-      map: texData.map,
-      bumpMap: texData.bumpMap || null,
-      bumpScale: isGas ? 0 : 0.08,
-      roughness: isGas ? 0.35 : 0.68,
-      metalness: isGas ? 0.1 : 0.12,
-      emissive: cityLightsTexture ? new Color(16777215) : new Color(0),
-      emissiveMap: cityLightsTexture || null,
-      emissiveIntensity: cityLightsTexture ? 0.85 : 0,
-      transparent: false,
-      depthWrite: true,
-      depthTest: true
-    });
-    const mesh = new Mesh(geo, mat);
-    const axialTilt = (seed % 17 + 12) * Math.PI / 180;
-    mesh.rotation.z = axialTilt;
-    mesh.rotation.x = (seed % 7 - 3) * Math.PI / 180;
     const planetGroup = new Group;
     planetGroup.position.set(px2, 0, pz2);
-    planetGroup.add(mesh);
-    if (isHab || isGas) {
-      const atmoHex = isHab ? 3718648 : parseInt(p.color);
-      const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.2 : 1);
-      planetGroup.add(atmoMesh);
-    }
+    let bodyMesh = null;
     let cloudMesh = null;
-    if (cloudTexture && isHab) {
-      const cloudGeo = new SphereGeometry(p.size * 1.018, 32, 32);
-      const cloudMat = new MeshStandardMaterial({
-        map: cloudTexture,
-        transparent: true,
-        opacity: 0.85,
-        blending: NormalBlending,
-        depthWrite: false,
-        roughness: 0.9,
-        metalness: 0
-      });
-      cloudMesh = new Mesh(cloudGeo, cloudMat);
-      cloudMesh.rotation.z = axialTilt;
-      planetGroup.add(cloudMesh);
-    }
     let psioAuraMesh = null;
+    const isConstruct = p.type === "Vorläufer-Konstrukt";
+    const isPlasmaVortex = p.type === "Plasma-Wirbel";
+    const isCapturedStar = p.type === "Gefangener Stern";
+    const isHab = p.type === "Habitable";
+    const isGas = p.type === "Gas Giant";
+    if (isConstruct) {
+      const construct = createPrecursorConstructMesh(p.size);
+      planetGroup.add(construct.group);
+      activeCoronaUpdaters.push(construct.update);
+      bodyMesh = construct.group;
+    } else if (isPlasmaVortex) {
+      const vortex = createPlasmaVortexMesh(p.size, parseInt(p.color));
+      planetGroup.add(vortex.group);
+      activeCoronaUpdaters.push(vortex.update);
+      bodyMesh = vortex.group;
+    } else if (isCapturedStar) {
+      const starGeo = new SphereGeometry(p.size, 32, 32);
+      const starMat = new MeshStandardMaterial({
+        color: parseInt(p.color),
+        emissive: parseInt(p.color),
+        emissiveIntensity: 1.2,
+        roughness: 0.2
+      });
+      const starMesh = new Mesh(starGeo, starMat);
+      planetGroup.add(starMesh);
+      bodyMesh = starMesh;
+      const capturedLight = new PointLight(parseInt(p.color), 1.8, 45, 1.2);
+      planetGroup.add(capturedLight);
+    } else {
+      const generated = generatePlanetAttributes(p);
+      let finalSpecies = p.species || generated.species;
+      if (isHab && (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0)) {
+        finalSpecies = generated.species;
+      }
+      let texData;
+      let cloudTexture = null;
+      let cityLightsTexture = null;
+      if (isHab) {
+        texData = createHabitableTextures(p.color, seed);
+        cloudTexture = createCloudTexture(seed + 999);
+        if (finalSpecies && finalSpecies.population > 0) {
+          cityLightsTexture = createCityLightsTexture(seed, finalSpecies.techLevel || "Spacefaring");
+        }
+      } else if (isGas) {
+        texData = createGasGiantTextures(p.color, seed);
+      } else {
+        texData = createRockyTextures(p.color, seed);
+      }
+      const geo = new SphereGeometry(p.size, 32, 32);
+      const mat = new MeshStandardMaterial({
+        map: texData.map,
+        bumpMap: texData.bumpMap || null,
+        bumpScale: isGas ? 0 : 0.08,
+        roughness: isGas ? 0.35 : 0.68,
+        metalness: isGas ? 0.1 : 0.12,
+        emissive: cityLightsTexture ? new Color(16777215) : new Color(0),
+        emissiveMap: cityLightsTexture || null,
+        emissiveIntensity: cityLightsTexture ? 0.85 : 0,
+        transparent: false,
+        depthWrite: true,
+        depthTest: true
+      });
+      const mesh = new Mesh(geo, mat);
+      const axialTilt = (seed % 17 + 12) * Math.PI / 180;
+      mesh.rotation.z = axialTilt;
+      mesh.rotation.x = (seed % 7 - 3) * Math.PI / 180;
+      planetGroup.add(mesh);
+      bodyMesh = mesh;
+      if (isHab || isGas) {
+        const atmoHex = isHab ? 3718648 : parseInt(p.color);
+        const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.2 : 1);
+        planetGroup.add(atmoMesh);
+      }
+      if (cloudTexture && isHab) {
+        const cloudGeo = new SphereGeometry(p.size * 1.018, 32, 32);
+        const cloudMat = new MeshStandardMaterial({
+          map: cloudTexture,
+          transparent: true,
+          opacity: 0.85,
+          blending: NormalBlending,
+          depthWrite: false,
+          roughness: 0.9,
+          metalness: 0
+        });
+        cloudMesh = new Mesh(cloudGeo, cloudMat);
+        cloudMesh.rotation.z = axialTilt;
+        planetGroup.add(cloudMesh);
+      }
+    }
     scene.add(planetGroup);
     const pMass = p.size * p.size * 4;
     const pRange = p.size * 4.5;
@@ -33077,7 +33416,7 @@ function spawnPlanetsAndAsteroids() {
     const pColorCss = p.color.replace("0x", "#");
     const planetEntry = {
       mesh: planetGroup,
-      bodyMesh: mesh,
+      bodyMesh,
       cloudMesh,
       psioAuraMesh,
       source: sourceObj,
@@ -33093,15 +33432,15 @@ function spawnPlanetsAndAsteroids() {
       isMoon: false,
       scanned: false,
       attributes: {
-        atmos: p.atmos || generated.atmos,
-        temp: p.temp || generated.temp,
-        bio: p.bio || generated.bio,
-        res: p.res || generated.res,
-        species: finalSpecies
+        atmos: p.atmos,
+        temp: p.temp,
+        bio: p.bio,
+        res: p.res,
+        species: p.species || null
       }
     };
     activePlanets.push(planetEntry);
-    const moonsList = p.moons || generateFallbackMoons(p);
+    const moonsList = p.moons || [];
     moonsList.forEach((m, m_idx) => {
       const moonAngle = m_idx * 2.2 + idx * 0.7 + 0.5;
       const mx = px2 + m.distance * Math.cos(moonAngle);
@@ -33119,11 +33458,8 @@ function spawnPlanetsAndAsteroids() {
       const mMat = new MeshStandardMaterial({
         map: mTex.map,
         bumpMap: mTex.bumpMap || null,
-        bumpScale: 0.05,
-        emissiveMap: mTex.emissiveMap || null,
-        emissive: m.type === "Vulkanmond" ? new Color(16729344) : new Color(0),
-        emissiveIntensity: m.type === "Vulkanmond" ? 0.6 : 0,
-        roughness: 0.85,
+        bumpScale: 0.06,
+        roughness: 0.75,
         metalness: 0.1
       });
       const mMesh = new Mesh(mGeo, mMat);
@@ -33172,7 +33508,7 @@ function spawnPlanetsAndAsteroids() {
       activePlanets.push(moonEntry);
     });
   });
-  const asteroidsList = activeSystem.asteroids && activeSystem.asteroids.length > 0 ? activeSystem.asteroids : generateFallbackAsteroids();
+  const asteroidsList = activeSystem.asteroids && activeSystem.asteroids.length > 0 ? activeSystem.asteroids : [];
   asteroidsList.forEach((ast) => {
     const size = 0.4 + Math.random() * 0.45;
     const geo = new DodecahedronGeometry(size, 1);
@@ -33194,47 +33530,26 @@ function spawnPlanetsAndAsteroids() {
       emissive: isOrganic ? 13073 : 8755
     });
     const mesh = new Mesh(geo, mat);
-    mesh.position.set(ast.x, 0, ast.z);
+    mesh.position.set(ast.x, (Math.random() - 0.5) * 1.5, ast.z);
     scene.add(mesh);
-    const range = size * 3;
+    const astRange = size * 2.8;
     const sourceObj = {
       mesh,
       type: "asteroid",
-      name: isOrganic ? "Organische Biosphäre" : "Silizium-Komet",
-      mass: size * 4,
+      name: isOrganic ? "Organische Biomasse-Trümmer" : "Silizium-Kristall-Fragment",
+      mass: size * 1.5,
       radius: size,
-      gravityRange: range,
-      position: new Vector3(ast.x, 0, ast.z),
+      gravityRange: astRange,
+      position: mesh.position,
       isResource: true,
       resourceType: isOrganic ? "bio" : "silicon",
-      isAbsorbed: false,
-      rotSpeed: {
-        x: (Math.random() - 0.5) * 0.6,
-        y: (Math.random() - 0.5) * 0.8,
-        z: (Math.random() - 0.5) * 0.6
-      },
-      ringMesh: null
+      yield: isOrganic ? 15 : 20
     };
     STATE.gravitySources.push(sourceObj);
     STATE.asteroids.push(sourceObj);
-    sourceObj.ringMesh = createGravityRing(ast.x, ast.z, range, color, 0.05);
   });
   initPlanetDefenseFleets();
-}
-function generateFallbackAsteroids() {
-  const list = [];
-  const count = 40;
-  for (let i = 0;i < count; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const isOuter = i % 2 === 0;
-    const dist = isOuter ? 115 + Math.random() * 115 : 48 + Math.random() * 27;
-    list.push({
-      x: Math.cos(angle) * dist,
-      z: Math.sin(angle) * dist,
-      type: Math.random() > 0.45 ? "bio" : "energy"
-    });
-  }
-  return list;
+  addLogEntry("NAV", `Sensoren initialisiert: ${activeSystem.name} [${activeSystem.sectorName || "Sektor"}].`);
 }
 
 // src/systems/galaxy-map.ts
@@ -33243,14 +33558,22 @@ var selectedSystem = null;
 var hoverSystem = null;
 var filterLifeOnly = false;
 var mapZoom = 1;
+var targetZoom = 1;
 var mapPanX = 0;
 var mapPanY = 0;
+var targetPanX = 0;
+var targetPanY = 0;
 var isDraggingMap = false;
 var dragStartX = 0;
 var dragStartY = 0;
+var mouseDownX = 0;
+var mouseDownY = 0;
 var mapMouseX = -1;
 var mapMouseY = -1;
 var mapAnimFrameId = null;
+var baseScale = 1;
+var canvasWidth = 800;
+var canvasHeight = 600;
 function isMapOpen() {
   return mapOpen;
 }
@@ -33265,6 +33588,7 @@ function toggleGalaxyMap() {
     overlay.style.display = "flex";
     renderGalaxyMap();
     startGalaxyMapLoop();
+    setupMapKeyboardShortcuts();
   } else {
     overlay.style.display = "none";
     stopGalaxyMapLoop();
@@ -33275,6 +33599,9 @@ function startGalaxyMapLoop() {
   function mapLoop() {
     if (!mapOpen)
       return;
+    mapPanX += (targetPanX - mapPanX) * 0.18;
+    mapPanY += (targetPanY - mapPanY) * 0.18;
+    mapZoom += (targetZoom - mapZoom) * 0.18;
     drawGalaxyMap(mapMouseX, mapMouseY);
     mapAnimFrameId = requestAnimationFrame(mapLoop);
   }
@@ -33286,6 +33613,12 @@ function stopGalaxyMapLoop() {
     mapAnimFrameId = null;
   }
 }
+function smoothPanTo(sysX, sysZ, desiredZoom = 1.8) {
+  targetZoom = desiredZoom;
+  const currentScale = baseScale * targetZoom;
+  targetPanX = -(sysX * currentScale);
+  targetPanY = -(sysZ * currentScale);
+}
 var drawGalaxyMap = () => {};
 function renderGalaxyMap() {
   const canvas = document.getElementById("galaxy-map-canvas");
@@ -33295,8 +33628,10 @@ function renderGalaxyMap() {
   const rect = canvas.parentNode ? canvas.parentNode.getBoundingClientRect() : canvas.getBoundingClientRect();
   canvas.width = rect.width || 800;
   canvas.height = rect.height || 600;
-  const width = canvas.width;
-  const height = canvas.height;
+  canvasWidth = canvas.width;
+  canvasHeight = canvas.height;
+  const width = canvasWidth;
+  const height = canvasHeight;
   const systems = STATE.universe.systems;
   let maxDist = 0;
   systems.forEach((sys) => {
@@ -33304,12 +33639,13 @@ function renderGalaxyMap() {
     if (dist > maxDist)
       maxDist = dist;
   });
-  const baseScale = Math.min(width, height) / (maxDist * 2.3 || 1);
+  baseScale = Math.min(width, height) / (maxDist * 2.3 || 1);
   if (!selectedSystem) {
     selectedSystem = systems.find((s) => s.id === STATE.currentSystemId) || systems[0];
   }
   updateSystemDetails(selectedSystem);
   populateQuickBeaconsList();
+  setupSearchAndNavigationControls();
   drawGalaxyMap = function(mouseX = -1, mouseY = -1) {
     ctx.fillStyle = "#030712";
     ctx.fillRect(0, 0, width, height);
@@ -33340,17 +33676,50 @@ function renderGalaxyMap() {
     ctx.moveTo(0, centerY);
     ctx.lineTo(width, centerY);
     ctx.stroke();
-    const coreGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, 50 * currentScale);
-    coreGrad.addColorStop(0, "rgba(168, 85, 247, 0.15)");
+    const coreR = 110 * currentScale;
+    const coreGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreR);
+    coreGrad.addColorStop(0, "rgba(234, 179, 8, 0.18)");
+    coreGrad.addColorStop(0.5, "rgba(168, 85, 247, 0.08)");
     coreGrad.addColorStop(1, "rgba(168, 85, 247, 0)");
     ctx.fillStyle = coreGrad;
     ctx.beginPath();
-    ctx.arc(centerX, centerY, 50 * currentScale, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, coreR, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = "rgba(234, 179, 8, 0.25)";
+    ctx.lineWidth = 1.2;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, coreR, 0, Math.PI * 2);
+    ctx.stroke();
+    const midR = 265 * currentScale;
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.2)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 8]);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, midR, 0, Math.PI * 2);
+    ctx.stroke();
+    const outerR = 430 * currentScale;
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.15)";
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash([8, 10]);
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, outerR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (mapZoom > 0.7) {
+      ctx.font = "bold 9px Orbitron, sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillStyle = "rgba(234, 179, 8, 0.5)";
+      ctx.fillText("SEKTOR 3: GALAKTISCHER KERN (SAGITTARIUS A*)", centerX + 12, centerY - coreR + 15);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.45)";
+      ctx.fillText("SEKTOR 2: ORION-ZYKLUS (ZIVILISATIONS-GÜRTEL)", centerX + 12, centerY - midR + 15);
+      ctx.fillStyle = "rgba(148, 163, 184, 0.35)";
+      ctx.fillText("SEKTOR 1: PERSEUS-RAND (DAS ERWACHEN)", centerX + 12, centerY - outerR + 15);
+    }
     const currentSys = systems.find((s) => s.id === STATE.currentSystemId) || systems[0];
+    const curScreenX = centerX + currentSys.x * currentScale;
+    const curScreenY = centerY + currentSys.z * currentScale;
     if (currentSys) {
-      const curScreenX = centerX + currentSys.x * currentScale;
-      const curScreenY = centerY + currentSys.z * currentScale;
       const warpRadiusScreen = STATE.warpRange * currentScale;
       ctx.strokeStyle = "rgba(56, 189, 248, 0.4)";
       ctx.lineWidth = 1.4;
@@ -33369,10 +33738,75 @@ function renderGalaxyMap() {
       ctx.strokeStyle = "rgba(56, 189, 248, 0.85)";
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(curScreenX, curScreenY, 14 * Math.min(1.5, Math.max(0.7, mapZoom)) + Math.sin(Date.now() * 0.006) * 3, 0, Math.PI * 2);
+      ctx.arc(curScreenX, curScreenY, 12 * Math.min(1.5, Math.max(0.7, mapZoom)) + Math.sin(Date.now() * 0.006) * 3, 0, Math.PI * 2);
       ctx.stroke();
     }
+    if (selectedSystem && selectedSystem.id !== currentSys.id) {
+      const targetScreenX = centerX + selectedSystem.x * currentScale;
+      const targetScreenY = centerY + selectedSystem.z * currentScale;
+      const dx = selectedSystem.x - currentSys.x;
+      const dz = selectedSystem.z - currentSys.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const inWarp = dist <= STATE.warpRange;
+      ctx.strokeStyle = inWarp ? "rgba(56, 189, 248, 0.6)" : "rgba(239, 68, 68, 0.5)";
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([8, 8]);
+      ctx.lineDashOffset = -(Date.now() * 0.02) % 16;
+      ctx.beginPath();
+      ctx.moveTo(curScreenX, curScreenY);
+      ctx.lineTo(targetScreenX, targetScreenY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const pulseT = Date.now() * 0.0008 % 1;
+      const pulseX = curScreenX + (targetScreenX - curScreenX) * pulseT;
+      const pulseY = curScreenY + (targetScreenY - curScreenY) * pulseT;
+      ctx.fillStyle = inWarp ? "#38bdf8" : "#ef4444";
+      ctx.beginPath();
+      ctx.arc(pulseX, pulseY, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      if (mapZoom > 0.8) {
+        const midX = (curScreenX + targetScreenX) / 2;
+        const midY = (curScreenY + targetScreenY) / 2;
+        const costMult = STATE.mutations.folddrive && STATE.mutations.folddrive.purchased ? 0.7 : 1;
+        const warpCost = Math.round((15 + dist * 0.15) * costMult);
+        ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+        ctx.strokeStyle = inWarp ? "rgba(56, 189, 248, 0.6)" : "rgba(239, 68, 68, 0.6)";
+        ctx.lineWidth = 1;
+        const badgeText = `${dist.toFixed(0)} LJ • -${warpCost}% Bio`;
+        ctx.font = "8px Orbitron, sans-serif";
+        const bWidth = ctx.measureText(badgeText).width;
+        ctx.beginPath();
+        if (ctx.roundRect)
+          ctx.roundRect(midX - bWidth / 2 - 6, midY - 9, bWidth + 12, 18, 4);
+        else
+          ctx.rect(midX - bWidth / 2 - 6, midY - 9, bWidth + 12, 18);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = inWarp ? "#38bdf8" : "#f87171";
+        ctx.textAlign = "center";
+        ctx.fillText(badgeText, midX, midY + 3);
+      }
+    }
+    let minHoverDist = 14;
     hoverSystem = null;
+    if (mouseX >= 0 && mouseY >= 0) {
+      for (let i = 0;i < systems.length; i++) {
+        const sys = systems[i];
+        const screenX = centerX + sys.x * currentScale;
+        const screenY = centerY + sys.z * currentScale;
+        if (screenX < -30 || screenX > width + 30 || screenY < -30 || screenY > height + 30) {
+          continue;
+        }
+        const dx = mouseX - screenX;
+        const dy = mouseY - screenY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minHoverDist) {
+          minHoverDist = dist;
+          hoverSystem = sys;
+        }
+      }
+    }
+    const visitedIds = STATE.visitedSystemIds || [STATE.currentSystemId];
     systems.forEach((sys) => {
       const screenX = centerX + sys.x * currentScale;
       const screenY = centerY + sys.z * currentScale;
@@ -33384,54 +33818,38 @@ function renderGalaxyMap() {
       const distFromCur = Math.sqrt(dxFromCur * dxFromCur + dzFromCur * dzFromCur);
       const inWarpRange = distFromCur <= STATE.warpRange;
       const inPsionicRange = distFromCur <= STATE.psionicRange;
-      const dx = mouseX - screenX;
-      const dy = mouseY - screenY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
       const isSelected = selectedSystem && selectedSystem.id === sys.id;
       const isActive = STATE.currentSystemId === sys.id;
+      const isHovered = hoverSystem && hoverSystem.id === sys.id;
+      const isVisited = visitedIds.includes(sys.id);
       const hasSentient = sys.planets.some((p) => p.type === "Habitable" || p.species && p.species.hasSentient);
       const showLifeBeacon = hasSentient && inPsionicRange;
       if (filterLifeOnly && !showLifeBeacon && !isActive && !isSelected) {
-        ctx.globalAlpha = 0.08;
-      } else if (!inWarpRange && !isActive && !isSelected) {
-        ctx.globalAlpha = 0.45;
+        ctx.globalAlpha = 0.05;
+      } else if (!inWarpRange && !isActive && !isSelected && !sys.isCoreAnchor) {
+        ctx.globalAlpha = isVisited ? 0.6 : 0.35;
       } else {
         ctx.globalAlpha = 1;
       }
-      let baseSize = 2.8 * Math.min(1.6, Math.max(0.7, mapZoom));
+      let baseSize = 2.4 * Math.min(1.5, Math.max(0.6, mapZoom));
       if (isActive)
-        baseSize = 4.8;
+        baseSize = 4.5;
       if (isSelected)
-        baseSize = 6;
-      if (dist < 10) {
-        hoverSystem = sys;
+        baseSize = 5.5;
+      if (sys.isCoreAnchor)
+        baseSize = 6.5;
+      if (isHovered) {
         baseSize += 2.5;
       }
       if (showLifeBeacon) {
-        const glowR = (baseSize + 14) * Math.min(1.4, Math.max(0.8, mapZoom));
+        const glowR = (baseSize + 12) * Math.min(1.4, Math.max(0.8, mapZoom));
         const glowGrad = ctx.createRadialGradient(screenX, screenY, baseSize, screenX, screenY, glowR);
-        glowGrad.addColorStop(0, "rgba(217, 70, 239, 0.45)");
-        glowGrad.addColorStop(0.6, "rgba(168, 85, 247, 0.15)");
+        glowGrad.addColorStop(0, "rgba(217, 70, 239, 0.4)");
         glowGrad.addColorStop(1, "rgba(217, 70, 239, 0)");
         ctx.fillStyle = glowGrad;
         ctx.beginPath();
         ctx.arc(screenX, screenY, glowR, 0, Math.PI * 2);
         ctx.fill();
-        const timeSec = Date.now() % 2400 / 2400;
-        for (let w = 0;w < 2; w++) {
-          const waveProg = (timeSec + w * 0.5) % 1;
-          const waveR = baseSize + 2 + waveProg * 14 * Math.min(1.4, Math.max(0.8, mapZoom));
-          const waveAlpha = (1 - waveProg) * 0.85;
-          ctx.strokeStyle = `rgba(217, 70, 239, ${waveAlpha})`;
-          ctx.lineWidth = 1.4;
-          ctx.beginPath();
-          ctx.arc(screenX, screenY, waveR, 0, Math.PI * 2);
-          ctx.stroke();
-        }
-        ctx.fillStyle = "#f472b6";
-        ctx.font = "bold 8px Orbitron, sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText("\uD83E\uDDE0", screenX, screenY + baseSize + 9);
       }
       let starColor = "#f59e0b";
       if (sys.star.type === "Blue Giant")
@@ -33442,32 +33860,42 @@ function renderGalaxyMap() {
         starColor = "#cbd5e1";
       if (sys.star.type === "Black Hole")
         starColor = "#8b5cf6";
+      if (sys.isCoreAnchor) {
+        ctx.strokeStyle = "#eab308";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, baseSize + 5 + Math.sin(Date.now() * 0.005) * 2, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       if (isSelected) {
         ctx.fillStyle = inWarpRange ? "rgba(168, 85, 247, 0.4)" : "rgba(239, 68, 68, 0.3)";
         ctx.beginPath();
-        ctx.arc(screenX, screenY, baseSize + 6, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY, baseSize + 5, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = inWarpRange ? "#e879f9" : "#f87171";
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.arc(screenX, screenY, baseSize + 3, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY, baseSize + 2, 0, Math.PI * 2);
         ctx.stroke();
       } else if (isActive) {
         ctx.fillStyle = "rgba(56, 189, 248, 0.35)";
         ctx.beginPath();
-        ctx.arc(screenX, screenY, baseSize + 4, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY, baseSize + 3, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.fillStyle = starColor;
       ctx.beginPath();
       ctx.arc(screenX, screenY, baseSize, 0, Math.PI * 2);
       ctx.fill();
-      const shouldShowLabel = isSelected || isActive || dist < 10 || mapZoom > 2 || showLifeBeacon && mapZoom > 1.2;
+      const shouldShowLabel = isSelected || isActive || isHovered || sys.isCoreAnchor || isVisited || showLifeBeacon && mapZoom > 1.2 || mapZoom > 3.4;
       if (shouldShowLabel) {
-        ctx.fillStyle = isSelected ? inWarpRange ? "#e879f9" : "#f87171" : isActive ? "#38bdf8" : showLifeBeacon ? "#f8fafc" : "#94a3b8";
-        ctx.font = isSelected ? "bold 9px Orbitron, sans-serif" : "8px Orbitron, sans-serif";
+        let labelText = sys.name;
+        if (isActive)
+          labelText = `\uD83D\uDCCD ${sys.name}`;
+        ctx.fillStyle = isSelected ? inWarpRange ? "#e879f9" : "#f87171" : isActive ? "#38bdf8" : sys.isCoreAnchor ? "#eab308" : showLifeBeacon ? "#f8fafc" : "#94a3b8";
+        ctx.font = isSelected || sys.isCoreAnchor || isHovered ? "bold 9px Orbitron, sans-serif" : "8px Orbitron, sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(sys.name, screenX, screenY - baseSize - 4);
+        ctx.fillText(labelText, screenX, screenY - baseSize - 4);
       }
     });
     ctx.globalAlpha = 1;
@@ -33478,15 +33906,25 @@ function renderGalaxyMap() {
       const tooltipX = mouseX + 15;
       const tooltipY = mouseY - 15;
       const hasSentient = hoverSystem.planets.some((p) => p.type === "Habitable" || p.species && p.species.hasSentient);
-      const text = `${hoverSystem.name} (${hoverSystem.star.type}) ${hasSentient ? "\uD83E\uDDE0 Leben" : ""}`;
+      let anomalyIcon = "";
+      if (hoverSystem.anomalyType === "flare_star")
+        anomalyIcon = " ⚡";
+      else if (hoverSystem.anomalyType === "dark_energy_rift")
+        anomalyIcon = " \uD83C\uDF00";
+      else if (hoverSystem.anomalyType === "ancient_beacon")
+        anomalyIcon = " \uD83C\uDFDB️";
+      else if (hoverSystem.anomalyType === "pulsar")
+        anomalyIcon = " \uD83D\uDCAB";
+      else if (hoverSystem.isCoreAnchor)
+        anomalyIcon = " \uD83D\uDD73️";
+      const text = `${hoverSystem.name} (${hoverSystem.star.type})${anomalyIcon}${hasSentient ? " \uD83E\uDDE0" : ""}`;
       ctx.font = "9.5px Orbitron, sans-serif";
       const textWidth = ctx.measureText(text).width;
       ctx.beginPath();
-      if (ctx.roundRect) {
+      if (ctx.roundRect)
         ctx.roundRect(tooltipX, tooltipY - 18, textWidth + 20, 24, 5);
-      } else {
+      else
         ctx.rect(tooltipX, tooltipY - 18, textWidth + 20, 24);
-      }
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = "#ffffff";
@@ -33497,38 +33935,67 @@ function renderGalaxyMap() {
   canvas.onwheel = (e) => {
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
-    const newZoom = Math.min(5, Math.max(0.6, mapZoom * zoomFactor));
-    mapZoom = newZoom;
+    targetZoom = Math.min(6, Math.max(0.5, mapZoom * zoomFactor));
   };
   canvas.onmousedown = (e) => {
     isDraggingMap = true;
-    dragStartX = e.clientX - mapPanX;
-    dragStartY = e.clientY - mapPanY;
+    dragStartX = e.clientX - targetPanX;
+    dragStartY = e.clientY - targetPanY;
+    mouseDownX = e.clientX;
+    mouseDownY = e.clientY;
   };
   window.addEventListener("mouseup", () => {
     isDraggingMap = false;
   });
   canvas.onmousemove = (e) => {
     const mRect = canvas.getBoundingClientRect();
-    mapMouseX = e.clientX - mRect.left;
-    mapMouseY = e.clientY - mRect.top;
+    const scaleX = canvas.width / (mRect.width || 1);
+    const scaleY = canvas.height / (mRect.height || 1);
+    mapMouseX = (e.clientX - mRect.left) * scaleX;
+    mapMouseY = (e.clientY - mRect.top) * scaleY;
     if (isDraggingMap) {
-      mapPanX = e.clientX - dragStartX;
-      mapPanY = e.clientY - dragStartY;
+      targetPanX = e.clientX - dragStartX;
+      targetPanY = e.clientY - dragStartY;
     }
   };
   canvas.ondblclick = () => {
-    mapZoom = 1;
-    mapPanX = 0;
-    mapPanY = 0;
+    targetZoom = 1;
+    targetPanX = 0;
+    targetPanY = 0;
   };
   canvas.onmouseleave = () => {
     mapMouseX = -1;
     mapMouseY = -1;
   };
-  canvas.onclick = () => {
-    if (hoverSystem) {
-      selectedSystem = hoverSystem;
+  canvas.onclick = (e) => {
+    const dragDist = Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY);
+    if (dragDist > 6) {
+      return;
+    }
+    const mRect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / (mRect.width || 1);
+    const scaleY = canvas.height / (mRect.height || 1);
+    const clickX = (e.clientX - mRect.left) * scaleX;
+    const clickY = (e.clientY - mRect.top) * scaleY;
+    const currentScale = baseScale * mapZoom;
+    const centerX = width / 2 + mapPanX;
+    const centerY = height / 2 + mapPanY;
+    let closestSys = null;
+    let closestDist = 16;
+    for (let i = 0;i < systems.length; i++) {
+      const sys = systems[i];
+      const screenX = centerX + sys.x * currentScale;
+      const screenY = centerY + sys.z * currentScale;
+      const dx = clickX - screenX;
+      const dy = clickY - screenY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestSys = sys;
+      }
+    }
+    if (closestSys) {
+      selectedSystem = closestSys;
       updateSystemDetails(selectedSystem);
       populateQuickBeaconsList();
       playSiliconCollectSound();
@@ -33543,20 +34010,165 @@ function renderGalaxyMap() {
       }
     });
   }
-  const lifeFilterBtn = document.getElementById("life-filter-toggle-btn");
-  if (lifeFilterBtn && !lifeFilterBtn.dataset.listenerAttached) {
-    lifeFilterBtn.dataset.listenerAttached = "true";
-    lifeFilterBtn.addEventListener("click", () => {
-      filterLifeOnly = !filterLifeOnly;
-      if (filterLifeOnly) {
-        lifeFilterBtn.classList.add("filter-active");
-        lifeFilterBtn.innerText = "\uD83E\uDDE0 Gedanken-Echo Filter: AN";
-      } else {
-        lifeFilterBtn.classList.remove("filter-active");
-        lifeFilterBtn.innerText = "\uD83E\uDDE0 Gedanken-Echo Filter: AUS";
+}
+function setupSearchAndNavigationControls() {
+  if (!STATE.universe)
+    return;
+  const systems = STATE.universe.systems;
+  const searchInput = document.getElementById("galaxy-search-input");
+  const resultsContainer = document.getElementById("galaxy-search-results");
+  if (searchInput && resultsContainer && !searchInput.dataset.listenerAttached) {
+    searchInput.dataset.listenerAttached = "true";
+    searchInput.addEventListener("input", () => {
+      const query = searchInput.value.trim().toLowerCase();
+      if (!query) {
+        resultsContainer.style.display = "none";
+        resultsContainer.innerHTML = "";
+        return;
+      }
+      const currentSys = STATE.universe?.systems.find((s) => s.id === STATE.currentSystemId) || STATE.universe?.systems[0];
+      const matches = systems.filter((s) => {
+        if (s.name.toLowerCase().includes(query))
+          return true;
+        if (s.sectorName && s.sectorName.toLowerCase().includes(query))
+          return true;
+        if (s.anomalyType && s.anomalyType.toLowerCase().includes(query))
+          return true;
+        if (s.planets.some((p) => p.species && p.species.name.toLowerCase().includes(query)))
+          return true;
+        return false;
+      }).slice(0, 8);
+      if (matches.length === 0) {
+        resultsContainer.innerHTML = `<div style="padding: 8px 12px; color: #64748b; font-size: 0.7rem; font-family: 'Orbitron', sans-serif;">Kein System gefunden</div>`;
+        resultsContainer.style.display = "block";
+        return;
+      }
+      let html = "";
+      matches.forEach((m) => {
+        const dx = m.x - (currentSys?.x || 0);
+        const dz = m.z - (currentSys?.z || 0);
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        let anomalyTag = "";
+        if (m.anomalyType && m.anomalyType !== "none")
+          anomalyTag = " ⚡";
+        if (m.isCoreAnchor)
+          anomalyTag = " \uD83D\uDD73️";
+        html += `
+                    <div class="galaxy-search-item" data-sys-id="${m.id}">
+                        <div>
+                            <span class="galaxy-search-item-title">✨ ${m.name}${anomalyTag}</span>
+                            <span class="galaxy-search-item-meta"> (${m.sectorName || "Sektor"})</span>
+                        </div>
+                        <span style="font-size: 0.65rem; color: #38bdf8; font-family: 'Orbitron', sans-serif;">${dist.toFixed(0)} LJ</span>
+                    </div>
+                `;
+      });
+      resultsContainer.innerHTML = html;
+      resultsContainer.style.display = "block";
+      resultsContainer.querySelectorAll(".galaxy-search-item").forEach((item) => {
+        item.addEventListener("click", () => {
+          const sysId = parseInt(item.getAttribute("data-sys-id") || "0");
+          const target = systems.find((s) => s.id === sysId);
+          if (target) {
+            selectedSystem = target;
+            updateSystemDetails(selectedSystem);
+            populateQuickBeaconsList();
+            playSiliconCollectSound();
+            smoothPanTo(target.x, target.z, 2.2);
+            resultsContainer.style.display = "none";
+            searchInput.value = target.name;
+          }
+        });
+      });
+    });
+    document.addEventListener("click", (e) => {
+      if (!searchInput.contains(e.target) && !resultsContainer.contains(e.target)) {
+        resultsContainer.style.display = "none";
       }
     });
   }
+  const shipBtn = document.getElementById("nav-btn-ship");
+  const sec1Btn = document.getElementById("nav-btn-sector1");
+  const sec2Btn = document.getElementById("nav-btn-sector2");
+  const sec3Btn = document.getElementById("nav-btn-sector3");
+  const lifeBtn = document.getElementById("life-filter-toggle-btn");
+  if (shipBtn && !shipBtn.dataset.listenerAttached) {
+    shipBtn.dataset.listenerAttached = "true";
+    shipBtn.addEventListener("click", () => {
+      const currentSys = systems.find((s) => s.id === STATE.currentSystemId) || systems[0];
+      smoothPanTo(currentSys.x, currentSys.z, 2);
+      selectedSystem = currentSys;
+      updateSystemDetails(selectedSystem);
+    });
+  }
+  if (sec1Btn && !sec1Btn.dataset.listenerAttached) {
+    sec1Btn.dataset.listenerAttached = "true";
+    sec1Btn.addEventListener("click", () => {
+      smoothPanTo(290, 160, 1.2);
+    });
+  }
+  if (sec2Btn && !sec2Btn.dataset.listenerAttached) {
+    sec2Btn.dataset.listenerAttached = "true";
+    sec2Btn.addEventListener("click", () => {
+      smoothPanTo(140, 80, 1.5);
+    });
+  }
+  if (sec3Btn && !sec3Btn.dataset.listenerAttached) {
+    sec3Btn.dataset.listenerAttached = "true";
+    sec3Btn.addEventListener("click", () => {
+      smoothPanTo(0, 0, 2.4);
+      const coreSys = systems.find((s) => s.id === 0);
+      if (coreSys) {
+        selectedSystem = coreSys;
+        updateSystemDetails(selectedSystem);
+      }
+    });
+  }
+  if (lifeBtn && !lifeBtn.dataset.listenerAttached) {
+    lifeBtn.dataset.listenerAttached = "true";
+    lifeBtn.addEventListener("click", () => {
+      filterLifeOnly = !filterLifeOnly;
+      if (filterLifeOnly) {
+        lifeBtn.classList.add("active-nav");
+        lifeBtn.innerText = "\uD83E\uDDE0 Gedanken-Echo: AN";
+      } else {
+        lifeBtn.classList.remove("active-nav");
+        lifeBtn.innerText = "\uD83E\uDDE0 Gedanken-Echo: AUS";
+      }
+    });
+  }
+}
+function setupMapKeyboardShortcuts() {
+  window.addEventListener("keydown", (e) => {
+    if (!mapOpen)
+      return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      const input = document.getElementById("galaxy-search-input");
+      if (input)
+        input.focus();
+      return;
+    }
+    if (document.activeElement?.id === "galaxy-search-input")
+      return;
+    if (e.key.toLowerCase() === "c") {
+      const shipBtn = document.getElementById("nav-btn-ship");
+      if (shipBtn)
+        shipBtn.click();
+    } else if (e.key === "1") {
+      const sec1Btn = document.getElementById("nav-btn-sector1");
+      if (sec1Btn)
+        sec1Btn.click();
+    } else if (e.key === "2") {
+      const sec2Btn = document.getElementById("nav-btn-sector2");
+      if (sec2Btn)
+        sec2Btn.click();
+    } else if (e.key === "3") {
+      const sec3Btn = document.getElementById("nav-btn-sector3");
+      if (sec3Btn)
+        sec3Btn.click();
+    }
+  });
 }
 function populateQuickBeaconsList() {
   const listEl = document.getElementById("psionic-beacons-quick-list");
@@ -33606,6 +34218,7 @@ function populateQuickBeaconsList() {
         updateSystemDetails(selectedSystem);
         populateQuickBeaconsList();
         playSiliconCollectSound();
+        smoothPanTo(target.x, target.z, 2);
       }
     });
   });
@@ -33631,6 +34244,9 @@ function updateSystemDetails(sys) {
   const inWarpRange = distFromCur <= STATE.warpRange;
   const inPsionicRange = distFromCur <= STATE.psionicRange;
   const nameEl = document.getElementById("detail-system-name");
+  const sectorEl = document.getElementById("val-sector-name");
+  const anomalyRow = document.getElementById("row-anomaly");
+  const anomalyEl = document.getElementById("val-anomaly-type");
   const coordXEl = document.getElementById("val-coord-x");
   const coordZEl = document.getElementById("val-coord-z");
   const starTypeEl = document.getElementById("val-star-type");
@@ -33638,6 +34254,34 @@ function updateSystemDetails(sys) {
   const planetCountEl = document.getElementById("val-planet-count");
   if (nameEl)
     nameEl.innerText = sys.name;
+  if (sectorEl) {
+    sectorEl.innerText = sys.sectorName || "Unkartierter Sektor";
+    if (sys.sectorId === "sector_core")
+      sectorEl.style.color = "#eab308";
+    else if (sys.sectorId === "sector_mid_rim")
+      sectorEl.style.color = "#38bdf8";
+    else
+      sectorEl.style.color = "#94a3b8";
+  }
+  if (anomalyRow && anomalyEl) {
+    if (sys.anomalyType && sys.anomalyType !== "none") {
+      anomalyRow.style.display = "flex";
+      let label = sys.anomalyType;
+      if (sys.anomalyType === "flare_star")
+        label = "⚡ Instabiler Sonnensturm";
+      else if (sys.anomalyType === "dark_energy_rift")
+        label = "\uD83C\uDF00 Dunkle-Energie-Verzerrung";
+      else if (sys.anomalyType === "ancient_beacon")
+        label = "\uD83C\uDFDB️ Vorläufer-Relikt-Bake";
+      else if (sys.anomalyType === "pulsar")
+        label = "\uD83D\uDCAB Hochenergetischer Pulsar";
+      else if (sys.anomalyType === "supermassive_black_hole")
+        label = "\uD83D\uDD73️ Supermassereiche Singularität";
+      anomalyEl.innerText = label;
+    } else {
+      anomalyRow.style.display = "none";
+    }
+  }
   if (coordXEl)
     coordXEl.innerText = String(sys.x);
   if (coordZEl)
@@ -33669,6 +34313,12 @@ function updateSystemDetails(sys) {
         pColor = "#c084fc";
       if (p.type === "Habitable")
         pColor = "#10b981";
+      if (p.type === "Vorläufer-Konstrukt")
+        pColor = "#06b6d4";
+      if (p.type === "Gefangener Stern")
+        pColor = "#38bdf8";
+      if (p.type === "Plasma-Wirbel")
+        pColor = "#ec4899";
       li.innerHTML = `
                 <span>
                     <span class="planet-indicator-dot" style="background-color: ${pColor};"></span>
@@ -33716,41 +34366,43 @@ function warpToSystem(systemId) {
   const dx = targetSys.x - currentSys.x;
   const dz = targetSys.z - currentSys.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist > STATE.warpRange) {
-    addLogEntry("SYSTEM", `Hypersprung abgebrochen: Distanz zu ${targetSys.name} (${dist.toFixed(0)} LJ) überschreitet maximale Faltungsreichweite (${STATE.warpRange} LJ)!`);
-    return;
-  }
   const costMult = STATE.mutations.folddrive && STATE.mutations.folddrive.purchased ? 0.7 : 1;
   const warpCost = Math.round((15 + dist * 0.15) * costMult);
-  if (STATE.bioEnergy < warpCost) {
-    addLogEntry("SYSTEM", `Hypersprung abgebrochen: Nicht genügend Bio-Energie (${warpCost}% benötigt, aktuell ${Math.round(STATE.bioEnergy)}%)!`);
+  if (dist > STATE.warpRange || STATE.bioEnergy < warpCost) {
+    playCrashSound();
+    addLogEntry("SYSTEM", `Warp-Fehlschlag: Ziel außerhalb der Faltungsreichweite oder unzureichende Bio-Energie!`);
     return;
   }
-  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - warpCost);
+  STATE.bioEnergy -= warpCost;
+  STATE.currentSystemId = targetSys.id;
+  STATE.systemsVisited++;
+  if (!STATE.visitedSystemIds)
+    STATE.visitedSystemIds = [];
+  if (!STATE.visitedSystemIds.includes(targetSys.id)) {
+    STATE.visitedSystemIds.push(targetSys.id);
+  }
   const warpOverlay = document.getElementById("warp-overlay");
   if (warpOverlay) {
-    warpOverlay.style.display = "flex";
+    warpOverlay.style.display = "block";
     warpOverlay.style.opacity = "1";
   }
-  setThrusterSound(false);
-  playCrashSound();
+  playSiliconCollectSound();
+  setThrusterSound(true);
+  addLogEntry("SYSTEM", `\uD83C\uDF0C RAUMZEIT GEFALTET: Transit nach ${targetSys.name} (${targetSys.sectorName || "Sektor"}). -${warpCost}% Bio-Energie.`);
   setTimeout(() => {
-    STATE.currentSystemId = systemId;
-    STATE.systemsVisited++;
-    const activeSystem = STATE.universe.systems[systemId];
     clearActiveSystem();
     spawnPlanetsAndAsteroids();
-    STATE.playerPosition.set(0, 0, 75);
-    STATE.playerVelocity.set(5.2, 0, 0);
-    if (STATE.playerGroup) {
-      STATE.playerGroup.position.set(0, 0, 75);
-    }
-    addLogEntry("SYSTEM", `Hypersprung abgeschlossen. Raumfaltung um ${activeSystem.name} (${dist.toFixed(0)} LJ, -${warpCost}% Energie) stabilisiert.`);
     if (warpOverlay) {
-      warpOverlay.style.display = "none";
+      warpOverlay.style.opacity = "0";
+      setTimeout(() => {
+        warpOverlay.style.display = "none";
+      }, 600);
     }
-    toggleGalaxyMap();
-  }, 600);
+    setThrusterSound(false);
+    if (mapOpen) {
+      toggleGalaxyMap();
+    }
+  }, 1200);
 }
 
 // src/systems/crew.ts
