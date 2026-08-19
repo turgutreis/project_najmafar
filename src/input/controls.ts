@@ -296,14 +296,12 @@ export function processInput(dt: number) {
     let isThrusting = false;
     let isRetroBraking = false;
     let turnInput = 0; // -1 = Left (CCW), +1 = Right (CW)
-    STATE.spaceBrakeActive = false;
 
     // 1. Keyboard Input
     if (STATE.keys.w) isThrusting = true;
     if (STATE.keys.s) isRetroBraking = true;
     if (STATE.keys.a) turnInput += 1;
     if (STATE.keys.d) turnInput -= 1;
-    if (STATE.keys.Shift) STATE.spaceBrakeActive = true;
 
     // 2. Gamepad Input
     let gp: Gamepad | null = null;
@@ -327,7 +325,6 @@ export function processInput(dt: number) {
         if (Math.abs(stickX) > deadzone) turnInput -= stickX;
         if (stickY < -0.3 || rtVal > 0.2) isThrusting = true;
         if (stickY > 0.3 || ltVal > 0.2) isRetroBraking = true;
-        if (gp.buttons[1] && gp.buttons[1].pressed) STATE.spaceBrakeActive = true; // Button B = Space Brake
 
         // Edge-triggered Buttons
         function isPressedEdge(btnIdx: number) {
@@ -414,19 +411,8 @@ export function processInput(dt: number) {
         }
     }
 
-    // 6. Space Handbrake / Inertial All-Stop (Holding Space / Shift)
-    if (STATE.spaceBrakeActive) {
-        const curSpeed = STATE.playerVelocity.length();
-        if (curSpeed > 0.1) {
-            const counterDir = STATE.playerVelocity.clone().normalize().negate();
-            STATE.playerAcceleration.addScaledVector(counterDir, STATE.retroThrustStrength * 1.6);
-        }
-    }
-
-    // 7. Space Drag & Flight Assist Integration
-    if (STATE.spaceBrakeActive) {
-        STATE.currentDrag = STATE.brakeDrag;
-    } else if (STATE.flightAssist) {
+    // 6. Space Drag & Flight Assist Integration
+    if (STATE.flightAssist) {
         // Flight Assist ON: Gentle retro-dampening only when no keys are pressed
         if (!isThrusting && !isRetroBraking) {
             STATE.currentDrag = 0.85;

@@ -57,7 +57,6 @@ export const STATE: GameState = {
     shipHeading: 0.0,
     shipAngularVelocity: 0.0,
     flightAssist: false,
-    spaceBrakeActive: false,
     shipSpeed: 2.5,
     progradeVector: new THREE.Vector3(1, 0, 0),
     drag: 0.005,

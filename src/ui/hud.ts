@@ -98,7 +98,6 @@ export function updateHUDStats(isHarmony = false) {
 
     const speedVal = document.getElementById('flight-speed-val');
     const modeText = document.getElementById('flight-mode-text');
-    const brakeIndicator = document.getElementById('space-brake-indicator');
 
     if (speedVal) {
         speedVal.innerText = (STATE.shipSpeed || 0).toFixed(1);
@@ -111,9 +110,6 @@ export function updateHUDStats(isHarmony = false) {
             modeText.innerHTML = "🌌 DRIFT <span style='font-size: 0.58rem; color: #94a3b8;'>[Z]</span>";
             modeText.style.color = "#38bdf8";
         }
-    }
-    if (brakeIndicator) {
-        brakeIndicator.style.display = STATE.spaceBrakeActive ? "inline" : "none";
     }
 }
 

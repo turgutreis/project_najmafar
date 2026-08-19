@@ -297,7 +297,6 @@ export interface GameState {
     shipHeading: number;
     shipAngularVelocity: number;
     flightAssist: boolean;
-    spaceBrakeActive: boolean;
     shipSpeed: number;
     progradeVector: THREE.Vector3;
     drag: number;

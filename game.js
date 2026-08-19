@@ -28755,7 +28755,6 @@ var STATE = {
   shipHeading: 0,
   shipAngularVelocity: 0,
   flightAssist: false,
-  spaceBrakeActive: false,
   shipSpeed: 2.5,
   progradeVector: new Vector3(1, 0, 0),
   drag: 0.005,
@@ -29916,7 +29915,7 @@ function updateTrajectory() {
     return;
   const curSpeed = STATE.playerVelocity.length();
   const isThrusting = STATE.keys ? STATE.keys.w : false;
-  const isBraking = STATE.keys ? STATE.keys.s || STATE.spaceBrakeActive : false;
+  const isBraking = STATE.keys ? STATE.keys.s : false;
   if (curSpeed < 0.2 && !isThrusting) {
     trajectoryLine.visible = false;
     return;
@@ -31583,7 +31582,6 @@ function updateHUDStats(isHarmony = false) {
   }
   const speedVal = document.getElementById("flight-speed-val");
   const modeText = document.getElementById("flight-mode-text");
-  const brakeIndicator = document.getElementById("space-brake-indicator");
   if (speedVal) {
     speedVal.innerText = (STATE.shipSpeed || 0).toFixed(1);
   }
@@ -31595,9 +31593,6 @@ function updateHUDStats(isHarmony = false) {
       modeText.innerHTML = "\uD83C\uDF0C DRIFT <span style='font-size: 0.58rem; color: #94a3b8;'>[Z]</span>";
       modeText.style.color = "#38bdf8";
     }
-  }
-  if (brakeIndicator) {
-    brakeIndicator.style.display = STATE.spaceBrakeActive ? "inline" : "none";
   }
 }
 function updateMinimap() {
@@ -35585,7 +35580,6 @@ function processInput(dt) {
   let isThrusting = false;
   let isRetroBraking = false;
   let turnInput = 0;
-  STATE.spaceBrakeActive = false;
   if (STATE.keys.w)
     isThrusting = true;
   if (STATE.keys.s)
@@ -35594,8 +35588,6 @@ function processInput(dt) {
     turnInput += 1;
   if (STATE.keys.d)
     turnInput -= 1;
-  if (STATE.keys.Shift)
-    STATE.spaceBrakeActive = true;
   let gp = null;
   if (navigator.getGamepads) {
     const gamepads = navigator.getGamepads();
@@ -35624,8 +35616,6 @@ function processInput(dt) {
       isThrusting = true;
     if (stickY > 0.3 || ltVal > 0.2)
       isRetroBraking = true;
-    if (gp.buttons[1] && gp.buttons[1].pressed)
-      STATE.spaceBrakeActive = true;
     if (isPressedEdge(0)) {
       if (STATE.nearestPlanet) {
         const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets && STATE.scannedPlanets[STATE.nearestPlanet.name];
@@ -35690,16 +35680,7 @@ function processInput(dt) {
       STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 1.8 * dt);
     }
   }
-  if (STATE.spaceBrakeActive) {
-    const curSpeed = STATE.playerVelocity.length();
-    if (curSpeed > 0.1) {
-      const counterDir = STATE.playerVelocity.clone().normalize().negate();
-      STATE.playerAcceleration.addScaledVector(counterDir, STATE.retroThrustStrength * 1.6);
-    }
-  }
-  if (STATE.spaceBrakeActive) {
-    STATE.currentDrag = STATE.brakeDrag;
-  } else if (STATE.flightAssist) {
+  if (STATE.flightAssist) {
     if (!isThrusting && !isRetroBraking) {
       STATE.currentDrag = 0.85;
     } else {

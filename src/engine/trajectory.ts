@@ -41,7 +41,7 @@ export function updateTrajectory() {
 
     const curSpeed = STATE.playerVelocity.length();
     const isThrusting = STATE.keys ? STATE.keys.w : false;
-    const isBraking = STATE.keys ? (STATE.keys.s || STATE.spaceBrakeActive) : false;
+    const isBraking = STATE.keys ? STATE.keys.s : false;
 
     // Smooth visibility
     if (curSpeed < 0.2 && !isThrusting) {
