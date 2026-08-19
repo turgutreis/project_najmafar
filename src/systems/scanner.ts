@@ -162,10 +162,12 @@ export function triggerScanStart() {
         return;
     }
 
+    const meshScale = planet.mesh ? planet.mesh.scale.x : 1.0;
+    const maxScanDist = Math.max(25.0, (planet.size || 2.5) * meshScale * 3.8);
     const dx = STATE.playerPosition.x - planet.mesh.position.x;
     const dz = STATE.playerPosition.z - planet.mesh.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist >= 20) return;
+    if (dist >= maxScanDist) return;
 
     STATE.scanningPlanet = planet;
     STATE.scanProgress = 0;
@@ -176,19 +178,23 @@ export function triggerScanStart() {
     const scanBtn = document.getElementById('start-scan-btn');
     if (scanBtn) scanBtn.setAttribute('disabled', 'true');
 
-    createScanVisuals(STATE.playerPosition, planet.mesh.position, planet.size || 3.0);
+    const visualRadius = (planet.size || 3.0) * meshScale;
+    createScanVisuals(STATE.playerPosition, planet.mesh.position, visualRadius);
     startScanSound();
-    addLogEntry("SYSTEM", `Spektral-Scan initiiert für: ${STATE.scanningPlanet.name}. Halte Position (Distanz < 20)...`);
+    addLogEntry("SYSTEM", `Spektral-Scan initiiert für: ${STATE.scanningPlanet.name}. Halte Orbit-Position...`);
 }
 
 export function updateScanning(dt: number) {
     if (!STATE.scanningPlanet) return;
 
+    const meshScale = STATE.scanningPlanet.mesh ? STATE.scanningPlanet.mesh.scale.x : 1.0;
+    const maxHoldDist = Math.max(32.0, (STATE.scanningPlanet.size || 2.5) * meshScale * 4.4);
+
     const dx = STATE.playerPosition.x - STATE.scanningPlanet.mesh.position.x;
     const dz = STATE.playerPosition.z - STATE.scanningPlanet.mesh.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
 
-    if (dist > 25) {
+    if (dist > maxHoldDist) {
         cancelScanning("Signalverlust. Abstand überschritt Sicherheitsradius.");
         return;
     }
@@ -323,15 +329,22 @@ export function updateScannerUI(planet: any, dist: number) {
         }
     }
 
-    const inRange = dist < 22;
+    const meshScale = planet.mesh ? planet.mesh.scale.x : 1.0;
+    const maxScanDist = Math.max(25.0, (planet.size || 2.5) * meshScale * 3.8);
+    const inRange = dist < maxScanDist;
     const isScanned = planet.scanned || STATE.scannedPlanets[planet.name];
+
+    if (distEl) {
+        distEl.innerText = `${dist.toFixed(1)} ${inRange ? '(In Sensorreichweite)' : '(Zu weit entfernt)'}`;
+        distEl.style.color = inRange ? '#10b981' : '#f59e0b';
+    }
 
     if (scanBtn) {
         scanBtn.disabled = !inRange || isScanned || (STATE.scanningPlanet !== null);
         if (isScanned) {
             scanBtn.innerText = "Oberflächenscan Abgeschlossen ✓";
         } else {
-            scanBtn.innerText = inRange ? "Scan initiieren [F]" : "Zu weit entfernt (Ziel < 20 nötig)";
+            scanBtn.innerText = inRange ? "Scan initiieren [F]" : `Zu weit entfernt (< ${Math.round(maxScanDist)} nötig)`;
         }
     }
 

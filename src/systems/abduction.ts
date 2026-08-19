@@ -18,10 +18,11 @@ export function triggerAbductStart() {
     }
 
     const p = STATE.nearestPlanet;
+    const meshScale = p.mesh ? p.mesh.scale.x : 1.0;
     const dx = STATE.playerPosition.x - p.mesh.position.x;
     const dz = STATE.playerPosition.z - p.mesh.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
-    const maxStartDist = Math.max(26.0, (p.size || 3.0) * 5.0);
+    const maxStartDist = Math.max(28.0, (p.size || 3.0) * meshScale * 4.4);
 
     if (dist > maxStartDist) {
         addLogEntry("SYSTEM", `Zu weit entfernt für psionischen Traktorstrahl (Distanz: ${dist.toFixed(1)} / Max ${maxStartDist.toFixed(0)}).`);
@@ -57,10 +58,11 @@ export function triggerAbductStart() {
 export function updateAbduction(dt: number) {
     if (!STATE.abductTarget) return;
 
+    const meshScale = STATE.abductTarget.mesh ? STATE.abductTarget.mesh.scale.x : 1.0;
     const dx = STATE.playerPosition.x - STATE.abductTarget.mesh.position.x;
     const dz = STATE.playerPosition.z - STATE.abductTarget.mesh.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
-    const maxHoldDist = Math.max(38.0, (STATE.abductTarget.size || 3.0) * 6.5);
+    const maxHoldDist = Math.max(38.0, (STATE.abductTarget.size || 3.0) * meshScale * 5.0);
 
     if (dist > maxHoldDist) {
         cancelAbduction(`Ziel außer Reichweite (Distanz: ${dist.toFixed(1)} > ${maxHoldDist.toFixed(0)})`);

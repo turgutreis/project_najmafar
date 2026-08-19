@@ -11,10 +11,12 @@ let harvestFilter: BiquadFilterNode | null = null;
 export function triggerHarvestStart() {
     if (!STATE.gameStarted || STATE.extractingPlanet || STATE.scanningPlanet || STATE.abductActive || !STATE.nearestPlanet) return;
 
+    const meshScale = STATE.nearestPlanet.mesh ? STATE.nearestPlanet.mesh.scale.x : 1.0;
+    const maxHarvestDist = Math.max(25.0, (STATE.nearestPlanet.size || 2.5) * meshScale * 3.8);
     const dx = STATE.playerPosition.x - STATE.nearestPlanet.mesh.position.x;
     const dz = STATE.playerPosition.z - STATE.nearestPlanet.mesh.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist >= 20) return;
+    if (dist >= maxHarvestDist) return;
 
     STATE.extractingPlanet = STATE.nearestPlanet;
     STATE.harvestProgress = 0;
@@ -31,12 +33,14 @@ export function triggerHarvestStart() {
 export function updateHarvesting(dt: number) {
     if (!STATE.extractingPlanet) return;
 
+    const meshScale = STATE.extractingPlanet.mesh ? STATE.extractingPlanet.mesh.scale.x : 1.0;
+    const maxHoldDist = Math.max(32.0, (STATE.extractingPlanet.size || 2.5) * meshScale * 4.4);
     const dx = STATE.playerPosition.x - STATE.extractingPlanet.mesh.position.x;
     const dz = STATE.playerPosition.z - STATE.extractingPlanet.mesh.position.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
 
-    if (dist > 25) {
-        cancelHarvesting("Ziel außer Reichweite (> 25)");
+    if (dist > maxHoldDist) {
+        cancelHarvesting("Ziel außer Orbit-Reichweite.");
         return;
     }
 

@@ -123,9 +123,15 @@ export function updatePhysics(dt: number) {
         if (!targetReticleGroup) createTargetReticle();
         if (targetReticleGroup) {
             targetReticleGroup.visible = true;
-            targetReticleGroup.position.copy(STATE.lockedTarget.mesh.position);
+            targetReticleGroup.position.set(
+                STATE.lockedTarget.mesh.position.x,
+                0.4,
+                STATE.lockedTarget.mesh.position.z
+            );
             
-            const scale = (STATE.lockedTarget.size || 2.5) * 1.5;
+            const curVisualScale = STATE.lockedTarget.mesh.scale.x || 1.0;
+            const baseSize = STATE.lockedTarget.size || 2.5;
+            const scale = baseSize * curVisualScale * 1.45;
             const pulse = 1.0 + Math.sin(Date.now() * 0.008) * 0.08;
             targetReticleGroup.scale.set(scale * pulse, scale * pulse, scale * pulse);
 

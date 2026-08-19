@@ -32335,10 +32335,12 @@ function triggerScanStart() {
     addLogEntry("SYSTEM", `Planet ${planet.name} ist bereits vollständig kartografiert & gescannt.`);
     return;
   }
+  const meshScale = planet.mesh ? planet.mesh.scale.x : 1;
+  const maxScanDist = Math.max(25, (planet.size || 2.5) * meshScale * 3.8);
   const dx = STATE.playerPosition.x - planet.mesh.position.x;
   const dz = STATE.playerPosition.z - planet.mesh.position.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist >= 20)
+  if (dist >= maxScanDist)
     return;
   STATE.scanningPlanet = planet;
   STATE.scanProgress = 0;
@@ -32348,17 +32350,20 @@ function triggerScanStart() {
   const scanBtn = document.getElementById("start-scan-btn");
   if (scanBtn)
     scanBtn.setAttribute("disabled", "true");
-  createScanVisuals(STATE.playerPosition, planet.mesh.position, planet.size || 3);
+  const visualRadius = (planet.size || 3) * meshScale;
+  createScanVisuals(STATE.playerPosition, planet.mesh.position, visualRadius);
   startScanSound();
-  addLogEntry("SYSTEM", `Spektral-Scan initiiert für: ${STATE.scanningPlanet.name}. Halte Position (Distanz < 20)...`);
+  addLogEntry("SYSTEM", `Spektral-Scan initiiert für: ${STATE.scanningPlanet.name}. Halte Orbit-Position...`);
 }
 function updateScanning(dt) {
   if (!STATE.scanningPlanet)
     return;
+  const meshScale = STATE.scanningPlanet.mesh ? STATE.scanningPlanet.mesh.scale.x : 1;
+  const maxHoldDist = Math.max(32, (STATE.scanningPlanet.size || 2.5) * meshScale * 4.4);
   const dx = STATE.playerPosition.x - STATE.scanningPlanet.mesh.position.x;
   const dz = STATE.playerPosition.z - STATE.scanningPlanet.mesh.position.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist > 25) {
+  if (dist > maxHoldDist) {
     cancelScanning("Signalverlust. Abstand überschritt Sicherheitsradius.");
     return;
   }
@@ -32481,14 +32486,20 @@ function updateScannerUI(planet, dist) {
       orbitBadge.style.display = "none";
     }
   }
-  const inRange = dist < 22;
+  const meshScale = planet.mesh ? planet.mesh.scale.x : 1;
+  const maxScanDist = Math.max(25, (planet.size || 2.5) * meshScale * 3.8);
+  const inRange = dist < maxScanDist;
   const isScanned = planet.scanned || STATE.scannedPlanets[planet.name];
+  if (distEl) {
+    distEl.innerText = `${dist.toFixed(1)} ${inRange ? "(In Sensorreichweite)" : "(Zu weit entfernt)"}`;
+    distEl.style.color = inRange ? "#10b981" : "#f59e0b";
+  }
   if (scanBtn) {
     scanBtn.disabled = !inRange || isScanned || STATE.scanningPlanet !== null;
     if (isScanned) {
       scanBtn.innerText = "Oberflächenscan Abgeschlossen ✓";
     } else {
-      scanBtn.innerText = inRange ? "Scan initiieren [F]" : "Zu weit entfernt (Ziel < 20 nötig)";
+      scanBtn.innerText = inRange ? "Scan initiieren [F]" : `Zu weit entfernt (< ${Math.round(maxScanDist)} nötig)`;
     }
   }
   if (isScanned) {
@@ -35107,10 +35118,12 @@ var harvestFilter = null;
 function triggerHarvestStart() {
   if (!STATE.gameStarted || STATE.extractingPlanet || STATE.scanningPlanet || STATE.abductActive || !STATE.nearestPlanet)
     return;
+  const meshScale = STATE.nearestPlanet.mesh ? STATE.nearestPlanet.mesh.scale.x : 1;
+  const maxHarvestDist = Math.max(25, (STATE.nearestPlanet.size || 2.5) * meshScale * 3.8);
   const dx = STATE.playerPosition.x - STATE.nearestPlanet.mesh.position.x;
   const dz = STATE.playerPosition.z - STATE.nearestPlanet.mesh.position.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist >= 20)
+  if (dist >= maxHarvestDist)
     return;
   STATE.extractingPlanet = STATE.nearestPlanet;
   STATE.harvestProgress = 0;
@@ -35124,11 +35137,13 @@ function triggerHarvestStart() {
 function updateHarvesting(dt) {
   if (!STATE.extractingPlanet)
     return;
+  const meshScale = STATE.extractingPlanet.mesh ? STATE.extractingPlanet.mesh.scale.x : 1;
+  const maxHoldDist = Math.max(32, (STATE.extractingPlanet.size || 2.5) * meshScale * 4.4);
   const dx = STATE.playerPosition.x - STATE.extractingPlanet.mesh.position.x;
   const dz = STATE.playerPosition.z - STATE.extractingPlanet.mesh.position.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist > 25) {
-    cancelHarvesting("Ziel außer Reichweite (> 25)");
+  if (dist > maxHoldDist) {
+    cancelHarvesting("Ziel außer Orbit-Reichweite.");
     return;
   }
   updateHarvestBeam(STATE.playerPosition, STATE.extractingPlanet.mesh.position);
@@ -35222,10 +35237,11 @@ function triggerAbductStart() {
     return;
   }
   const p = STATE.nearestPlanet;
+  const meshScale = p.mesh ? p.mesh.scale.x : 1;
   const dx = STATE.playerPosition.x - p.mesh.position.x;
   const dz = STATE.playerPosition.z - p.mesh.position.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
-  const maxStartDist = Math.max(26, (p.size || 3) * 5);
+  const maxStartDist = Math.max(28, (p.size || 3) * meshScale * 4.4);
   if (dist > maxStartDist) {
     addLogEntry("SYSTEM", `Zu weit entfernt für psionischen Traktorstrahl (Distanz: ${dist.toFixed(1)} / Max ${maxStartDist.toFixed(0)}).`);
     return;
@@ -35253,10 +35269,11 @@ function triggerAbductStart() {
 function updateAbduction(dt) {
   if (!STATE.abductTarget)
     return;
+  const meshScale = STATE.abductTarget.mesh ? STATE.abductTarget.mesh.scale.x : 1;
   const dx = STATE.playerPosition.x - STATE.abductTarget.mesh.position.x;
   const dz = STATE.playerPosition.z - STATE.abductTarget.mesh.position.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
-  const maxHoldDist = Math.max(38, (STATE.abductTarget.size || 3) * 6.5);
+  const maxHoldDist = Math.max(38, (STATE.abductTarget.size || 3) * meshScale * 5);
   if (dist > maxHoldDist) {
     cancelAbduction(`Ziel außer Reichweite (Distanz: ${dist.toFixed(1)} > ${maxHoldDist.toFixed(0)})`);
     return;
@@ -36045,8 +36062,10 @@ function updatePhysics(dt) {
       createTargetReticle();
     if (targetReticleGroup) {
       targetReticleGroup.visible = true;
-      targetReticleGroup.position.copy(STATE.lockedTarget.mesh.position);
-      const scale = (STATE.lockedTarget.size || 2.5) * 1.5;
+      targetReticleGroup.position.set(STATE.lockedTarget.mesh.position.x, 0.4, STATE.lockedTarget.mesh.position.z);
+      const curVisualScale = STATE.lockedTarget.mesh.scale.x || 1;
+      const baseSize = STATE.lockedTarget.size || 2.5;
+      const scale = baseSize * curVisualScale * 1.45;
       const pulse = 1 + Math.sin(Date.now() * 0.008) * 0.08;
       targetReticleGroup.scale.set(scale * pulse, scale * pulse, scale * pulse);
       if (targetReticleGroup.children[0])
