@@ -29884,8 +29884,8 @@ function onWindowResize() {
 }
 
 // src/engine/trajectory.ts
-var TRAJECTORY_STEPS = 65;
-var TRAJECTORY_DT = 0.055;
+var TRAJECTORY_STEPS = 140;
+var TRAJECTORY_DT = 0.08;
 var trajectoryGeometry;
 var trajectoryLine;
 var trajectoryPositions;
@@ -29893,6 +29893,7 @@ var trajectoryColors;
 var _predPos = new Vector3;
 var _predVel = new Vector3;
 var _predAcc = new Vector3;
+var _thrustAcc = new Vector3;
 function initTrajectory() {
   trajectoryGeometry = new BufferGeometry;
   trajectoryPositions = new Float32Array(TRAJECTORY_STEPS * 3);
@@ -29902,8 +29903,8 @@ function initTrajectory() {
   const material = new LineBasicMaterial({
     vertexColors: true,
     transparent: true,
-    opacity: 0.7,
-    linewidth: 1.2,
+    opacity: 0.85,
+    linewidth: 1.5,
     blending: AdditiveBlending,
     depthWrite: false
   });
@@ -29913,26 +29914,48 @@ function initTrajectory() {
 function updateTrajectory() {
   if (!trajectoryLine)
     return;
-  const curSpeed = STATE.playerVelocity.length();
-  if (curSpeed < 0.4) {
-    trajectoryLine.visible = false;
-    return;
-  }
-  trajectoryLine.visible = true;
   _predPos.copy(STATE.playerPosition);
   _predVel.copy(STATE.playerVelocity);
+  const isThrusting = STATE.keys ? STATE.keys.w : false;
+  const isBraking = STATE.keys ? STATE.keys.s || STATE.spaceBrakeActive : false;
+  if (isThrusting) {
+    const hasEnergy = STATE.bioEnergy > 0;
+    const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
+    const thrustMult = STATE.crewBuffs ? STATE.crewBuffs.thrust : 1;
+    const fX = Math.cos(STATE.shipHeading || 0);
+    const fZ = -Math.sin(STATE.shipHeading || 0);
+    _thrustAcc.set(fX, 0, fZ).multiplyScalar(effectiveThrust * thrustMult);
+  } else if (isBraking) {
+    if (_predVel.lengthSq() > 0.1) {
+      _thrustAcc.copy(_predVel).normalize().negate().multiplyScalar(STATE.retroThrustStrength);
+    } else {
+      _thrustAcc.set(0, 0, 0);
+    }
+  } else {
+    _thrustAcc.set(0, 0, 0);
+  }
   const sources = STATE.gravitySources;
   const sourceCount = sources.length;
   for (let step = 0;step < TRAJECTORY_STEPS; step++) {
     trajectoryPositions[step * 3 + 0] = _predPos.x;
     trajectoryPositions[step * 3 + 1] = 0.1;
     trajectoryPositions[step * 3 + 2] = _predPos.z;
-    const t = step / TRAJECTORY_STEPS;
-    const alpha = Math.pow(1 - t, 1.8) * Math.min(1, (curSpeed - 0.4) * 2);
-    trajectoryColors[step * 3 + 0] = 0.22 * alpha;
-    trajectoryColors[step * 3 + 1] = 0.75 * alpha;
-    trajectoryColors[step * 3 + 2] = 0.98 * alpha;
-    _predAcc.set(0, 0, 0);
+    const progress = step / TRAJECTORY_STEPS;
+    const alpha = Math.pow(1 - progress, 1.2) * 0.9;
+    if (isThrusting) {
+      trajectoryColors[step * 3 + 0] = 0.05 * alpha;
+      trajectoryColors[step * 3 + 1] = 0.95 * alpha;
+      trajectoryColors[step * 3 + 2] = 0.65 * alpha;
+    } else if (isBraking) {
+      trajectoryColors[step * 3 + 0] = 0.95 * alpha;
+      trajectoryColors[step * 3 + 1] = 0.25 * alpha;
+      trajectoryColors[step * 3 + 2] = 0.35 * alpha;
+    } else {
+      trajectoryColors[step * 3 + 0] = 0.2 * alpha;
+      trajectoryColors[step * 3 + 1] = 0.75 * alpha;
+      trajectoryColors[step * 3 + 2] = 0.98 * alpha;
+    }
+    _predAcc.copy(_thrustAcc);
     for (let s = 0;s < sourceCount; s++) {
       const source = sources[s];
       if (source.isAbsorbed)
@@ -30820,6 +30843,7 @@ function createPlayerMesh() {
   empLight = new PointLight(14239471, 0, 180, 1);
   ship.group.add(empLight);
   ship.group.position.copy(STATE.playerPosition);
+  ship.group.scale.set(0.65, 0.65, 0.65);
   scene.add(ship.group);
   STATE.playerGroup = ship.group;
   return ship.group;

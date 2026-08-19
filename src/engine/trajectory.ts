@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { STATE } from '../core/state';
 import { scene } from './scene';
 
-const TRAJECTORY_STEPS = 65;
-const TRAJECTORY_DT = 0.055;
+const TRAJECTORY_STEPS = 140;
+const TRAJECTORY_DT = 0.08;
 
 let trajectoryGeometry: THREE.BufferGeometry;
 let trajectoryLine: THREE.Line;
@@ -13,6 +13,7 @@ let trajectoryColors: Float32Array;
 const _predPos = new THREE.Vector3();
 const _predVel = new THREE.Vector3();
 const _predAcc = new THREE.Vector3();
+const _thrustAcc = new THREE.Vector3();
 
 export function initTrajectory() {
     trajectoryGeometry = new THREE.BufferGeometry();
@@ -25,8 +26,8 @@ export function initTrajectory() {
     const material = new THREE.LineBasicMaterial({
         vertexColors: true,
         transparent: true,
-        opacity: 0.7,
-        linewidth: 1.2,
+        opacity: 0.85,
+        linewidth: 1.5,
         blending: THREE.AdditiveBlending,
         depthWrite: false
     });
@@ -38,17 +39,29 @@ export function initTrajectory() {
 export function updateTrajectory() {
     if (!trajectoryLine) return;
 
-    const curSpeed = STATE.playerVelocity.length();
-
-    // Hide or collapse trajectory when ship is nearly motionless
-    if (curSpeed < 0.4) {
-        trajectoryLine.visible = false;
-        return;
-    }
-    trajectoryLine.visible = true;
-
     _predPos.copy(STATE.playerPosition);
     _predVel.copy(STATE.playerVelocity);
+
+    const isThrusting = STATE.keys ? STATE.keys.w : false;
+    const isBraking = STATE.keys ? (STATE.keys.s || STATE.spaceBrakeActive) : false;
+
+    if (isThrusting) {
+        const hasEnergy = STATE.bioEnergy > 0;
+        const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
+        const thrustMult = (STATE.crewBuffs ? STATE.crewBuffs.thrust : 1.0);
+
+        const fX = Math.cos(STATE.shipHeading || 0);
+        const fZ = -Math.sin(STATE.shipHeading || 0);
+        _thrustAcc.set(fX, 0, fZ).multiplyScalar(effectiveThrust * thrustMult);
+    } else if (isBraking) {
+        if (_predVel.lengthSq() > 0.1) {
+            _thrustAcc.copy(_predVel).normalize().negate().multiplyScalar(STATE.retroThrustStrength);
+        } else {
+            _thrustAcc.set(0, 0, 0);
+        }
+    } else {
+        _thrustAcc.set(0, 0, 0);
+    }
 
     const sources = STATE.gravitySources;
     const sourceCount = sources.length;
@@ -58,18 +71,27 @@ export function updateTrajectory() {
         trajectoryPositions[step * 3 + 1] = 0.1;
         trajectoryPositions[step * 3 + 2] = _predPos.z;
 
-        // Smooth quadratic alpha fade-out into the distance
-        const t = step / TRAJECTORY_STEPS;
-        const alpha = Math.pow(1.0 - t, 1.8) * Math.min(1.0, (curSpeed - 0.4) * 2.0);
+        const progress = step / TRAJECTORY_STEPS;
+        const alpha = Math.pow(1.0 - progress, 1.2) * 0.9;
 
-        // Soft Cyan / Psionic Azure line color
-        trajectoryColors[step * 3 + 0] = 0.22 * alpha;
-        trajectoryColors[step * 3 + 1] = 0.75 * alpha;
-        trajectoryColors[step * 3 + 2] = 0.98 * alpha;
+        // Color coding: Emerald when actively accelerating, Cyan / Azure when coasting on gravity
+        if (isThrusting) {
+            trajectoryColors[step * 3 + 0] = 0.05 * alpha;
+            trajectoryColors[step * 3 + 1] = 0.95 * alpha;
+            trajectoryColors[step * 3 + 2] = 0.65 * alpha;
+        } else if (isBraking) {
+            trajectoryColors[step * 3 + 0] = 0.95 * alpha;
+            trajectoryColors[step * 3 + 1] = 0.25 * alpha;
+            trajectoryColors[step * 3 + 2] = 0.35 * alpha;
+        } else {
+            trajectoryColors[step * 3 + 0] = 0.20 * alpha;
+            trajectoryColors[step * 3 + 1] = 0.75 * alpha;
+            trajectoryColors[step * 3 + 2] = 0.98 * alpha;
+        }
 
-        // Gravitational prediction across planetary/solar wells
-        _predAcc.set(0, 0, 0);
+        _predAcc.copy(_thrustAcc);
 
+        // Calculate gravitational acceleration at this predicted point in space
         for (let s = 0; s < sourceCount; s++) {
             const source = sources[s];
             if (source.isAbsorbed) continue;
