@@ -25,7 +25,7 @@ STAR_CLASSES = {
     "Blue Giant": {"color": "0x3b82f6", "size": 16, "mass": 320},
     "Red Dwarf":  {"color": "0xef4444", "size": 8, "mass": 90},
     "White Dwarf": {"color": "0xf8fafc", "size": 5, "mass": 140},
-    "Black Hole":  {"color": "0x7c3aed", "size": 7, "mass": 480}
+    "Black Hole":  {"color": "0x7c3aed", "size": 9, "mass": 650}
 }
 
 STAR_SYSTEM_TEMPLATES = {
@@ -50,8 +50,8 @@ STAR_SYSTEM_TEMPLATES = {
         "habitable_zone": (12, 22)
     },
     "Black Hole": {
-        "d_min": 14,
-        "spacing": 1.45,
+        "d_min": 20,
+        "spacing": 1.55,
         "habitable_zone": (0, 0)
     }
 }
@@ -66,7 +66,6 @@ class QuantumRandomStream:
         self.bit_pool = "".join(bitstrings)
         
     def get_bits(self, count):
-        """Extracts 'count' bits from the quantum stream and returns as an integer."""
         if not self.bit_pool:
             return random.getrandbits(count)
             
@@ -83,13 +82,11 @@ class QuantumRandomStream:
         return int(chunk, 2)
 
     def get_range(self, min_val, max_val):
-        """Returns a float uniformly distributed between min_val and max_val."""
         val = self.get_bits(12)
         ratio = val / 4095.0
         return min_val + ratio * (max_val - min_val)
 
     def choose(self, lst):
-        """Chooses an item from a list using quantum bits."""
         if not lst:
             return None
         idx = self.get_bits(8) % len(lst)
@@ -97,10 +94,6 @@ class QuantumRandomStream:
 
 
 def generate_quantum_bits(api_key=None, use_qpu=False):
-    """
-    Builds and runs a 5-qubit Hadamard quantum circuit.
-    Returns (qrng_stream, meta_info_dict).
-    """
     print("Najmafar Quantum Generator: Initialisiere Quantenschaltkreis...", flush=True)
     
     shots = 16000
@@ -226,7 +219,6 @@ def generate_quantum_bits(api_key=None, use_qpu=False):
 
 
 def run_local_simulator(qc, shots):
-    """Runs the circuit locally using Qiskit's BasicProvider."""
     try:
         from qiskit.providers.basic_provider import BasicProvider
         provider = BasicProvider()
@@ -245,7 +237,6 @@ def run_local_simulator(qc, shots):
 
 
 def build_galaxy(qrng, meta_info, count=1000):
-    """Procedurally generates a beautiful, natural spiral galaxy of 1000+ stellar systems divided into 3 sectors."""
     print(f"Generiere Galaxie mit {count} Sternensystemen in 3 Sektoren...", flush=True)
     systems = []
     
@@ -254,6 +245,7 @@ def build_galaxy(qrng, meta_info, count=1000):
     
     for i in range(count):
         if i == 0:
+            # Sagittarius A* (Supermassive Black Hole at Core Center)
             sys_name = "Sagittarius A* (Kern-Singularität)"
             x, z = 0.0, 0.0
             existing_coords.append((x, z))
@@ -262,6 +254,112 @@ def build_galaxy(qrng, meta_info, count=1000):
             sector_name = "Galaktischer Kern (Sagittarius A*)"
             anomaly_type = "supermassive_black_hole"
             is_core_anchor = True
+
+            # Custom Iconic Lore Objects for Sagittarius A* (No generic rocky planets!)
+            planets = [
+                {
+                    "name": "Chronos-Anker (Vorläufer-Konstrukt)",
+                    "type": "Vorläufer-Konstrukt",
+                    "size": 3.6,
+                    "distance": 34.0,
+                    "color": "0x06b6d4",
+                    "temp": "0 Kelvin (Zeit-Stasis)",
+                    "atmos": "Psionisches Dunkle-Energie-Feld",
+                    "bio": "Ruhendes Vorläufer-Gedächtnis (Dschinn-Urquell)",
+                    "res": "Reine Dunkle Energie, Chrono-Partikel & Tachyonen-Kerne",
+                    "species": {
+                        "hasSentient": True,
+                        "name": "Schlafendes Bewusstsein der Alten",
+                        "population": 1,
+                        "candidates": [
+                            {
+                                "name": "Ur-Dschinn Al-Mu'azzam",
+                                "species": "Vorläufer-Entität",
+                                "speciesType": "ancient",
+                                "role": "cryptologist",
+                                "roleName": "🌌 Kosmischer Zeitzeuge",
+                                "buffDesc": "+80 Psionische Reichweite & Universum-Harmonisierung",
+                                "baseStressRate": 0.05,
+                                "age": 100,
+                                "maxLifespan": 3600,
+                                "ageCategory": "vital",
+                                "rejuvenationCount": 0
+                            }
+                        ]
+                    },
+                    "moons": [
+                        {
+                            "name": "Tachyonen-Relais Alpha",
+                            "type": "Vorläufer-Relais",
+                            "size": 1.2,
+                            "distance": 6.8,
+                            "speed": 1.4,
+                            "color": "0x00ff88",
+                            "temp": "-270°C",
+                            "atmos": "Quanten-Verschränkungsfeld",
+                            "bio": "Kybernetisches Neuro-Geflecht",
+                            "res": "Tachyonen-Kristalle & Naniten"
+                        }
+                    ]
+                },
+                {
+                    "name": "S2-Stern (Gefangener Hyper-Riese)",
+                    "type": "Gefangener Stern",
+                    "size": 4.5,
+                    "distance": 54.0,
+                    "color": "0x38bdf8",
+                    "temp": "32.000°C",
+                    "atmos": "Reines Wasserstoff-Helium-Plasma",
+                    "bio": "Steril",
+                    "res": "Hochenergetisches Plasma & Gravitations-Echos",
+                    "species": None,
+                    "moons": []
+                },
+                {
+                    "name": "Ereignis-Knoten Alpha (Akkretions-Wirbel)",
+                    "type": "Plasma-Wirbel",
+                    "size": 3.2,
+                    "distance": 76.0,
+                    "color": "0xec4899",
+                    "temp": "1.400.000°C",
+                    "atmos": "Gammastrahlung & relativistischer Synchrotron-Nebel",
+                    "bio": "Steril",
+                    "res": "Dunkle Materie & Antimaterie-Kerne",
+                    "species": None,
+                    "moons": []
+                }
+            ]
+
+            asteroids = []
+            for a_idx in range(16):
+                a_dist = 24.0 + (a_idx * 4.5)
+                a_angle = a_idx * (math.pi / 8)
+                asteroids.append({
+                    "x": round(a_dist * math.cos(a_angle), 2),
+                    "z": round(a_dist * math.sin(a_angle), 2),
+                    "type": "energy" if a_idx % 2 == 0 else "bio"
+                })
+
+            systems.append({
+                "id": 0,
+                "name": sys_name,
+                "x": 0.0,
+                "z": 0.0,
+                "sectorId": sector_id,
+                "sectorName": sector_name,
+                "anomalyType": anomaly_type,
+                "isCoreAnchor": is_core_anchor,
+                "star": {
+                    "type": "Black Hole",
+                    "color": "0x7c3aed",
+                    "size": 10,
+                    "mass": 650
+                },
+                "planets": planets,
+                "asteroids": asteroids
+            })
+            continue
+
         elif i == 1:
             sys_name = "Perseus-Erwachen Prime (Start)"
             x, z = 310.0, 160.0
@@ -355,134 +453,171 @@ def build_galaxy(qrng, meta_info, count=1000):
             
         star_cfg = STAR_CLASSES[star_type]
         
-        planet_count = 1 + (qrng.get_bits(4) % 5)
+        # Planet generation
         if star_type == "Black Hole":
-            planet_count = 1 + (qrng.get_bits(2) % 3)
-            
-        tpl = STAR_SYSTEM_TEMPLATES[star_type]
-        hz_min, hz_max = tpl["habitable_zone"]
-        
-        planets = []
-        for p_idx in range(planet_count):
-            p_dist = tpl["d_min"] * (tpl["spacing"] ** (p_idx + 1)) + qrng.get_range(-2, 2)
-            p_dist = max(p_dist, STAR_CLASSES[star_type]["size"] + 6.0)
-            
-            if hz_min <= p_dist <= hz_max and hz_min > 0:
-                type_roll = qrng.get_bits(3)
-                if type_roll < 5:
-                    p_type = "Habitable"
+            # Black hole accretion debris objects (No generic rocky/habitable)
+            planet_count = 2 + (qrng.get_bits(2) % 2)
+            planets = []
+            for p_idx in range(planet_count):
+                p_dist = 28.0 + (p_idx * 26.0) + qrng.get_range(-3, 3)
+                p_name = f"{sys_name} {chr(65 + p_idx)}"
+                if p_idx == 0:
+                    p_type = "Plasma-Wirbel"
+                    p_size = qrng.get_range(2.8, 3.8)
+                    p_color = "0xec4899"
+                    p_temp = "850.000°C"
+                    p_atmos = "Relativistisches Synchrotron-Plasma"
+                    p_bio = "Steril"
+                    p_res = "Dunkle Materie & Antimaterie-Fragmente"
                 else:
-                    p_type = qrng.choose(["Rocky", "Gas Giant"])
-            elif p_dist < hz_min or hz_min == 0:
-                p_type = "Rocky"
-            else:
-                p_type = "Gas Giant" if qrng.get_bits(1) == 0 else "Ice"
-                
-            p_name = f"{sys_name} {chr(65 + p_idx)}"
-            
-            if p_type == "Habitable":
-                p_size = qrng.get_range(2.8, 3.8)
-                p_color = qrng.choose(["0x22c55e", "0x0ea5e9", "0x14b8a6", "0x10b981"])
-                p_temp = f"{int(qrng.get_range(14, 28))}°C"
-                p_atmos = "O2 / N2 (Atembar)"
-                p_bio = "Reich an Biomasse & Flora"
-                p_res = "Kohlenstoff, Bio-Polymere & O2"
-                species = {
-                    "hasSentient": True,
-                    "name": f"Zivilisation von {p_name}",
-                    "population": int(qrng.get_range(10, 800)) * 1000000,
-                    "candidates": []
-                }
-            elif p_type == "Gas Giant":
-                p_size = qrng.get_range(4.8, 7.5)
-                p_color = qrng.choose(["0xf97316", "0xec4899", "0x8b5cf6", "0xeab308"])
-                p_temp = f"{int(qrng.get_range(-140, -80))}°C"
-                p_atmos = "Wasserstoff & Helium-Plasma"
-                p_bio = "Atmosphärische Mikroorganismen"
-                p_res = "Deuterium & Siphon-Gase"
-                species = None
-            elif p_type == "Rocky":
-                p_size = qrng.get_range(2.0, 3.2)
-                p_color = qrng.choose(["0xd97706", "0xb45309", "0x78716c", "0xef4444"])
-                p_temp = f"{int(qrng.get_range(120, 480))}°C"
-                p_atmos = "Dünnes CO2 / Schwefeldampf"
-                p_bio = "Steril"
-                p_res = "Silizium-Kristalle & Titan-Erze"
-                species = None
-            else:
-                p_size = qrng.get_range(2.2, 3.5)
-                p_color = qrng.choose(["0x38bdf8", "0x06b6d4", "0xa5f3fc"])
-                p_temp = f"{int(qrng.get_range(-220, -120))}°C"
-                p_atmos = "Gefrorenes Methan & Stickstoff"
-                p_bio = "Kryo-Bakterien"
-                p_res = "Wassereis & flüssiges Methan"
-                species = None
-                
-            moons = []
-            if p_type == "Gas Giant":
-                moon_count = qrng.get_bits(2) % 4
-            elif p_type == "Habitable":
-                moon_count = qrng.get_bits(2) % 3
-            else:
-                moon_count = qrng.get_bits(1)
-                
-            for m_idx in range(moon_count):
-                m_dist = round(p_size + 3.2 + (m_idx * 2.6) + qrng.get_range(-0.3, 0.3), 2)
-                m_speed = round(qrng.get_range(0.7, 1.6), 2)
-                m_size = round(qrng.get_range(0.6, 1.1), 2)
-                
-                m_roll = qrng.get_bits(2)
-                if p_type == "Gas Giant" or m_roll == 0:
-                    m_type = "Eismond"
-                    m_color = qrng.choose(["0x38bdf8", "0xe0f2fe", "0xa5f3fc"])
-                    m_temp = f"{int(qrng.get_range(-210, -130))}°C"
-                    m_atmos = "Subglazialer Wasserdampf (Geysire)"
-                    m_bio = "Kryophile Mikroben"
-                    m_res = "Deuterium-Eis & Ammoniak"
-                elif m_roll == 1:
-                    m_type = "Vulkanmond"
-                    m_color = qrng.choose(["0xf97316", "0xef4444", "0xd97706"])
-                    m_temp = f"{int(qrng.get_range(120, 350))}°C"
-                    m_atmos = "Schwefeldioxid-Ausgasungen"
-                    m_bio = "Schwefel-Synthetisierer"
-                    m_res = "Geschmolzenes Titan & Silizium"
-                else:
-                    m_type = "Kratermond"
-                    m_color = qrng.choose(["0x94a3b8", "0x64748b", "0xcbcfd6"])
-                    m_temp = f"{int(qrng.get_range(-160, 110))}°C"
-                    m_atmos = "Vakuum"
-                    m_bio = "Steril"
-                    m_res = "Regolith-Gestein & Nickel"
+                    p_type = "Gezeiten-Trümmerfeld"
+                    p_size = qrng.get_range(2.0, 3.2)
+                    p_color = "0x8b5cf6"
+                    p_temp = "-260°C"
+                    p_atmos = "Vakuum & Gravitations-Echos"
+                    p_bio = "Steril"
+                    p_res = "Verdichtetes Silizium & Schwermetalle"
                     
-                m_name = f"{p_name}-{chr(73 + m_idx)}"
-                moons.append({
-                    "name": m_name,
-                    "type": m_type,
-                    "size": m_size,
-                    "distance": m_dist,
-                    "speed": m_speed,
-                    "color": m_color,
-                    "temp": m_temp,
-                    "atmos": m_atmos,
-                    "bio": m_bio,
-                    "res": m_res
+                planets.append({
+                    "name": p_name,
+                    "type": p_type,
+                    "size": round(p_size, 2),
+                    "distance": round(p_dist, 2),
+                    "color": p_color,
+                    "temp": p_temp,
+                    "atmos": p_atmos,
+                    "bio": p_bio,
+                    "res": p_res,
+                    "species": None,
+                    "moons": []
+                })
+        else:
+            planet_count = 1 + (qrng.get_bits(4) % 5)
+            tpl = STAR_SYSTEM_TEMPLATES[star_type]
+            hz_min, hz_max = tpl["habitable_zone"]
+            
+            planets = []
+            for p_idx in range(planet_count):
+                p_dist = tpl["d_min"] * (tpl["spacing"] ** (p_idx + 1)) + qrng.get_range(-2, 2)
+                p_dist = max(p_dist, STAR_CLASSES[star_type]["size"] + 6.0)
+                
+                if hz_min <= p_dist <= hz_max and hz_min > 0:
+                    type_roll = qrng.get_bits(3)
+                    if type_roll < 5:
+                        p_type = "Habitable"
+                    else:
+                        p_type = qrng.choose(["Rocky", "Gas Giant"])
+                elif p_dist < hz_min or hz_min == 0:
+                    p_type = "Rocky"
+                else:
+                    p_type = "Gas Giant" if qrng.get_bits(1) == 0 else "Ice"
+                    
+                p_name = f"{sys_name} {chr(65 + p_idx)}"
+                
+                if p_type == "Habitable":
+                    p_size = qrng.get_range(2.8, 3.8)
+                    p_color = qrng.choose(["0x22c55e", "0x0ea5e9", "0x14b8a6", "0x10b981"])
+                    p_temp = f"{int(qrng.get_range(14, 28))}°C"
+                    p_atmos = "O2 / N2 (Atembar)"
+                    p_bio = "Reich an Biomasse & Flora"
+                    p_res = "Kohlenstoff, Bio-Polymere & O2"
+                    species = {
+                        "hasSentient": True,
+                        "name": f"Zivilisation von {p_name}",
+                        "population": int(qrng.get_range(10, 800)) * 1000000,
+                        "candidates": []
+                    }
+                elif p_type == "Gas Giant":
+                    p_size = qrng.get_range(4.8, 7.5)
+                    p_color = qrng.choose(["0xf97316", "0xec4899", "0x8b5cf6", "0xeab308"])
+                    p_temp = f"{int(qrng.get_range(-140, -80))}°C"
+                    p_atmos = "Wasserstoff & Helium-Plasma"
+                    p_bio = "Atmosphärische Mikroorganismen"
+                    p_res = "Deuterium & Siphon-Gase"
+                    species = None
+                elif p_type == "Rocky":
+                    p_size = qrng.get_range(2.0, 3.2)
+                    p_color = qrng.choose(["0xd97706", "0xb45309", "0x78716c", "0xef4444"])
+                    p_temp = f"{int(qrng.get_range(120, 480))}°C"
+                    p_atmos = "Dünnes CO2 / Schwefeldampf"
+                    p_bio = "Steril"
+                    p_res = "Silizium-Kristalle & Titan-Erze"
+                    species = None
+                else:
+                    p_size = qrng.get_range(2.2, 3.5)
+                    p_color = qrng.choose(["0x38bdf8", "0x06b6d4", "0xa5f3fc"])
+                    p_temp = f"{int(qrng.get_range(-220, -120))}°C"
+                    p_atmos = "Gefrorenes Methan & Stickstoff"
+                    p_bio = "Kryo-Bakterien"
+                    p_res = "Wassereis & flüssiges Methan"
+                    species = None
+                    
+                moons = []
+                if p_type == "Gas Giant":
+                    moon_count = qrng.get_bits(2) % 4
+                elif p_type == "Habitable":
+                    moon_count = qrng.get_bits(2) % 3
+                else:
+                    moon_count = qrng.get_bits(1)
+                    
+                for m_idx in range(moon_count):
+                    m_dist = round(p_size + 3.2 + (m_idx * 2.6) + qrng.get_range(-0.3, 0.3), 2)
+                    m_speed = round(qrng.get_range(0.7, 1.6), 2)
+                    m_size = round(qrng.get_range(0.6, 1.1), 2)
+                    
+                    m_roll = qrng.get_bits(2)
+                    if p_type == "Gas Giant" or m_roll == 0:
+                        m_type = "Eismond"
+                        m_color = qrng.choose(["0x38bdf8", "0xe0f2fe", "0xa5f3fc"])
+                        m_temp = f"{int(qrng.get_range(-210, -130))}°C"
+                        m_atmos = "Subglazialer Wasserdampf (Geysire)"
+                        m_bio = "Kryophile Mikroben"
+                        m_res = "Deuterium-Eis & Ammoniak"
+                    elif m_roll == 1:
+                        m_type = "Vulkanmond"
+                        m_color = qrng.choose(["0xf97316", "0xef4444", "0xd97706"])
+                        m_temp = f"{int(qrng.get_range(120, 350))}°C"
+                        m_atmos = "Schwefeldioxid-Ausgasungen"
+                        m_bio = "Schwefel-Synthetisierer"
+                        m_res = "Geschmolzenes Titan & Silizium"
+                    else:
+                        m_type = "Kratermond"
+                        m_color = qrng.choose(["0x94a3b8", "0x64748b", "0xcbcfd6"])
+                        m_temp = f"{int(qrng.get_range(-160, 110))}°C"
+                        m_atmos = "Vakuum"
+                        m_bio = "Steril"
+                        m_res = "Regolith-Gestein & Nickel"
+                        
+                    m_name = f"{p_name}-{chr(73 + m_idx)}"
+                    moons.append({
+                        "name": m_name,
+                        "type": m_type,
+                        "size": m_size,
+                        "distance": m_dist,
+                        "speed": m_speed,
+                        "color": m_color,
+                        "temp": m_temp,
+                        "atmos": m_atmos,
+                        "bio": m_bio,
+                        "res": m_res
+                    })
+                
+                planets.append({
+                    "name": p_name,
+                    "type": p_type,
+                    "size": round(p_size, 2),
+                    "distance": round(p_dist, 2),
+                    "color": p_color,
+                    "temp": p_temp,
+                    "atmos": p_atmos,
+                    "bio": p_bio,
+                    "res": p_res,
+                    "species": species,
+                    "moons": moons
                 })
             
-            planets.append({
-                "name": p_name,
-                "type": p_type,
-                "size": round(p_size, 2),
-                "distance": round(p_dist, 2),
-                "color": p_color,
-                "temp": p_temp,
-                "atmos": p_atmos,
-                "bio": p_bio,
-                "res": p_res,
-                "species": species,
-                "moons": moons
-            })
-            
         asteroids = []
+        tpl = STAR_SYSTEM_TEMPLATES[star_type]
         belt1_dist = tpl["d_min"] * (tpl["spacing"] ** 1.8)
         belt2_dist = tpl["d_min"] * (tpl["spacing"] ** 3.5)
         
@@ -541,13 +676,9 @@ def main():
     api_key = args.api_key or os.environ.get("IBM_QUANTUM_API_KEY", "") or os.environ.get("QISKIT_IBM_TOKEN", "")
     use_qpu = args.qpu
     
-    # 1. Fetch quantum random stream and provenance metadata
     qrng, meta_info = generate_quantum_bits(api_key, use_qpu)
-    
-    # 2. Build galaxy
     galaxy_data = build_galaxy(qrng, meta_info, count=args.count)
     
-    # 3. Export to JSON
     output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "universe_data.json")
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(galaxy_data, f, indent=2, ensure_ascii=False)

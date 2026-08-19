@@ -11,6 +11,16 @@ let scanOsc: OscillatorNode | null = null;
 let scanGain: GainNode | null = null;
 
 export function generatePlanetAttributes(p: any) {
+    if (p.atmos && p.temp && p.bio && p.res) {
+        return {
+            atmos: p.atmos,
+            temp: p.temp,
+            bio: p.bio,
+            res: p.res,
+            species: p.species || null
+        };
+    }
+
     const hash = p.name.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
 
     let atmos: string, temp: string, bio: string, res: string, species: any;

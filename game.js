@@ -10808,6 +10808,66 @@ function toJSON$1(shapes, options, data) {
     data.options.extrudePath = options.extrudePath.toJSON();
   return data;
 }
+class OctahedronGeometry extends PolyhedronGeometry {
+  constructor(radius = 1, detail = 0) {
+    const vertices = [
+      1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      -1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      -1
+    ];
+    const indices = [
+      0,
+      2,
+      4,
+      0,
+      4,
+      3,
+      0,
+      3,
+      5,
+      0,
+      5,
+      2,
+      1,
+      2,
+      5,
+      1,
+      5,
+      3,
+      1,
+      3,
+      4,
+      1,
+      4,
+      2
+    ];
+    super(vertices, indices, radius, detail);
+    this.type = "OctahedronGeometry";
+    this.parameters = {
+      radius,
+      detail
+    };
+  }
+  static fromJSON(data) {
+    return new OctahedronGeometry(data.radius, data.detail);
+  }
+}
+
 class PlaneGeometry extends BufferGeometry {
   constructor(width = 1, height = 1, widthSegments = 1, heightSegments = 1) {
     super();
@@ -11042,6 +11102,69 @@ class TetrahedronGeometry extends PolyhedronGeometry {
   }
   static fromJSON(data) {
     return new TetrahedronGeometry(data.radius, data.detail);
+  }
+}
+
+class TorusGeometry extends BufferGeometry {
+  constructor(radius = 1, tube = 0.4, radialSegments = 12, tubularSegments = 48, arc = Math.PI * 2, thetaStart = 0, thetaLength = Math.PI * 2) {
+    super();
+    this.type = "TorusGeometry";
+    this.parameters = {
+      radius,
+      tube,
+      radialSegments,
+      tubularSegments,
+      arc,
+      thetaStart,
+      thetaLength
+    };
+    radialSegments = Math.floor(radialSegments);
+    tubularSegments = Math.floor(tubularSegments);
+    const indices = [];
+    const vertices = [];
+    const normals = [];
+    const uvs = [];
+    const center = new Vector3;
+    const vertex = new Vector3;
+    const normal = new Vector3;
+    for (let j = 0;j <= radialSegments; j++) {
+      const v = thetaStart + j / radialSegments * thetaLength;
+      for (let i = 0;i <= tubularSegments; i++) {
+        const u = i / tubularSegments * arc;
+        vertex.x = (radius + tube * Math.cos(v)) * Math.cos(u);
+        vertex.y = (radius + tube * Math.cos(v)) * Math.sin(u);
+        vertex.z = tube * Math.sin(v);
+        vertices.push(vertex.x, vertex.y, vertex.z);
+        center.x = radius * Math.cos(u);
+        center.y = radius * Math.sin(u);
+        normal.subVectors(vertex, center).normalize();
+        normals.push(normal.x, normal.y, normal.z);
+        uvs.push(i / tubularSegments);
+        uvs.push(j / radialSegments);
+      }
+    }
+    for (let j = 1;j <= radialSegments; j++) {
+      for (let i = 1;i <= tubularSegments; i++) {
+        const a = (tubularSegments + 1) * j + i - 1;
+        const b = (tubularSegments + 1) * (j - 1) + i - 1;
+        const c = (tubularSegments + 1) * (j - 1) + i;
+        const d = (tubularSegments + 1) * j + i;
+        indices.push(a, b, d);
+        indices.push(b, c, d);
+      }
+    }
+    this.setIndex(indices);
+    this.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+    this.setAttribute("normal", new Float32BufferAttribute(normals, 3));
+    this.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+  }
+  copy(source) {
+    super.copy(source);
+    this.parameters = Object.assign({}, source.parameters);
+    return this;
+  }
+  static fromJSON(data) {
+    return new TorusGeometry(data.radius, data.tube, data.radialSegments, data.tubularSegments, data.arc);
   }
 }
 function cloneUniforms(src) {
@@ -30841,6 +30964,146 @@ function removeScanVisuals() {
     scanPlanetRingMesh = null;
   }
 }
+function createBlackHoleMesh(size) {
+  const group = new Group;
+  const horizonGeo = new SphereGeometry(size, 48, 48);
+  const horizonMat = new MeshBasicMaterial({ color: 0 });
+  const horizonMesh = new Mesh(horizonGeo, horizonMat);
+  group.add(horizonMesh);
+  const photonGeo = new RingGeometry(size * 1.02, size * 1.12, 64);
+  photonGeo.rotateX(Math.PI / 2.3);
+  const photonMat = new MeshBasicMaterial({
+    color: 16777215,
+    transparent: true,
+    opacity: 0.95,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  const photonRing = new Mesh(photonGeo, photonMat);
+  group.add(photonRing);
+  const diskGeo = new RingGeometry(size * 1.15, size * 3.8, 64);
+  diskGeo.rotateX(Math.PI / 2.3);
+  const diskMat = new MeshBasicMaterial({
+    color: 16096779,
+    transparent: true,
+    opacity: 0.85,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  const accretionDisk = new Mesh(diskGeo, diskMat);
+  group.add(accretionDisk);
+  const lensGeo = new RingGeometry(size * 1.2, size * 5.2, 64);
+  lensGeo.rotateX(Math.PI / 2.3);
+  const lensMat = new MeshBasicMaterial({
+    color: 11032055,
+    transparent: true,
+    opacity: 0.35,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  const lensRing = new Mesh(lensGeo, lensMat);
+  group.add(lensRing);
+  const jetGeo = new CylinderGeometry(0.15, size * 0.9, size * 9, 16);
+  const jetMat = new MeshBasicMaterial({
+    color: 3718648,
+    transparent: true,
+    opacity: 0.45,
+    blending: AdditiveBlending
+  });
+  const topJet = new Mesh(jetGeo, jetMat);
+  topJet.position.y = size * 4.5;
+  group.add(topJet);
+  const bottomJet = topJet.clone();
+  bottomJet.position.y = -size * 4.5;
+  bottomJet.rotation.z = Math.PI;
+  group.add(bottomJet);
+  return {
+    group,
+    update: (dt) => {
+      accretionDisk.rotation.z += 0.8 * dt;
+      lensRing.rotation.z -= 0.3 * dt;
+      photonRing.rotation.z += 1.2 * dt;
+      topJet.material.opacity = 0.35 + Math.sin(Date.now() * 0.008) * 0.15;
+      bottomJet.material.opacity = 0.35 + Math.sin(Date.now() * 0.008) * 0.15;
+    }
+  };
+}
+function createPrecursorConstructMesh(size) {
+  const group = new Group;
+  const coreGeo = new OctahedronGeometry(size * 0.8, 0);
+  const coreMat = new MeshStandardMaterial({
+    color: 988970,
+    emissive: 440020,
+    emissiveIntensity: 0.8,
+    roughness: 0.15,
+    metalness: 0.95
+  });
+  const coreMesh = new Mesh(coreGeo, coreMat);
+  group.add(coreMesh);
+  const ring1Geo = new TorusGeometry(size * 1.3, 0.08, 16, 48);
+  const ring1Mat = new MeshStandardMaterial({
+    color: 3718648,
+    emissive: 3718648,
+    emissiveIntensity: 1.2,
+    roughness: 0.1,
+    metalness: 0.9
+  });
+  const ring1 = new Mesh(ring1Geo, ring1Mat);
+  group.add(ring1);
+  const ring2Geo = new TorusGeometry(size * 1.8, 0.1, 16, 64);
+  const ring2Mat = new MeshStandardMaterial({
+    color: 65416,
+    emissive: 65416,
+    emissiveIntensity: 0.9,
+    roughness: 0.1,
+    metalness: 0.9
+  });
+  const ring2 = new Mesh(ring2Geo, ring2Mat);
+  ring2.rotation.x = Math.PI / 3;
+  group.add(ring2);
+  return {
+    group,
+    update: (dt) => {
+      coreMesh.rotation.y += 0.4 * dt;
+      coreMesh.rotation.x += 0.2 * dt;
+      ring1.rotation.x += 0.8 * dt;
+      ring1.rotation.y += 0.5 * dt;
+      ring2.rotation.y -= 0.6 * dt;
+      ring2.rotation.z += 0.4 * dt;
+    }
+  };
+}
+function createPlasmaVortexMesh(size, colorHex) {
+  const group = new Group;
+  const sphereGeo = new SphereGeometry(size, 24, 24);
+  const sphereMat = new MeshBasicMaterial({
+    color: colorHex,
+    transparent: true,
+    opacity: 0.9,
+    blending: AdditiveBlending
+  });
+  const sphereMesh = new Mesh(sphereGeo, sphereMat);
+  group.add(sphereMesh);
+  const auraGeo = new RingGeometry(size * 1.05, size * 2.2, 32);
+  auraGeo.rotateX(Math.PI / 2);
+  const auraMat = new MeshBasicMaterial({
+    color: colorHex,
+    transparent: true,
+    opacity: 0.6,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  const auraMesh = new Mesh(auraGeo, auraMat);
+  group.add(auraMesh);
+  return {
+    group,
+    update: (dt) => {
+      sphereMesh.rotation.y += 1.4 * dt;
+      auraMesh.rotation.z += 2 * dt;
+      sphereMesh.material.opacity = 0.75 + Math.sin(Date.now() * 0.01) * 0.2;
+    }
+  };
+}
 
 // src/engine/audio.ts
 var audioCtx = null;
@@ -31883,6 +32146,15 @@ function closeDiplomacyComms() {
 var scanOsc = null;
 var scanGain = null;
 function generatePlanetAttributes(p) {
+  if (p.atmos && p.temp && p.bio && p.res) {
+    return {
+      atmos: p.atmos,
+      temp: p.temp,
+      bio: p.bio,
+      res: p.res,
+      species: p.species || null
+    };
+  }
   const hash = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
   let atmos, temp, bio, res, species;
   if (p.type === "Habitable") {
@@ -31979,34 +32251,6 @@ function generatePlanetAttributes(p) {
     species = null;
   }
   return { atmos, temp, bio, res, species };
-}
-function generateFallbackMoons(p) {
-  const hash = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  let count = 0;
-  if (p.type === "Gas Giant")
-    count = 1 + hash % 3;
-  else if (p.type === "Habitable")
-    count = hash % 3;
-  else
-    count = hash % 2;
-  const moons = [];
-  for (let i = 0;i < count; i++) {
-    const mType = p.type === "Gas Giant" || (hash + i) % 3 === 0 ? "Eismond" : (hash + i) % 3 === 1 ? "Vulkanmond" : "Kratermond";
-    const mColor = mType === "Eismond" ? "0x38bdf8" : mType === "Vulkanmond" ? "0xf97316" : "0x94a3b8";
-    moons.push({
-      name: `${p.name}-${String.fromCharCode(73 + i)}`,
-      type: mType,
-      size: 0.7 + (hash + i) % 5 * 0.1,
-      distance: p.size + 3.2 + i * 2.5,
-      speed: 0.9 + (hash + i) % 6 * 0.15,
-      color: mColor,
-      temp: mType === "Eismond" ? "-170°C" : mType === "Vulkanmond" ? "+220°C" : "-40°C",
-      atmos: mType === "Eismond" ? "Subglazialer Wasserdampf" : mType === "Vulkanmond" ? "Schwefeldioxid-Ausgasungen" : "Vakuum",
-      bio: mType === "Eismond" ? "Kryophile Mikroben" : mType === "Vulkanmond" ? "Schwefel-Synthetisierer" : "Steril",
-      res: mType === "Eismond" ? "Reich an Deuterium-Eis" : mType === "Vulkanmond" ? "Geschmolzenes Titan & Silizium" : "Regolith & Schwermetalle"
-    });
-  }
-  return moons;
 }
 function triggerScanStart() {
   if (!STATE.gameStarted || STATE.scanningPlanet || STATE.extractingPlanet || !STATE.nearestPlanet)
@@ -32910,23 +33154,52 @@ async function checkUniverseData() {
 }
 function clearActiveSystem() {
   activePlanets.forEach((p) => {
-    if (p.mesh)
-      scene.remove(p.mesh);
-    if (p.ringMesh)
+    scene.remove(p.mesh);
+    if (p.bodyMesh) {
+      p.bodyMesh.geometry.dispose();
+      if (p.bodyMesh.material instanceof Array) {
+        p.bodyMesh.material.forEach((m) => m.dispose());
+      } else if (p.bodyMesh.material) {
+        p.bodyMesh.material.dispose();
+      }
+    }
+    if (p.cloudMesh) {
+      p.cloudMesh.geometry.dispose();
+      p.cloudMesh.material.dispose();
+    }
+    if (p.psioAuraMesh) {
+      p.psioAuraMesh.geometry.dispose();
+      p.psioAuraMesh.material.dispose();
+    }
+    if (p.ringMesh) {
       scene.remove(p.ringMesh);
+      p.ringMesh.geometry.dispose();
+      p.ringMesh.material.dispose();
+    }
+  });
+  STATE.gravitySources.forEach((s) => {
+    if (s.ringMesh) {
+      scene.remove(s.ringMesh);
+      s.ringMesh.geometry.dispose();
+      s.ringMesh.material.dispose();
+    }
+    if (s.type === "star") {
+      scene.remove(s.mesh);
+      if (s.mesh instanceof Mesh) {
+        s.mesh.geometry.dispose();
+        s.mesh.material.dispose();
+      }
+    }
   });
   STATE.asteroids.forEach((a) => {
-    if (a.mesh)
-      scene.remove(a.mesh);
-    if (a.ringMesh)
-      scene.remove(a.ringMesh);
-  });
-  STATE.gravitySources.forEach((source) => {
-    if (source.mesh && source.mesh !== STATE.playerGroup) {
-      scene.remove(source.mesh);
-    }
-    if (source.ringMesh) {
-      scene.remove(source.ringMesh);
+    scene.remove(a.mesh);
+    if (a.mesh instanceof Mesh) {
+      a.mesh.geometry.dispose();
+      if (a.mesh.material instanceof Array) {
+        a.mesh.material.forEach((m) => m.dispose());
+      } else if (a.mesh.material) {
+        a.mesh.material.dispose();
+      }
     }
   });
   activeCoronaMeshes.forEach((m) => scene.remove(m));
@@ -32968,7 +33241,29 @@ function spawnPlanetsAndAsteroids() {
   if (!activeSystem)
     return;
   const starData = activeSystem.star;
-  if (starData.type !== "Black Hole") {
+  if (starData.type === "Black Hole") {
+    const blackHole = createBlackHoleMesh(starData.size);
+    scene.add(blackHole.group);
+    activeCoronaMeshes.push(blackHole.group);
+    activeCoronaUpdaters.push(blackHole.update);
+    const starLight = new PointLight(11032055, 2.5, 0, 0);
+    starLight.position.set(0, 0, 0);
+    scene.add(starLight);
+    activeStarLights.push(starLight);
+    starData.colorCss = "#7c3aed";
+    const starRange = 42;
+    const starSource = {
+      mesh: blackHole.group,
+      type: "star",
+      name: `${activeSystem.name} (Ereignishorizont)`,
+      mass: starData.mass * 0.5,
+      radius: starData.size,
+      gravityRange: starRange,
+      position: new Vector3(0, 0, 0)
+    };
+    STATE.gravitySources.push(starSource);
+    starSource.ringMesh = createGravityRing(0, 0, starRange, 8141549, 0.14);
+  } else {
     const starSeed = STATE.currentSystemId * 1337 + 42;
     const starTex = createStarTexture(starData.color, starSeed);
     const starGeo = new SphereGeometry(starData.size, 32, 32);
@@ -33012,70 +33307,100 @@ function spawnPlanetsAndAsteroids() {
     const px2 = scaledDist * Math.cos(angle);
     const pz2 = scaledDist * Math.sin(angle);
     const seed = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) + idx * 77;
-    const isGas = p.type === "Gas Giant";
-    const isHab = p.type === "Habitable";
-    const generated = generatePlanetAttributes(p);
-    let finalSpecies = p.species || generated.species;
-    if (p.type === "Habitable" && (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0)) {
-      finalSpecies = generated.species;
-    }
-    let texData;
-    let cloudTexture = null;
-    let cityLightsTexture = null;
-    if (isHab) {
-      texData = createHabitableTextures(p.color, seed);
-      cloudTexture = createCloudTexture(seed + 999);
-      if (finalSpecies && finalSpecies.population > 0) {
-        cityLightsTexture = createCityLightsTexture(seed, finalSpecies.techLevel || "Spacefaring");
-      }
-    } else if (isGas) {
-      texData = createGasGiantTextures(p.color, seed);
-    } else {
-      texData = createRockyTextures(p.color, seed);
-    }
-    const geo = new SphereGeometry(p.size, 32, 32);
-    const mat = new MeshStandardMaterial({
-      map: texData.map,
-      bumpMap: texData.bumpMap || null,
-      bumpScale: isGas ? 0 : 0.08,
-      roughness: isGas ? 0.35 : 0.68,
-      metalness: isGas ? 0.1 : 0.12,
-      emissive: cityLightsTexture ? new Color(16777215) : new Color(0),
-      emissiveMap: cityLightsTexture || null,
-      emissiveIntensity: cityLightsTexture ? 0.85 : 0,
-      transparent: false,
-      depthWrite: true,
-      depthTest: true
-    });
-    const mesh = new Mesh(geo, mat);
-    const axialTilt = (seed % 17 + 12) * Math.PI / 180;
-    mesh.rotation.z = axialTilt;
-    mesh.rotation.x = (seed % 7 - 3) * Math.PI / 180;
     const planetGroup = new Group;
     planetGroup.position.set(px2, 0, pz2);
-    planetGroup.add(mesh);
-    if (isHab || isGas) {
-      const atmoHex = isHab ? 3718648 : parseInt(p.color);
-      const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.2 : 1);
-      planetGroup.add(atmoMesh);
-    }
+    let bodyMesh = null;
     let cloudMesh = null;
-    if (cloudTexture && isHab) {
-      const cloudGeo = new SphereGeometry(p.size * 1.018, 32, 32);
-      const cloudMat = new MeshStandardMaterial({
-        map: cloudTexture,
-        transparent: true,
-        opacity: 0.85,
-        blending: NormalBlending,
-        depthWrite: false,
-        roughness: 0.9,
-        metalness: 0
-      });
-      cloudMesh = new Mesh(cloudGeo, cloudMat);
-      cloudMesh.rotation.z = axialTilt;
-      planetGroup.add(cloudMesh);
-    }
     let psioAuraMesh = null;
+    const isConstruct = p.type === "Vorläufer-Konstrukt";
+    const isPlasmaVortex = p.type === "Plasma-Wirbel";
+    const isCapturedStar = p.type === "Gefangener Stern";
+    const isHab = p.type === "Habitable";
+    const isGas = p.type === "Gas Giant";
+    if (isConstruct) {
+      const construct = createPrecursorConstructMesh(p.size);
+      planetGroup.add(construct.group);
+      activeCoronaUpdaters.push(construct.update);
+      bodyMesh = construct.group;
+    } else if (isPlasmaVortex) {
+      const vortex = createPlasmaVortexMesh(p.size, parseInt(p.color));
+      planetGroup.add(vortex.group);
+      activeCoronaUpdaters.push(vortex.update);
+      bodyMesh = vortex.group;
+    } else if (isCapturedStar) {
+      const starGeo = new SphereGeometry(p.size, 32, 32);
+      const starMat = new MeshStandardMaterial({
+        color: parseInt(p.color),
+        emissive: parseInt(p.color),
+        emissiveIntensity: 1.2,
+        roughness: 0.2
+      });
+      const starMesh = new Mesh(starGeo, starMat);
+      planetGroup.add(starMesh);
+      bodyMesh = starMesh;
+      const capturedLight = new PointLight(parseInt(p.color), 1.8, 45, 1.2);
+      planetGroup.add(capturedLight);
+    } else {
+      const generated = generatePlanetAttributes(p);
+      let finalSpecies = p.species || generated.species;
+      if (isHab && (!finalSpecies || !finalSpecies.candidates || finalSpecies.candidates.length === 0)) {
+        finalSpecies = generated.species;
+      }
+      let texData;
+      let cloudTexture = null;
+      let cityLightsTexture = null;
+      if (isHab) {
+        texData = createHabitableTextures(p.color, seed);
+        cloudTexture = createCloudTexture(seed + 999);
+        if (finalSpecies && finalSpecies.population > 0) {
+          cityLightsTexture = createCityLightsTexture(seed, finalSpecies.techLevel || "Spacefaring");
+        }
+      } else if (isGas) {
+        texData = createGasGiantTextures(p.color, seed);
+      } else {
+        texData = createRockyTextures(p.color, seed);
+      }
+      const geo = new SphereGeometry(p.size, 32, 32);
+      const mat = new MeshStandardMaterial({
+        map: texData.map,
+        bumpMap: texData.bumpMap || null,
+        bumpScale: isGas ? 0 : 0.08,
+        roughness: isGas ? 0.35 : 0.68,
+        metalness: isGas ? 0.1 : 0.12,
+        emissive: cityLightsTexture ? new Color(16777215) : new Color(0),
+        emissiveMap: cityLightsTexture || null,
+        emissiveIntensity: cityLightsTexture ? 0.85 : 0,
+        transparent: false,
+        depthWrite: true,
+        depthTest: true
+      });
+      const mesh = new Mesh(geo, mat);
+      const axialTilt = (seed % 17 + 12) * Math.PI / 180;
+      mesh.rotation.z = axialTilt;
+      mesh.rotation.x = (seed % 7 - 3) * Math.PI / 180;
+      planetGroup.add(mesh);
+      bodyMesh = mesh;
+      if (isHab || isGas) {
+        const atmoHex = isHab ? 3718648 : parseInt(p.color);
+        const atmoMesh = createAtmosphereMesh(p.size, atmoHex, isHab ? 1.2 : 1);
+        planetGroup.add(atmoMesh);
+      }
+      if (cloudTexture && isHab) {
+        const cloudGeo = new SphereGeometry(p.size * 1.018, 32, 32);
+        const cloudMat = new MeshStandardMaterial({
+          map: cloudTexture,
+          transparent: true,
+          opacity: 0.85,
+          blending: NormalBlending,
+          depthWrite: false,
+          roughness: 0.9,
+          metalness: 0
+        });
+        cloudMesh = new Mesh(cloudGeo, cloudMat);
+        cloudMesh.rotation.z = axialTilt;
+        planetGroup.add(cloudMesh);
+      }
+    }
     scene.add(planetGroup);
     const pMass = p.size * p.size * 4;
     const pRange = p.size * 4.5;
@@ -33094,7 +33419,7 @@ function spawnPlanetsAndAsteroids() {
     const pColorCss = p.color.replace("0x", "#");
     const planetEntry = {
       mesh: planetGroup,
-      bodyMesh: mesh,
+      bodyMesh,
       cloudMesh,
       psioAuraMesh,
       source: sourceObj,
@@ -33110,15 +33435,15 @@ function spawnPlanetsAndAsteroids() {
       isMoon: false,
       scanned: false,
       attributes: {
-        atmos: p.atmos || generated.atmos,
-        temp: p.temp || generated.temp,
-        bio: p.bio || generated.bio,
-        res: p.res || generated.res,
-        species: finalSpecies
+        atmos: p.atmos,
+        temp: p.temp,
+        bio: p.bio,
+        res: p.res,
+        species: p.species || null
       }
     };
     activePlanets.push(planetEntry);
-    const moonsList = p.moons || generateFallbackMoons(p);
+    const moonsList = p.moons || [];
     moonsList.forEach((m, m_idx) => {
       const moonAngle = m_idx * 2.2 + idx * 0.7 + 0.5;
       const mx = px2 + m.distance * Math.cos(moonAngle);
@@ -33136,11 +33461,8 @@ function spawnPlanetsAndAsteroids() {
       const mMat = new MeshStandardMaterial({
         map: mTex.map,
         bumpMap: mTex.bumpMap || null,
-        bumpScale: 0.05,
-        emissiveMap: mTex.emissiveMap || null,
-        emissive: m.type === "Vulkanmond" ? new Color(16729344) : new Color(0),
-        emissiveIntensity: m.type === "Vulkanmond" ? 0.6 : 0,
-        roughness: 0.85,
+        bumpScale: 0.06,
+        roughness: 0.75,
         metalness: 0.1
       });
       const mMesh = new Mesh(mGeo, mMat);
@@ -33189,7 +33511,7 @@ function spawnPlanetsAndAsteroids() {
       activePlanets.push(moonEntry);
     });
   });
-  const asteroidsList = activeSystem.asteroids && activeSystem.asteroids.length > 0 ? activeSystem.asteroids : generateFallbackAsteroids();
+  const asteroidsList = activeSystem.asteroids && activeSystem.asteroids.length > 0 ? activeSystem.asteroids : [];
   asteroidsList.forEach((ast) => {
     const size = 0.4 + Math.random() * 0.45;
     const geo = new DodecahedronGeometry(size, 1);
@@ -33211,47 +33533,26 @@ function spawnPlanetsAndAsteroids() {
       emissive: isOrganic ? 13073 : 8755
     });
     const mesh = new Mesh(geo, mat);
-    mesh.position.set(ast.x, 0, ast.z);
+    mesh.position.set(ast.x, (Math.random() - 0.5) * 1.5, ast.z);
     scene.add(mesh);
-    const range = size * 3;
+    const astRange = size * 2.8;
     const sourceObj = {
       mesh,
       type: "asteroid",
-      name: isOrganic ? "Organische Biosphäre" : "Silizium-Komet",
-      mass: size * 4,
+      name: isOrganic ? "Organische Biomasse-Trümmer" : "Silizium-Kristall-Fragment",
+      mass: size * 1.5,
       radius: size,
-      gravityRange: range,
-      position: new Vector3(ast.x, 0, ast.z),
+      gravityRange: astRange,
+      position: mesh.position,
       isResource: true,
       resourceType: isOrganic ? "bio" : "silicon",
-      isAbsorbed: false,
-      rotSpeed: {
-        x: (Math.random() - 0.5) * 0.6,
-        y: (Math.random() - 0.5) * 0.8,
-        z: (Math.random() - 0.5) * 0.6
-      },
-      ringMesh: null
+      yield: isOrganic ? 15 : 20
     };
     STATE.gravitySources.push(sourceObj);
     STATE.asteroids.push(sourceObj);
-    sourceObj.ringMesh = createGravityRing(ast.x, ast.z, range, color, 0.05);
   });
   initPlanetDefenseFleets();
-}
-function generateFallbackAsteroids() {
-  const list = [];
-  const count = 40;
-  for (let i = 0;i < count; i++) {
-    const angle = Math.random() * Math.PI * 2;
-    const isOuter = i % 2 === 0;
-    const dist = isOuter ? 115 + Math.random() * 115 : 48 + Math.random() * 27;
-    list.push({
-      x: Math.cos(angle) * dist,
-      z: Math.sin(angle) * dist,
-      type: Math.random() > 0.45 ? "bio" : "energy"
-    });
-  }
-  return list;
+  addLogEntry("NAV", `Sensoren initialisiert: ${activeSystem.name} [${activeSystem.sectorName || "Sektor"}].`);
 }
 
 // src/systems/galaxy-map.ts

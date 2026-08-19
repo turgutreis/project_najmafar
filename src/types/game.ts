@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export type PlanetType = 'Habitable' | 'Gas Giant' | 'Rocky' | 'Desert' | 'Oceanic' | 'Volcanic' | 'Ice';
+export type PlanetType = 'Habitable' | 'Gas Giant' | 'Rocky' | 'Desert' | 'Oceanic' | 'Volcanic' | 'Ice' | 'Vorläufer-Konstrukt' | 'Gefangener Stern' | 'Plasma-Wirbel' | 'Trümmerfeld' | 'Gezeiten-Trümmerfeld' | 'Toter Kern' | string;
 export type MoonType = 'Eismond' | 'Vulkanmond' | 'Kratermond' | 'Gesteinsmond';
 export type TechLevel = 'Primitive' | 'Industrial' | 'Spacefaring' | 'Hyper-Advanced';
 export type FactionId = 'vega_collective' | 'olyndar_psion' | 'xenomilitary_ash' | 'free_traders' | 'aethelgard_guardians';
