@@ -33653,6 +33653,7 @@ function spawnPlanetsAndAsteroids() {
         angle: moonAngle,
         speed: moonOrbitSpeed,
         distance: m.distance,
+        baseDistance: m.distance,
         name: m.name,
         type: m.type,
         size: m.size,

@@ -494,6 +494,7 @@ export function spawnPlanetsAndAsteroids() {
                 angle: moonAngle,
                 speed: moonOrbitSpeed,
                 distance: m.distance,
+                baseDistance: m.distance,
                 name: m.name,
                 type: m.type,
                 size: m.size,
@@ -585,6 +586,12 @@ export function updateActivePlanets(dt: number) {
                 p.ringMesh.position.set(px, 0, pz);
             }
         } else if (p.isMoon && p.parentPlanet) {
+            // Dynamic Sub-System Expansion: Expand moon distance when zooming into planetary orbit
+            const isOrbitFocus = !!(STATE.isInPlanetOrbit && (STATE.orbitPlanet === p.parentPlanet || STATE.orbitPlanet === p));
+            const baseDist = p.baseDistance || 6.0;
+            const targetDist = isOrbitFocus ? (baseDist * 2.2 + 5.0) : baseDist;
+            p.distance = THREE.MathUtils.lerp(p.distance, targetDist, Math.min(1.0, dt * 3.0));
+
             p.angle += p.speed * dt;
             const parentPos = p.parentPlanet.mesh.position;
             const mx = parentPos.x + p.distance * Math.cos(p.angle);
@@ -597,6 +604,8 @@ export function updateActivePlanets(dt: number) {
             }
             if (p.ringMesh) {
                 p.ringMesh.position.set(parentPos.x, 0, parentPos.z);
+                const ringScale = p.distance / baseDist;
+                p.ringMesh.scale.set(ringScale, 1, ringScale);
             }
         }
     });

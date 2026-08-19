@@ -189,6 +189,7 @@ export interface PlanetEntry {
     angle: number;
     speed: number;
     distance: number;
+    baseDistance?: number;
     name: string;
     type: PlanetType | MoonType | string;
     size: number;
