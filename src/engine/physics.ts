@@ -234,46 +234,37 @@ export function updatePhysics(dt: number) {
     let targetCamZ = STATE.playerPosition.z;
 
     if (nearestPlanet) {
-        // Wide 48-unit orbital zone for seamless approach
-        const orbitTriggerDist = Math.max(48.0, (nearestPlanet.size || 2.5) * 14.0);
+        // Wide 50-unit orbital zone for seamless approach
+        const orbitTriggerDist = Math.max(50.0, (nearestPlanet.size || 2.5) * 14.0);
 
         if (nearestPlanetDist < orbitTriggerDist) {
             STATE.isInPlanetOrbit = true;
             STATE.orbitPlanet = nearestPlanet;
 
-            // Normalized orbit proximity (0 = deep space, 1 = planet atmosphere)
             const rawProximity = Math.max(0, Math.min(1.0, 1.0 - (nearestPlanetDist / orbitTriggerDist)));
-            const easedProximity = Math.sin(rawProximity * Math.PI / 2); // Smooth ease-out
-            STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1.0, dt * 4.5));
+            const easedProximity = Math.sin(rawProximity * Math.PI / 2);
+            STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1.0, dt * 4.0));
 
-            // Dramatic zoom down from 75 to 22 units
-            const minOrbitHeight = Math.max(20.0, (nearestPlanet.size || 2.5) * 5.5);
-            STATE.targetCameraHeight = THREE.MathUtils.lerp(75.0, minOrbitHeight, STATE.orbitZoomFactor);
+            // Keep ship comfortable and proportional (Height 62-68)
+            STATE.targetCameraHeight = 65.0;
 
-            // Cinematic Offset: Center camera between player and planet
-            const framingWeight = 0.32 * STATE.orbitZoomFactor;
+            // Subtle framing offset towards planet
+            const framingWeight = 0.18 * STATE.orbitZoomFactor;
             targetCamX = THREE.MathUtils.lerp(STATE.playerPosition.x, nearestPlanet.mesh.position.x, framingWeight);
             targetCamZ = THREE.MathUtils.lerp(STATE.playerPosition.z, nearestPlanet.mesh.position.z, framingWeight);
-
-            // Telephoto FOV compression for massive planetary scale (60 -> 42 deg)
-            const targetFov = THREE.MathUtils.lerp(60.0, 42.0, STATE.orbitZoomFactor);
-            if (Math.abs(camera.fov - targetFov) > 0.05) {
-                camera.fov = targetFov;
-                camera.updateProjectionMatrix();
-            }
         } else {
             STATE.isInPlanetOrbit = false;
-            STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1.0, dt * 3.5));
-            STATE.targetCameraHeight = 75.0;
-
-            if (camera.fov !== 60.0) {
-                camera.fov = THREE.MathUtils.lerp(camera.fov, 60.0, Math.min(1.0, dt * 3.5));
-                camera.updateProjectionMatrix();
-            }
+            STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1.0, dt * 3.0));
+            STATE.targetCameraHeight = 65.0;
         }
     } else {
         STATE.isInPlanetOrbit = false;
-        STATE.targetCameraHeight = 75.0;
+        STATE.targetCameraHeight = 65.0;
+    }
+
+    if (camera.fov !== 60.0) {
+        camera.fov = 60.0;
+        camera.updateProjectionMatrix();
     }
 
     // Camera follow (Smooth lag + Dynamic Smooth Zoom)

@@ -36145,35 +36145,29 @@ function updatePhysics(dt) {
   let targetCamX = STATE.playerPosition.x;
   let targetCamZ = STATE.playerPosition.z;
   if (nearestPlanet) {
-    const orbitTriggerDist = Math.max(48, (nearestPlanet.size || 2.5) * 14);
+    const orbitTriggerDist = Math.max(50, (nearestPlanet.size || 2.5) * 14);
     if (nearestPlanetDist < orbitTriggerDist) {
       STATE.isInPlanetOrbit = true;
       STATE.orbitPlanet = nearestPlanet;
       const rawProximity = Math.max(0, Math.min(1, 1 - nearestPlanetDist / orbitTriggerDist));
       const easedProximity = Math.sin(rawProximity * Math.PI / 2);
-      STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1, dt * 4.5));
-      const minOrbitHeight = Math.max(20, (nearestPlanet.size || 2.5) * 5.5);
-      STATE.targetCameraHeight = MathUtils.lerp(75, minOrbitHeight, STATE.orbitZoomFactor);
-      const framingWeight = 0.32 * STATE.orbitZoomFactor;
+      STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1, dt * 4));
+      STATE.targetCameraHeight = 65;
+      const framingWeight = 0.18 * STATE.orbitZoomFactor;
       targetCamX = MathUtils.lerp(STATE.playerPosition.x, nearestPlanet.mesh.position.x, framingWeight);
       targetCamZ = MathUtils.lerp(STATE.playerPosition.z, nearestPlanet.mesh.position.z, framingWeight);
-      const targetFov = MathUtils.lerp(60, 42, STATE.orbitZoomFactor);
-      if (Math.abs(camera.fov - targetFov) > 0.05) {
-        camera.fov = targetFov;
-        camera.updateProjectionMatrix();
-      }
     } else {
       STATE.isInPlanetOrbit = false;
-      STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1, dt * 3.5));
-      STATE.targetCameraHeight = 75;
-      if (camera.fov !== 60) {
-        camera.fov = MathUtils.lerp(camera.fov, 60, Math.min(1, dt * 3.5));
-        camera.updateProjectionMatrix();
-      }
+      STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1, dt * 3));
+      STATE.targetCameraHeight = 65;
     }
   } else {
     STATE.isInPlanetOrbit = false;
-    STATE.targetCameraHeight = 75;
+    STATE.targetCameraHeight = 65;
+  }
+  if (camera.fov !== 60) {
+    camera.fov = 60;
+    camera.updateProjectionMatrix();
   }
   camera.position.x = MathUtils.lerp(camera.position.x, targetCamX, Math.min(1, dt * 5.5));
   camera.position.z = MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1, dt * 5.5));

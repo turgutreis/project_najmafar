@@ -576,6 +576,13 @@ export function updateActivePlanets(dt: number) {
             p.mesh.position.set(px, 0, pz);
             p.source.position.set(px, 0, pz);
 
+            // Dynamic Planetary Sub-System Scale: Planet smoothly expands into a colossal world
+            const isOrbitFocus = !!(STATE.isInPlanetOrbit && STATE.orbitPlanet === p);
+            const targetScale = isOrbitFocus ? 2.8 : 1.0;
+            const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 3.0));
+            p.mesh.scale.set(curScale, curScale, curScale);
+            p.source.radius = p.size * curScale;
+
             if (p.bodyMesh && p.bodyMesh instanceof THREE.Mesh) {
                 p.bodyMesh.rotation.y += 0.08 * dt;
             }
@@ -586,11 +593,16 @@ export function updateActivePlanets(dt: number) {
                 p.ringMesh.position.set(px, 0, pz);
             }
         } else if (p.isMoon && p.parentPlanet) {
-            // Dynamic Sub-System Expansion: Expand moon distance when zooming into planetary orbit
+            // Dynamic Sub-System Expansion: Expand moon distance & size for the orbital level
             const isOrbitFocus = !!(STATE.isInPlanetOrbit && (STATE.orbitPlanet === p.parentPlanet || STATE.orbitPlanet === p));
             const baseDist = p.baseDistance || 6.0;
-            const targetDist = isOrbitFocus ? (baseDist * 3.2 + 8.0) : baseDist;
-            p.distance = THREE.MathUtils.lerp(p.distance, targetDist, Math.min(1.0, dt * 4.0));
+            const targetDist = isOrbitFocus ? (baseDist * 3.4 + 10.0) : baseDist;
+            p.distance = THREE.MathUtils.lerp(p.distance, targetDist, Math.min(1.0, dt * 3.5));
+
+            const targetMoonScale = isOrbitFocus ? 1.8 : 1.0;
+            const curMoonScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 3.0));
+            p.mesh.scale.set(curMoonScale, curMoonScale, curMoonScale);
+            p.source.radius = p.size * curMoonScale;
 
             p.angle += p.speed * dt;
             const parentPos = p.parentPlanet.mesh.position;
