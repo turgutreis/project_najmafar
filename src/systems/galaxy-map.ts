@@ -11,14 +11,22 @@ let filterLifeOnly = false;
 
 // Zoom & Pan state
 let mapZoom = 1.0;
+let targetZoom = 1.0;
 let mapPanX = 0;
 let mapPanY = 0;
+let targetPanX = 0;
+let targetPanY = 0;
 let isDraggingMap = false;
 let dragStartX = 0;
 let dragStartY = 0;
+let mouseDownX = 0;
+let mouseDownY = 0;
 let mapMouseX = -1;
 let mapMouseY = -1;
 let mapAnimFrameId: number | null = null;
+let baseScale = 1.0;
+let canvasWidth = 800;
+let canvasHeight = 600;
 
 export function isMapOpen(): boolean {
     return mapOpen;
@@ -35,6 +43,9 @@ export function toggleGalaxyMap() {
         overlay.style.display = 'flex';
         renderGalaxyMap();
         startGalaxyMapLoop();
+
+        // Focus search input on Ctrl+F or slash
+        setupMapKeyboardShortcuts();
     } else {
         overlay.style.display = 'none';
         stopGalaxyMapLoop();
@@ -45,6 +56,12 @@ export function startGalaxyMapLoop() {
     stopGalaxyMapLoop();
     function mapLoop() {
         if (!mapOpen) return;
+
+        // Smooth camera damping
+        mapPanX += (targetPanX - mapPanX) * 0.18;
+        mapPanY += (targetPanY - mapPanY) * 0.18;
+        mapZoom += (targetZoom - mapZoom) * 0.18;
+
         drawGalaxyMap(mapMouseX, mapMouseY);
         mapAnimFrameId = requestAnimationFrame(mapLoop);
     }
@@ -58,6 +75,13 @@ export function stopGalaxyMapLoop() {
     }
 }
 
+export function smoothPanTo(sysX: number, sysZ: number, desiredZoom = 1.8) {
+    targetZoom = desiredZoom;
+    const currentScale = baseScale * targetZoom;
+    targetPanX = -(sysX * currentScale);
+    targetPanY = -(sysZ * currentScale);
+}
+
 let drawGalaxyMap: (mouseX: number, mouseY: number) => void = () => {};
 
 export function renderGalaxyMap() {
@@ -69,8 +93,11 @@ export function renderGalaxyMap() {
     canvas.width = rect.width || 800;
     canvas.height = rect.height || 600;
 
-    const width = canvas.width;
-    const height = canvas.height;
+    canvasWidth = canvas.width;
+    canvasHeight = canvas.height;
+
+    const width = canvasWidth;
+    const height = canvasHeight;
 
     const systems = STATE.universe.systems;
     let maxDist = 0;
@@ -78,13 +105,14 @@ export function renderGalaxyMap() {
         const dist = Math.sqrt(sys.x * sys.x + sys.z * sys.z);
         if (dist > maxDist) maxDist = dist;
     });
-    const baseScale = Math.min(width, height) / (maxDist * 2.3 || 1);
+    baseScale = Math.min(width, height) / (maxDist * 2.3 || 1);
 
     if (!selectedSystem) {
         selectedSystem = systems.find(s => s.id === STATE.currentSystemId) || systems[0];
     }
     updateSystemDetails(selectedSystem);
     populateQuickBeaconsList();
+    setupSearchAndNavigationControls();
 
     drawGalaxyMap = function(mouseX = -1, mouseY = -1) {
         ctx.fillStyle = '#030712';
@@ -118,8 +146,7 @@ export function renderGalaxyMap() {
         ctx.moveTo(0, centerY); ctx.lineTo(width, centerY);
         ctx.stroke();
 
-        // 2. Concentric Galactic Sectors (Core -> Mid-Rim -> Outer-Rim)
-        // Sector 3: Core (Radius <= 110)
+        // 2. Concentric Galactic Sectors
         const coreR = 110 * currentScale;
         const coreGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreR);
         coreGrad.addColorStop(0, 'rgba(234, 179, 8, 0.18)');
@@ -137,7 +164,6 @@ export function renderGalaxyMap() {
         ctx.arc(centerX, centerY, coreR, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Sector 2: Mid-Rim (Radius 110 - 265)
         const midR = 265 * currentScale;
         ctx.strokeStyle = 'rgba(56, 189, 248, 0.2)';
         ctx.lineWidth = 1.0;
@@ -146,7 +172,6 @@ export function renderGalaxyMap() {
         ctx.arc(centerX, centerY, midR, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Sector 1: Outer-Rim (Radius > 265)
         const outerR = 430 * currentScale;
         ctx.strokeStyle = 'rgba(148, 163, 184, 0.15)';
         ctx.lineWidth = 0.8;
@@ -156,27 +181,24 @@ export function renderGalaxyMap() {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Sector Watermark Labels
+        // Sector Labels
         if (mapZoom > 0.7) {
             ctx.font = 'bold 9px Orbitron, sans-serif';
             ctx.textAlign = 'left';
-
             ctx.fillStyle = 'rgba(234, 179, 8, 0.5)';
             ctx.fillText('SEKTOR 3: GALAKTISCHER KERN (SAGITTARIUS A*)', centerX + 12, centerY - coreR + 15);
-
             ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
             ctx.fillText('SEKTOR 2: ORION-ZYKLUS (ZIVILISATIONS-GÜRTEL)', centerX + 12, centerY - midR + 15);
-
             ctx.fillStyle = 'rgba(148, 163, 184, 0.35)';
             ctx.fillText('SEKTOR 1: PERSEUS-RAND (DAS ERWACHEN)', centerX + 12, centerY - outerR + 15);
         }
 
-        // 3. Current Player System Halos & Warp / Psionic Range
+        // 3. Current Player Ship Location & Sensor Ranges
         const currentSys = systems.find(s => s.id === STATE.currentSystemId) || systems[0];
-        if (currentSys) {
-            const curScreenX = centerX + currentSys.x * currentScale;
-            const curScreenY = centerY + currentSys.z * currentScale;
+        const curScreenX = centerX + currentSys.x * currentScale;
+        const curScreenY = centerY + currentSys.z * currentScale;
 
+        if (currentSys) {
             // Draw Warp Range Circle (Cyan dashed)
             const warpRadiusScreen = STATE.warpRange * currentScale;
             ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
@@ -204,7 +226,64 @@ export function renderGalaxyMap() {
             ctx.stroke();
         }
 
-        // Pre-calculate Hover System: Find the closest star to the cursor within hit radius
+        // 4. Animated Flight Trajectory Projection (Current System -> Selected System)
+        if (selectedSystem && selectedSystem.id !== currentSys.id) {
+            const targetScreenX = centerX + selectedSystem.x * currentScale;
+            const targetScreenY = centerY + selectedSystem.z * currentScale;
+
+            const dx = selectedSystem.x - currentSys.x;
+            const dz = selectedSystem.z - currentSys.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            const inWarp = dist <= STATE.warpRange;
+
+            // Trajectory Dash Line
+            ctx.strokeStyle = inWarp ? 'rgba(56, 189, 248, 0.6)' : 'rgba(239, 68, 68, 0.5)';
+            ctx.lineWidth = 1.6;
+            ctx.setLineDash([8, 8]);
+            ctx.lineDashOffset = -(Date.now() * 0.02) % 16;
+            ctx.beginPath();
+            ctx.moveTo(curScreenX, curScreenY);
+            ctx.lineTo(targetScreenX, targetScreenY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Trajectory Traveling Energy Pulse
+            const pulseT = ((Date.now() * 0.0008) % 1.0);
+            const pulseX = curScreenX + (targetScreenX - curScreenX) * pulseT;
+            const pulseY = curScreenY + (targetScreenY - curScreenY) * pulseT;
+
+            ctx.fillStyle = inWarp ? '#38bdf8' : '#ef4444';
+            ctx.beginPath();
+            ctx.arc(pulseX, pulseY, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Midpoint Flight Badge
+            if (mapZoom > 0.8) {
+                const midX = (curScreenX + targetScreenX) / 2;
+                const midY = (curScreenY + targetScreenY) / 2;
+                const costMult = STATE.mutations.folddrive && STATE.mutations.folddrive.purchased ? 0.7 : 1.0;
+                const warpCost = Math.round((15 + dist * 0.15) * costMult);
+
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+                ctx.strokeStyle = inWarp ? 'rgba(56, 189, 248, 0.6)' : 'rgba(239, 68, 68, 0.6)';
+                ctx.lineWidth = 1;
+                const badgeText = `${dist.toFixed(0)} LJ • -${warpCost}% Bio`;
+                ctx.font = '8px Orbitron, sans-serif';
+                const bWidth = ctx.measureText(badgeText).width;
+
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(midX - bWidth / 2 - 6, midY - 9, bWidth + 12, 18, 4);
+                else ctx.rect(midX - bWidth / 2 - 6, midY - 9, bWidth + 12, 18);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = inWarp ? '#38bdf8' : '#f87171';
+                ctx.textAlign = 'center';
+                ctx.fillText(badgeText, midX, midY + 3);
+            }
+        }
+
+        // 5. Pre-calculate Hover System (Closest Star within Hit Radius)
         let minHoverDist = 14;
         hoverSystem = null;
         if (mouseX >= 0 && mouseY >= 0) {
@@ -228,7 +307,9 @@ export function renderGalaxyMap() {
             }
         }
 
-        // 4. Render 1,000+ Star Systems
+        const visitedIds = STATE.visitedSystemIds || [STATE.currentSystemId];
+
+        // 6. Render 1,000+ Star Systems (Exploratory Fog of War)
         systems.forEach(sys => {
             const screenX = centerX + sys.x * currentScale;
             const screenY = centerY + sys.z * currentScale;
@@ -247,14 +328,15 @@ export function renderGalaxyMap() {
             const isSelected = selectedSystem && selectedSystem.id === sys.id;
             const isActive = STATE.currentSystemId === sys.id;
             const isHovered = hoverSystem && hoverSystem.id === sys.id;
+            const isVisited = visitedIds.includes(sys.id);
             const hasSentient = sys.planets.some(p => p.type === 'Habitable' || (p.species && p.species.hasSentient));
 
             const showLifeBeacon = hasSentient && inPsionicRange;
 
             if (filterLifeOnly && !showLifeBeacon && !isActive && !isSelected) {
-                ctx.globalAlpha = 0.06;
-            } else if (!inWarpRange && !isActive && !isSelected) {
-                ctx.globalAlpha = sys.isCoreAnchor ? 0.9 : 0.4;
+                ctx.globalAlpha = 0.05;
+            } else if (!inWarpRange && !isActive && !isSelected && !sys.isCoreAnchor) {
+                ctx.globalAlpha = isVisited ? 0.6 : 0.35;
             } else {
                 ctx.globalAlpha = 1.0;
             }
@@ -288,7 +370,6 @@ export function renderGalaxyMap() {
             if (sys.star.type === 'Black Hole') starColor = '#8b5cf6';
 
             if (sys.isCoreAnchor) {
-                // Sagittarius A* Accretion Ring
                 ctx.strokeStyle = '#eab308';
                 ctx.lineWidth = 1.5;
                 ctx.beginPath();
@@ -319,19 +400,21 @@ export function renderGalaxyMap() {
             ctx.arc(screenX, screenY, baseSize, 0, Math.PI * 2);
             ctx.fill();
 
-            // Smart LOD Labeling
-            const shouldShowLabel = isSelected || isActive || isHovered || sys.isCoreAnchor || (mapZoom > 2.2) || (showLifeBeacon && mapZoom > 1.4);
+            // Explorative Label Visibility (Only show labels for Active, Selected, Hovered, Visited, Core, or Life Beacons!)
+            const shouldShowLabel = isSelected || isActive || isHovered || sys.isCoreAnchor || isVisited || (showLifeBeacon && mapZoom > 1.2) || (mapZoom > 3.4);
             if (shouldShowLabel) {
+                let labelText = sys.name;
+                if (isActive) labelText = `📍 ${sys.name}`;
                 ctx.fillStyle = isSelected ? (inWarpRange ? '#e879f9' : '#f87171') : (isActive ? '#38bdf8' : (sys.isCoreAnchor ? '#eab308' : (showLifeBeacon ? '#f8fafc' : '#94a3b8')));
                 ctx.font = (isSelected || sys.isCoreAnchor || isHovered) ? 'bold 9px Orbitron, sans-serif' : '8px Orbitron, sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText(sys.name, screenX, screenY - baseSize - 4);
+                ctx.fillText(labelText, screenX, screenY - baseSize - 4);
             }
         });
 
         ctx.globalAlpha = 1.0;
 
-        // Hover Tooltip
+        // 7. Hover Tooltip
         if (hoverSystem) {
             ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
             ctx.strokeStyle = 'rgba(217, 70, 239, 0.6)';
@@ -354,11 +437,8 @@ export function renderGalaxyMap() {
             const textWidth = ctx.measureText(text).width;
 
             ctx.beginPath();
-            if (ctx.roundRect) {
-                ctx.roundRect(tooltipX, tooltipY - 18, textWidth + 20, 24, 5);
-            } else {
-                ctx.rect(tooltipX, tooltipY - 18, textWidth + 20, 24);
-            }
+            if (ctx.roundRect) ctx.roundRect(tooltipX, tooltipY - 18, textWidth + 20, 24, 5);
+            else ctx.rect(tooltipX, tooltipY - 18, textWidth + 20, 24);
             ctx.fill();
             ctx.stroke();
 
@@ -372,17 +452,13 @@ export function renderGalaxyMap() {
     canvas.onwheel = (e) => {
         e.preventDefault();
         const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
-        const newZoom = Math.min(6.0, Math.max(0.5, mapZoom * zoomFactor));
-        mapZoom = newZoom;
+        targetZoom = Math.min(6.0, Math.max(0.5, mapZoom * zoomFactor));
     };
-
-    let mouseDownX = 0;
-    let mouseDownY = 0;
 
     canvas.onmousedown = (e) => {
         isDraggingMap = true;
-        dragStartX = e.clientX - mapPanX;
-        dragStartY = e.clientY - mapPanY;
+        dragStartX = e.clientX - targetPanX;
+        dragStartY = e.clientY - targetPanY;
         mouseDownX = e.clientX;
         mouseDownY = e.clientY;
     };
@@ -399,15 +475,15 @@ export function renderGalaxyMap() {
         mapMouseY = (e.clientY - mRect.top) * scaleY;
 
         if (isDraggingMap) {
-            mapPanX = e.clientX - dragStartX;
-            mapPanY = e.clientY - dragStartY;
+            targetPanX = e.clientX - dragStartX;
+            targetPanY = e.clientY - dragStartY;
         }
     };
 
     canvas.ondblclick = () => {
-        mapZoom = 1.0;
-        mapPanX = 0;
-        mapPanY = 0;
+        targetZoom = 1.0;
+        targetPanX = 0;
+        targetPanY = 0;
     };
 
     canvas.onmouseleave = () => {
@@ -417,8 +493,8 @@ export function renderGalaxyMap() {
 
     canvas.onclick = (e) => {
         const dragDist = Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY);
-        if (dragDist > 5) {
-            return; // Ignore click if user was panning the map
+        if (dragDist > 6) {
+            return;
         }
 
         const mRect = canvas.getBoundingClientRect();
@@ -457,7 +533,7 @@ export function renderGalaxyMap() {
         }
     };
 
-    // Attach Warp Button & Life Filter listeners once
+    // Attach Warp Button once
     const warpBtn = document.getElementById('warp-btn');
     if (warpBtn && !warpBtn.dataset.listenerAttached) {
         warpBtn.dataset.listenerAttached = 'true';
@@ -467,21 +543,177 @@ export function renderGalaxyMap() {
             }
         });
     }
+}
 
-    const lifeFilterBtn = document.getElementById('life-filter-toggle-btn');
-    if (lifeFilterBtn && !lifeFilterBtn.dataset.listenerAttached) {
-        lifeFilterBtn.dataset.listenerAttached = 'true';
-        lifeFilterBtn.addEventListener('click', () => {
-            filterLifeOnly = !filterLifeOnly;
-            if (filterLifeOnly) {
-                lifeFilterBtn.classList.add('filter-active');
-                lifeFilterBtn.innerText = "🧠 Gedanken-Echo Filter: AN";
-            } else {
-                lifeFilterBtn.classList.remove('filter-active');
-                lifeFilterBtn.innerText = "🧠 Gedanken-Echo Filter: AUS";
+function setupSearchAndNavigationControls() {
+    if (!STATE.universe) return;
+    const systems = STATE.universe.systems;
+
+    // Search Input & Autocomplete
+    const searchInput = document.getElementById('galaxy-search-input') as HTMLInputElement;
+    const resultsContainer = document.getElementById('galaxy-search-results');
+
+    if (searchInput && resultsContainer && !searchInput.dataset.listenerAttached) {
+        searchInput.dataset.listenerAttached = 'true';
+
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.trim().toLowerCase();
+            if (!query) {
+                resultsContainer.style.display = 'none';
+                resultsContainer.innerHTML = '';
+                return;
+            }
+
+            const currentSys = STATE.universe?.systems.find(s => s.id === STATE.currentSystemId) || STATE.universe?.systems[0];
+            const matches = systems.filter(s => {
+                if (s.name.toLowerCase().includes(query)) return true;
+                if (s.sectorName && s.sectorName.toLowerCase().includes(query)) return true;
+                if (s.anomalyType && s.anomalyType.toLowerCase().includes(query)) return true;
+                if (s.planets.some(p => p.species && p.species.name.toLowerCase().includes(query))) return true;
+                return false;
+            }).slice(0, 8);
+
+            if (matches.length === 0) {
+                resultsContainer.innerHTML = `<div style="padding: 8px 12px; color: #64748b; font-size: 0.7rem; font-family: 'Orbitron', sans-serif;">Kein System gefunden</div>`;
+                resultsContainer.style.display = 'block';
+                return;
+            }
+
+            let html = '';
+            matches.forEach(m => {
+                const dx = m.x - (currentSys?.x || 0);
+                const dz = m.z - (currentSys?.z || 0);
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                let anomalyTag = '';
+                if (m.anomalyType && m.anomalyType !== 'none') anomalyTag = ' ⚡';
+                if (m.isCoreAnchor) anomalyTag = ' 🕳️';
+
+                html += `
+                    <div class="galaxy-search-item" data-sys-id="${m.id}">
+                        <div>
+                            <span class="galaxy-search-item-title">✨ ${m.name}${anomalyTag}</span>
+                            <span class="galaxy-search-item-meta"> (${m.sectorName || 'Sektor'})</span>
+                        </div>
+                        <span style="font-size: 0.65rem; color: #38bdf8; font-family: 'Orbitron', sans-serif;">${dist.toFixed(0)} LJ</span>
+                    </div>
+                `;
+            });
+
+            resultsContainer.innerHTML = html;
+            resultsContainer.style.display = 'block';
+
+            resultsContainer.querySelectorAll('.galaxy-search-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const sysId = parseInt(item.getAttribute('data-sys-id') || '0');
+                    const target = systems.find(s => s.id === sysId);
+                    if (target) {
+                        selectedSystem = target;
+                        updateSystemDetails(selectedSystem);
+                        populateQuickBeaconsList();
+                        playSiliconCollectSound();
+                        smoothPanTo(target.x, target.z, 2.2);
+                        resultsContainer.style.display = 'none';
+                        searchInput.value = target.name;
+                    }
+                });
+            });
+        });
+
+        // Hide results on click outside
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target as Node) && !resultsContainer.contains(e.target as Node)) {
+                resultsContainer.style.display = 'none';
             }
         });
     }
+
+    // Quick Sector Buttons
+    const shipBtn = document.getElementById('nav-btn-ship');
+    const sec1Btn = document.getElementById('nav-btn-sector1');
+    const sec2Btn = document.getElementById('nav-btn-sector2');
+    const sec3Btn = document.getElementById('nav-btn-sector3');
+    const lifeBtn = document.getElementById('life-filter-toggle-btn');
+
+    if (shipBtn && !shipBtn.dataset.listenerAttached) {
+        shipBtn.dataset.listenerAttached = 'true';
+        shipBtn.addEventListener('click', () => {
+            const currentSys = systems.find(s => s.id === STATE.currentSystemId) || systems[0];
+            smoothPanTo(currentSys.x, currentSys.z, 2.0);
+            selectedSystem = currentSys;
+            updateSystemDetails(selectedSystem);
+        });
+    }
+
+    if (sec1Btn && !sec1Btn.dataset.listenerAttached) {
+        sec1Btn.dataset.listenerAttached = 'true';
+        sec1Btn.addEventListener('click', () => {
+            smoothPanTo(290, 160, 1.2);
+        });
+    }
+
+    if (sec2Btn && !sec2Btn.dataset.listenerAttached) {
+        sec2Btn.dataset.listenerAttached = 'true';
+        sec2Btn.addEventListener('click', () => {
+            smoothPanTo(140, 80, 1.5);
+        });
+    }
+
+    if (sec3Btn && !sec3Btn.dataset.listenerAttached) {
+        sec3Btn.dataset.listenerAttached = 'true';
+        sec3Btn.addEventListener('click', () => {
+            smoothPanTo(0, 0, 2.4);
+            const coreSys = systems.find(s => s.id === 0);
+            if (coreSys) {
+                selectedSystem = coreSys;
+                updateSystemDetails(selectedSystem);
+            }
+        });
+    }
+
+    if (lifeBtn && !lifeBtn.dataset.listenerAttached) {
+        lifeBtn.dataset.listenerAttached = 'true';
+        lifeBtn.addEventListener('click', () => {
+            filterLifeOnly = !filterLifeOnly;
+            if (filterLifeOnly) {
+                lifeBtn.classList.add('active-nav');
+                lifeBtn.innerText = "🧠 Gedanken-Echo: AN";
+            } else {
+                lifeBtn.classList.remove('active-nav');
+                lifeBtn.innerText = "🧠 Gedanken-Echo: AUS";
+            }
+        });
+    }
+}
+
+function setupMapKeyboardShortcuts() {
+    window.addEventListener('keydown', (e) => {
+        if (!mapOpen) return;
+
+        // Search shortcut
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            const input = document.getElementById('galaxy-search-input') as HTMLInputElement;
+            if (input) input.focus();
+            return;
+        }
+
+        // Ignore hotkeys if typing in search
+        if (document.activeElement?.id === 'galaxy-search-input') return;
+
+        if (e.key.toLowerCase() === 'c') {
+            const shipBtn = document.getElementById('nav-btn-ship');
+            if (shipBtn) shipBtn.click();
+        } else if (e.key === '1') {
+            const sec1Btn = document.getElementById('nav-btn-sector1');
+            if (sec1Btn) sec1Btn.click();
+        } else if (e.key === '2') {
+            const sec2Btn = document.getElementById('nav-btn-sector2');
+            if (sec2Btn) sec2Btn.click();
+        } else if (e.key === '3') {
+            const sec3Btn = document.getElementById('nav-btn-sector3');
+            if (sec3Btn) sec3Btn.click();
+        }
+    });
 }
 
 export function populateQuickBeaconsList() {
@@ -540,6 +772,7 @@ export function populateQuickBeaconsList() {
                 updateSystemDetails(selectedSystem);
                 populateQuickBeaconsList();
                 playSiliconCollectSound();
+                smoothPanTo(target.x, target.z, 2.0);
             }
         });
     });
@@ -626,6 +859,9 @@ export function updateSystemDetails(sys: StarSystem | null) {
             let pColor = '#94a3b8';
             if (p.type === 'Gas Giant') pColor = '#c084fc';
             if (p.type === 'Habitable') pColor = '#10b981';
+            if (p.type === 'Vorläufer-Konstrukt') pColor = '#06b6d4';
+            if (p.type === 'Gefangener Stern') pColor = '#38bdf8';
+            if (p.type === 'Plasma-Wirbel') pColor = '#ec4899';
 
             li.innerHTML = `
                 <span>
@@ -689,6 +925,10 @@ export function warpToSystem(systemId: number) {
     STATE.bioEnergy -= warpCost;
     STATE.currentSystemId = targetSys.id;
     STATE.systemsVisited++;
+    if (!STATE.visitedSystemIds) STATE.visitedSystemIds = [];
+    if (!STATE.visitedSystemIds.includes(targetSys.id)) {
+        STATE.visitedSystemIds.push(targetSys.id);
+    }
 
     // Trigger Warp VFX overlay
     const warpOverlay = document.getElementById('warp-overlay');

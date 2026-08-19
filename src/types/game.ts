@@ -260,6 +260,7 @@ export interface GameState {
     gameStarted: boolean;
     isGameOver: boolean;
     systemsVisited: number;
+    visitedSystemIds: number[];
 
     // Evolution Resources
     bioRes: number;

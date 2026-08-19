@@ -13,6 +13,7 @@ export const STATE: GameState = {
     gameStarted: false,
     isGameOver: false,
     systemsVisited: 1,
+    visitedSystemIds: [1],
 
     // Evolution Resources
     bioRes: 0,
