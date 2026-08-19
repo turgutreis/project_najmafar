@@ -29881,37 +29881,72 @@ function onWindowResize() {
 }
 
 // src/engine/trajectory.ts
-var TRAJECTORY_STEPS = 120;
-var TRAJECTORY_DT = 0.07;
-var SOFTENING_SQ = 16;
+var DASH_SEGMENTS = 130;
+var TRAJECTORY_DT = 0.08;
+var DASH_RATIO = 0.65;
+var SOFTENING_SQ = 6;
 var trajectoryGeometry;
-var trajectoryLine;
+var trajectoryLines;
 var trajectoryPositions;
 var trajectoryColors;
 var _predPos = new Vector3;
 var _predVel = new Vector3;
 var _predAcc = new Vector3;
+var _segmentStart = new Vector3;
+var _segmentEnd = new Vector3;
 function initTrajectory() {
+  const vertexCount = DASH_SEGMENTS * 2;
   trajectoryGeometry = new BufferGeometry;
-  trajectoryPositions = new Float32Array(TRAJECTORY_STEPS * 3);
-  trajectoryColors = new Float32Array(TRAJECTORY_STEPS * 3);
+  trajectoryPositions = new Float32Array(vertexCount * 3);
+  trajectoryColors = new Float32Array(vertexCount * 3);
   trajectoryGeometry.setAttribute("position", new BufferAttribute(trajectoryPositions, 3));
   trajectoryGeometry.setAttribute("color", new BufferAttribute(trajectoryColors, 3));
   const material = new LineBasicMaterial({
     vertexColors: true,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.92,
     linewidth: 2,
     blending: AdditiveBlending,
     depthWrite: false
   });
-  trajectoryLine = new Line(trajectoryGeometry, material);
-  scene.add(trajectoryLine);
+  trajectoryLines = new LineSegments(trajectoryGeometry, material);
+  scene.add(trajectoryLines);
+}
+function calculateGravityAt(pos, simTime, outAcc) {
+  outAcc.set(0, 0, 0);
+  const sources = STATE.gravitySources;
+  const count = sources.length;
+  for (let s = 0;s < count; s++) {
+    const source = sources[s];
+    if (source.isAbsorbed)
+      continue;
+    let sourceX = source.position.x;
+    let sourceZ = source.position.z;
+    if (source.type === "planet") {
+      const planetEntry = activePlanets.find((p) => p.source === source);
+      if (planetEntry && !planetEntry.isMoon) {
+        const futureAngle = planetEntry.angle + planetEntry.speed * simTime;
+        sourceX = planetEntry.distance * Math.cos(futureAngle);
+        sourceZ = planetEntry.distance * Math.sin(futureAngle);
+      }
+    }
+    const dx = sourceX - pos.x;
+    const dz = sourceZ - pos.z;
+    const distSq = dx * dx + dz * dz;
+    const rangeSq = source.gravityRange * source.gravityRange;
+    if (distSq < rangeSq) {
+      const distance = Math.sqrt(distSq);
+      const forceStrength = STATE.gConstant * source.mass / (distSq + SOFTENING_SQ);
+      const invDist = 1 / Math.max(0.1, distance);
+      outAcc.x += dx * invDist * forceStrength;
+      outAcc.z += dz * invDist * forceStrength;
+    }
+  }
 }
 function updateTrajectory() {
-  if (!trajectoryLine)
+  if (!trajectoryLines)
     return;
-  trajectoryLine.visible = true;
+  trajectoryLines.visible = true;
   _predPos.copy(STATE.playerPosition);
   _predVel.copy(STATE.playerVelocity);
   const isThrusting = STATE.keys ? STATE.keys.w : false;
@@ -29921,61 +29956,49 @@ function updateTrajectory() {
     const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
     const fX = Math.cos(STATE.shipHeading || 0);
     const fZ = -Math.sin(STATE.shipHeading || 0);
-    _predVel.x += fX * effectiveThrust * 0.25;
-    _predVel.z += fZ * effectiveThrust * 0.25;
+    _predVel.x += fX * effectiveThrust * 0.22;
+    _predVel.z += fZ * effectiveThrust * 0.22;
   }
-  const sources = STATE.gravitySources;
-  const sourceCount = sources.length;
-  for (let step = 0;step < TRAJECTORY_STEPS; step++) {
-    trajectoryPositions[step * 3 + 0] = _predPos.x;
-    trajectoryPositions[step * 3 + 1] = 0.2;
-    trajectoryPositions[step * 3 + 2] = _predPos.z;
-    const progress = step / TRAJECTORY_STEPS;
-    const alpha = Math.max(0.05, Math.pow(1 - progress, 1.1) * 0.9);
+  for (let seg = 0;seg < DASH_SEGMENTS; seg++) {
+    const simTime = seg * TRAJECTORY_DT;
+    _segmentStart.copy(_predPos);
+    const dashDt = TRAJECTORY_DT * DASH_RATIO;
+    calculateGravityAt(_predPos, simTime, _predAcc);
+    _predVel.addScaledVector(_predAcc, dashDt);
+    _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * dashDt));
+    _predPos.addScaledVector(_predVel, dashDt);
+    _segmentEnd.copy(_predPos);
+    const gapDt = TRAJECTORY_DT * (1 - DASH_RATIO);
+    calculateGravityAt(_predPos, simTime + dashDt, _predAcc);
+    _predVel.addScaledVector(_predAcc, gapDt);
+    _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * gapDt));
+    _predPos.addScaledVector(_predVel, gapDt);
+    const v0 = seg * 2;
+    const v1 = seg * 2 + 1;
+    trajectoryPositions[v0 * 3 + 0] = _segmentStart.x;
+    trajectoryPositions[v0 * 3 + 1] = 0.25;
+    trajectoryPositions[v0 * 3 + 2] = _segmentStart.z;
+    trajectoryPositions[v1 * 3 + 0] = _segmentEnd.x;
+    trajectoryPositions[v1 * 3 + 1] = 0.25;
+    trajectoryPositions[v1 * 3 + 2] = _segmentEnd.z;
+    const progress = seg / DASH_SEGMENTS;
+    const alpha = Math.max(0.08, Math.pow(1 - progress, 1.15) * 0.95);
+    let r = 0.22, g = 0.78, b = 0.98;
     if (isThrusting) {
-      trajectoryColors[step * 3 + 0] = 0.05 * alpha;
-      trajectoryColors[step * 3 + 1] = 0.95 * alpha;
-      trajectoryColors[step * 3 + 2] = 0.55 * alpha;
+      r = 0.05;
+      g = 0.95;
+      b = 0.55;
     } else if (isBraking) {
-      trajectoryColors[step * 3 + 0] = 0.95 * alpha;
-      trajectoryColors[step * 3 + 1] = 0.4 * alpha;
-      trajectoryColors[step * 3 + 2] = 0.2 * alpha;
-    } else {
-      trajectoryColors[step * 3 + 0] = 0.2 * alpha;
-      trajectoryColors[step * 3 + 1] = 0.75 * alpha;
-      trajectoryColors[step * 3 + 2] = 0.98 * alpha;
+      r = 0.95;
+      g = 0.4;
+      b = 0.2;
     }
-    _predAcc.set(0, 0, 0);
-    const simTime = step * TRAJECTORY_DT;
-    for (let s = 0;s < sourceCount; s++) {
-      const source = sources[s];
-      if (source.isAbsorbed)
-        continue;
-      let sourceX = source.position.x;
-      let sourceZ = source.position.z;
-      if (source.type === "planet") {
-        const planetEntry = activePlanets.find((p) => p.source === source);
-        if (planetEntry && !planetEntry.isMoon) {
-          const futureAngle = planetEntry.angle + planetEntry.speed * simTime;
-          sourceX = planetEntry.distance * Math.cos(futureAngle);
-          sourceZ = planetEntry.distance * Math.sin(futureAngle);
-        }
-      }
-      const dx = sourceX - _predPos.x;
-      const dz = sourceZ - _predPos.z;
-      const distSq = dx * dx + dz * dz;
-      const rangeSq = source.gravityRange * source.gravityRange;
-      if (distSq < rangeSq) {
-        const distance = Math.sqrt(distSq);
-        const forceStrength = STATE.gConstant * source.mass / (distSq + SOFTENING_SQ);
-        const invDist = 1 / Math.max(0.1, distance);
-        _predAcc.x += dx * invDist * forceStrength;
-        _predAcc.z += dz * invDist * forceStrength;
-      }
-    }
-    _predVel.addScaledVector(_predAcc, TRAJECTORY_DT);
-    _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * TRAJECTORY_DT));
-    _predPos.addScaledVector(_predVel, TRAJECTORY_DT);
+    trajectoryColors[v0 * 3 + 0] = r * alpha;
+    trajectoryColors[v0 * 3 + 1] = g * alpha;
+    trajectoryColors[v0 * 3 + 2] = b * alpha;
+    trajectoryColors[v1 * 3 + 0] = r * alpha;
+    trajectoryColors[v1 * 3 + 1] = g * alpha;
+    trajectoryColors[v1 * 3 + 2] = b * alpha;
   }
   trajectoryGeometry.attributes.position.needsUpdate = true;
   trajectoryGeometry.attributes.color.needsUpdate = true;
@@ -33417,8 +33440,8 @@ function spawnPlanetsAndAsteroids() {
       }
     }
     scene.add(planetGroup);
-    const pMass = p.size * p.size * 4;
-    const pRange = p.size * 4.5;
+    const pMass = p.size * p.size * 12 * (isGas ? 1.8 : 1.2);
+    const pRange = Math.max(22, p.size * 7.5);
     const sourceObj = {
       mesh: planetGroup,
       type: "planet",
