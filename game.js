@@ -32871,6 +32871,7 @@ async function checkUniverseData() {
     if (data && data.systems && data.systems.length > 0) {
       STATE.universe = data;
       const sysCount = data.systems.length;
+      const meta = data.meta;
       const startBtn = document.getElementById("start-game-btn");
       if (startBtn) {
         startBtn.removeAttribute("disabled");
@@ -32878,9 +32879,25 @@ async function checkUniverseData() {
         startBtn.innerText = "Najmafar betreten";
       }
       const status = document.getElementById("generation-status");
-      if (status) {
-        status.innerText = `Galaxie aktiv (${sysCount} Sternensysteme).`;
-        status.style.color = "#10b981";
+      const mapBadge = document.getElementById("galaxy-provenance-badge");
+      if (meta) {
+        const isQpu = meta.generatorMode === "IBM_QPU";
+        const label = isQpu ? `\uD83C\uDF0C IBM Quantum QPU (${meta.backendName})` : `\uD83D\uDD2C Qiskit Simulator (${meta.backendName || "basic_simulator"})`;
+        if (status) {
+          status.innerText = `Galaxie aktiv (${sysCount} Systeme) — ${label}`;
+          status.style.color = isQpu ? "#34d399" : "#38bdf8";
+        }
+        if (mapBadge) {
+          mapBadge.innerText = `${label} • ${sysCount} Systeme`;
+          mapBadge.style.color = isQpu ? "#34d399" : "#38bdf8";
+          mapBadge.style.borderColor = isQpu ? "rgba(52, 211, 153, 0.4)" : "rgba(56, 189, 248, 0.3)";
+          mapBadge.style.background = isQpu ? "rgba(52, 211, 153, 0.15)" : "rgba(56, 189, 248, 0.15)";
+        }
+      } else {
+        if (status) {
+          status.innerText = `Galaxie aktiv (${sysCount} Sternensysteme).`;
+          status.style.color = "#10b981";
+        }
       }
       clearActiveSystem();
       spawnPlanetsAndAsteroids();

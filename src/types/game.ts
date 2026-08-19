@@ -146,8 +146,21 @@ export interface StarSystem {
     asteroids?: any[];
 }
 
+export interface UniverseMetadata {
+    generator: string;
+    generatorMode: 'IBM_QPU' | 'LOCAL_SIMULATOR' | 'PSEUDO_MOCK' | string;
+    backendName: string;
+    jobId?: string | null;
+    shots: number;
+    qubits: number;
+    generatedAt: string;
+    systemCount: number;
+    sectors: string[];
+}
+
 export interface UniverseData {
-    name: string;
+    name?: string;
+    meta?: UniverseMetadata;
     systems: StarSystem[];
 }
 

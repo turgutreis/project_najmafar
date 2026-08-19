@@ -4,6 +4,7 @@ import json
 import math
 import random
 import argparse
+from datetime import datetime, timezone
 
 # Prefix & Suffix tables for procedural star naming
 STAR_PREFIXES = [
@@ -83,7 +84,6 @@ class QuantumRandomStream:
 
     def get_range(self, min_val, max_val):
         """Returns a float uniformly distributed between min_val and max_val."""
-        # Use 12 bits for precision (0..4095)
         val = self.get_bits(12)
         ratio = val / 4095.0
         return min_val + ratio * (max_val - min_val)
@@ -99,25 +99,36 @@ class QuantumRandomStream:
 def generate_quantum_bits(api_key=None, use_qpu=False):
     """
     Builds and runs a 5-qubit Hadamard quantum circuit.
-    Falls back to local simulation if no API key is set, or pseudorandom if Qiskit isn't installed.
+    Returns (qrng_stream, meta_info_dict).
     """
     print("Najmafar Quantum Generator: Initialisiere Quantenschaltkreis...", flush=True)
     
+    shots = 16000
+    qubits = 5
+    gen_time = datetime.now(timezone.utc).isoformat()
+
     try:
         import qiskit
         from qiskit import QuantumCircuit
         print(f"Qiskit v{qiskit.__version__} erkannt.", flush=True)
     except ImportError:
         print("WARNUNG: Qiskit ist auf diesem System nicht installiert. Weiche auf Pseudo-Zufall aus.", flush=True)
-        mock_strings = [format(random.randint(0, 31), '05b') for _ in range(16000)]
-        return QuantumRandomStream(mock_strings)
+        mock_strings = [format(random.randint(0, 31), '05b') for _ in range(shots)]
+        meta = {
+            "generator": "Project Najmafar Fallback Generator",
+            "generatorMode": "PSEUDO_MOCK",
+            "backendName": "python_random_fallback",
+            "jobId": None,
+            "shots": shots,
+            "qubits": qubits,
+            "generatedAt": gen_time,
+            "sectors": ["sector_outer_rim", "sector_mid_rim", "sector_core"]
+        }
+        return QuantumRandomStream(mock_strings), meta
 
-    qc = QuantumCircuit(5, 5)
-    qc.h(range(5))
-    qc.measure(range(5), range(5))
-    
-    shots = 16000
-    bitstrings = []
+    qc = QuantumCircuit(qubits, qubits)
+    qc.h(range(qubits))
+    qc.measure(range(qubits), range(qubits))
 
     if use_qpu:
         print("Verbinde mit IBM Quantum Platform (Echtes QPU/Cloud-Gerät)...", flush=True)
@@ -138,7 +149,8 @@ def generate_quantum_bits(api_key=None, use_qpu=False):
 
             if service:
                 backend = service.least_busy(simulator=False, operational=True)
-                print(f"QPU ausgewählt: {backend.name}. Reiche Quanten-Job ein (Shots={shots})...", flush=True)
+                backend_name = backend.name
+                print(f"QPU ausgewählt: {backend_name}. Reiche Quanten-Job ein (Shots={shots})...", flush=True)
                 
                 from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
                 pm = generate_preset_pass_manager(optimization_level=1, backend=backend)
@@ -146,7 +158,8 @@ def generate_quantum_bits(api_key=None, use_qpu=False):
                 
                 sampler = SamplerV2(backend)
                 job = sampler.run([(transpiled_qc)])
-                print(f"Job erfolgreich eingereicht! Job-ID: {job.job_id()}", flush=True)
+                job_id = job.job_id()
+                print(f"Job erfolgreich eingereicht! Job-ID: {job_id}", flush=True)
                 print(f"Status im IBM Quantum Dashboard sichtbar (Status: {job.status()}). Warte auf Berechnung...", flush=True)
                 
                 result = job.result()
@@ -154,19 +167,62 @@ def generate_quantum_bits(api_key=None, use_qpu=False):
                 bitstrings_raw = pub_result.data.c.get_bitstrings()
                 bitstrings = list(bitstrings_raw)
                 print("Quanten-Messergebnisse erfolgreich von IBM QPU empfangen!", flush=True)
+
+                meta = {
+                    "generator": "IBM Quantum Platform QPU Engine",
+                    "generatorMode": "IBM_QPU",
+                    "backendName": backend_name,
+                    "jobId": job_id,
+                    "shots": shots,
+                    "qubits": qubits,
+                    "generatedAt": gen_time,
+                    "sectors": ["sector_outer_rim", "sector_mid_rim", "sector_core"]
+                }
+                return QuantumRandomStream(bitstrings), meta
             else:
                 print("Weiche auf den lokalen Qiskit-Simulator aus...", flush=True)
                 bitstrings = run_local_simulator(qc, shots)
+                meta = {
+                    "generator": "Local Qiskit Simulator Engine",
+                    "generatorMode": "LOCAL_SIMULATOR",
+                    "backendName": "basic_simulator",
+                    "jobId": None,
+                    "shots": shots,
+                    "qubits": qubits,
+                    "generatedAt": gen_time,
+                    "sectors": ["sector_outer_rim", "sector_mid_rim", "sector_core"]
+                }
+                return QuantumRandomStream(bitstrings), meta
             
         except Exception as e:
             print(f"FEHLER bei IBM QPU-Verbindung: {str(e)}", flush=True)
             print("Weiche auf den lokalen Qiskit-Simulator aus...", flush=True)
             bitstrings = run_local_simulator(qc, shots)
+            meta = {
+                "generator": "Local Qiskit Simulator Engine (QPU Fallback)",
+                "generatorMode": "LOCAL_SIMULATOR",
+                "backendName": "basic_simulator",
+                "jobId": None,
+                "shots": shots,
+                "qubits": qubits,
+                "generatedAt": gen_time,
+                "sectors": ["sector_outer_rim", "sector_mid_rim", "sector_core"]
+            }
+            return QuantumRandomStream(bitstrings), meta
     else:
         print("Führe Quantenschaltkreis auf lokalem Simulator aus (BasicProvider)...", flush=True)
         bitstrings = run_local_simulator(qc, shots)
-        
-    return QuantumRandomStream(bitstrings)
+        meta = {
+            "generator": "Local Qiskit Simulator Engine",
+            "generatorMode": "LOCAL_SIMULATOR",
+            "backendName": "basic_simulator",
+            "jobId": None,
+            "shots": shots,
+            "qubits": qubits,
+            "generatedAt": gen_time,
+            "sectors": ["sector_outer_rim", "sector_mid_rim", "sector_core"]
+        }
+        return QuantumRandomStream(bitstrings), meta
 
 
 def run_local_simulator(qc, shots):
@@ -188,7 +244,7 @@ def run_local_simulator(qc, shots):
         return [format(random.randint(0, 31), '05b') for _ in range(shots)]
 
 
-def build_galaxy(qrng, count=1000):
+def build_galaxy(qrng, meta_info, count=1000):
     """Procedurally generates a beautiful, natural spiral galaxy of 1000+ stellar systems divided into 3 sectors."""
     print(f"Generiere Galaxie mit {count} Sternensystemen in 3 Sektoren...", flush=True)
     systems = []
@@ -197,9 +253,7 @@ def build_galaxy(qrng, count=1000):
     existing_coords = []
     
     for i in range(count):
-        # 1. Coordinate Placement
         if i == 0:
-            # Sagittarius A* (Supermassive Black Hole at Core Center)
             sys_name = "Sagittarius A* (Kern-Singularität)"
             x, z = 0.0, 0.0
             existing_coords.append((x, z))
@@ -209,7 +263,6 @@ def build_galaxy(qrng, count=1000):
             anomaly_type = "supermassive_black_hole"
             is_core_anchor = True
         elif i == 1:
-            # Player Starting System in Outer Rim (Perseus Arm)
             sys_name = "Perseus-Erwachen Prime (Start)"
             x, z = 310.0, 160.0
             existing_coords.append((x, z))
@@ -219,7 +272,6 @@ def build_galaxy(qrng, count=1000):
             anomaly_type = "none"
             is_core_anchor = False
         else:
-            # Distribute along spiral arms
             arm = i % arms
             arm_offset = arm * (2.0 * math.pi / arms)
             
@@ -236,7 +288,6 @@ def build_galaxy(qrng, count=1000):
             x = round(arm_r * math.cos(arm_angle) + scatter_dist * math.cos(scatter_angle), 2)
             z = round(arm_r * math.sin(arm_angle) + scatter_dist * math.sin(scatter_angle), 2)
             
-            # Anti-Overlap Collision Check (min 9.5 units)
             attempts = 0
             while attempts < 25:
                 too_close = False
@@ -254,7 +305,6 @@ def build_galaxy(qrng, count=1000):
                 
             existing_coords.append((x, z))
             
-            # Sector Classification based on distance from core
             dist_from_core = math.sqrt(x * x + z * z)
             if dist_from_core <= 110.0:
                 sector_id = "sector_core"
@@ -266,10 +316,8 @@ def build_galaxy(qrng, count=1000):
                 sector_id = "sector_outer_rim"
                 sector_name = "Perseus-Rand (Das Erwachen)"
                 
-            # Star selection
-            star_roll = qrng.get_bits(6) # 0-63
+            star_roll = qrng.get_bits(6)
             if sector_id == "sector_core":
-                # Higher density of energetic & exotic stars
                 if star_roll < 20:
                     star_type = "White Dwarf"
                 elif star_roll < 38:
@@ -290,7 +338,6 @@ def build_galaxy(qrng, count=1000):
                 else:
                     star_type = "Black Hole"
 
-            # Anomaly Assignment
             anomaly_roll = qrng.get_bits(5)
             if sector_id == "sector_mid_rim" and anomaly_roll < 4:
                 anomaly_type = qrng.choose(["flare_star", "dark_energy_rift", "ancient_beacon"])
@@ -308,7 +355,6 @@ def build_galaxy(qrng, count=1000):
             
         star_cfg = STAR_CLASSES[star_type]
         
-        # 2. Planets Generation (1 to 5 planets)
         planet_count = 1 + (qrng.get_bits(4) % 5)
         if star_type == "Black Hole":
             planet_count = 1 + (qrng.get_bits(2) % 3)
@@ -363,7 +409,7 @@ def build_galaxy(qrng, count=1000):
                 p_bio = "Steril"
                 p_res = "Silizium-Kristalle & Titan-Erze"
                 species = None
-            else: # Ice
+            else:
                 p_size = qrng.get_range(2.2, 3.5)
                 p_color = qrng.choose(["0x38bdf8", "0x06b6d4", "0xa5f3fc"])
                 p_temp = f"{int(qrng.get_range(-220, -120))}°C"
@@ -372,7 +418,6 @@ def build_galaxy(qrng, count=1000):
                 p_res = "Wassereis & flüssiges Methan"
                 species = None
                 
-            # Moons
             moons = []
             if p_type == "Gas Giant":
                 moon_count = qrng.get_bits(2) % 4
@@ -437,7 +482,6 @@ def build_galaxy(qrng, count=1000):
                 "moons": moons
             })
             
-        # 3. Asteroids
         asteroids = []
         belt1_dist = tpl["d_min"] * (tpl["spacing"] ** 1.8)
         belt2_dist = tpl["d_min"] * (tpl["spacing"] ** 3.5)
@@ -480,7 +524,11 @@ def build_galaxy(qrng, count=1000):
             "asteroids": asteroids
         })
         
-    return {"systems": systems}
+    meta_info["systemCount"] = len(systems)
+    return {
+        "meta": meta_info,
+        "systems": systems
+    }
 
 
 def main():
@@ -493,18 +541,18 @@ def main():
     api_key = args.api_key or os.environ.get("IBM_QUANTUM_API_KEY", "") or os.environ.get("QISKIT_IBM_TOKEN", "")
     use_qpu = args.qpu
     
-    # 1. Fetch quantum random stream
-    qrng = generate_quantum_bits(api_key, use_qpu)
+    # 1. Fetch quantum random stream and provenance metadata
+    qrng, meta_info = generate_quantum_bits(api_key, use_qpu)
     
     # 2. Build galaxy
-    galaxy_data = build_galaxy(qrng, count=args.count)
+    galaxy_data = build_galaxy(qrng, meta_info, count=args.count)
     
     # 3. Export to JSON
     output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "universe_data.json")
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(galaxy_data, f, indent=2, ensure_ascii=False)
         
-    print(f"Erfolg: {len(galaxy_data['systems'])} Sternensysteme in '{output_path}' exportiert!", flush=True)
+    print(f"Erfolg: {len(galaxy_data['systems'])} Sternensysteme [{meta_info['generatorMode']} - {meta_info['backendName']}] in '{output_path}' exportiert!", flush=True)
 
 
 if __name__ == "__main__":
