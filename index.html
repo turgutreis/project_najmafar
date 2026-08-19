@@ -270,250 +270,242 @@
     </div>
 
     <!-- Game HUD -->
-    <div id="hud-container">
+    <div id="hud-container" class="smart-hud-container">
         
-        <!-- Top Stats: Bio-Entity Status -->
-        <header class="hud-header glass-panel">
-            <div class="stat-group">
-                <div class="stat-label">Organischer Kern</div>
-                <div class="progress-bar-container">
-                    <div id="core-health-bar" class="progress-bar health" style="width: 100%;"></div>
+        <!-- 1. Top-Left Vital Cluster (Ultra-Compact Semi-Transparent Curved Capsule) -->
+        <div id="hud-vital-cluster" class="hud-vital-cluster glass-capsule">
+            <!-- Core Health -->
+            <div class="vital-item" title="Organischer Kern (Gesundheit)">
+                <span class="vital-icon">❤️</span>
+                <div class="vital-bar-track">
+                    <div id="core-health-bar" class="vital-bar health" style="width: 100%;"></div>
                 </div>
-                <div class="stat-value" id="core-health-text">100%</div>
+                <span id="core-health-text" class="vital-val">100%</span>
+            </div>
+            <!-- Bio Energy -->
+            <div class="vital-item" title="Bio-Energie (Schub & Extraktion)">
+                <span class="vital-icon">⚡</span>
+                <div class="vital-bar-track">
+                    <div id="bio-energy-bar" class="vital-bar energy" style="width: 100%;"></div>
+                </div>
+                <span id="bio-energy-text" class="vital-val">100%</span>
+            </div>
+            <!-- Mental Field -->
+            <div class="vital-item" title="Mentale Feldstärke (Psionik & Telepathie)">
+                <span class="vital-icon">🧠</span>
+                <div class="vital-bar-track">
+                    <div id="telepathy-energy-bar" class="vital-bar mental" style="width: 100%;"></div>
+                </div>
+                <span id="telepathy-energy-text" class="vital-val">100/100</span>
+            </div>
+            <!-- Loneliness Resonance -->
+            <div class="vital-item" title="Kosmische Einsamkeit / Gedanken-Resonanz">
+                <span class="vital-icon">💫</span>
+                <div class="vital-bar-track">
+                    <div id="loneliness-bar" class="vital-bar loneliness" style="width: 80%;"></div>
+                </div>
+                <span id="loneliness-text" class="vital-val-pill">80% (Verzweiflung)</span>
+            </div>
+        </div>
+
+        <!-- 2. Top-Right System & Resource Pill -->
+        <div id="hud-system-pill" class="hud-system-pill glass-capsule">
+            <span class="sys-name" id="hud-current-system-name">🪐 Sol Invictus</span>
+            <span class="sys-divider">•</span>
+            <span class="res-item" title="Biomasse"><span class="res-dot bio"></span> <span id="res-bio-count">0</span> Bio</span>
+            <span class="res-item" title="Silizium-Kristalle"><span class="res-dot silicon"></span> <span id="res-silicon-count">0</span> Sil</span>
+            <span class="sys-divider">•</span>
+            <span id="chronos-fragments-badge" class="chronos-badge" title="Psionische Chronos-Gedächtnisfragmente">⏳ <span id="chronos-count">0</span>/12</span>
+            <button id="music-toggle-btn" class="mini-music-btn" title="Musik umschalten">🔇</button>
+        </div>
+
+        <!-- 3. Contextual Slide-In Sensor Hologram (Left side, only slides in on orbit / target / proximity) -->
+        <aside id="left-deck-panel" class="hud-scanner-card glass-panel">
+            <div class="scanner-card-header">
+                <div class="scanner-card-title">
+                    <span class="scanner-dot"></span>
+                    <span>Sensoren & Telemetrie</span>
+                </div>
+                <button id="left-collapse-btn" class="scanner-close-btn" title="Sensor-Karte schließen">✕</button>
             </div>
 
-            <div class="stat-group">
-                <div class="stat-label">Bio-Energie</div>
-                <div class="progress-bar-container">
-                    <div id="bio-energy-bar" class="progress-bar energy" style="width: 80%;"></div>
+            <!-- Orbit Sub-System Telemetry Badge -->
+            <div id="orbit-subsystem-badge" class="orbit-subsystem-badge" style="display: none;">
+                <span class="orbit-icon">🪐</span>
+                <div class="orbit-details">
+                    <div class="orbit-title" id="orbit-badge-title">ORBIT-SUB-SYSTEM</div>
+                    <div class="orbit-sub" id="orbit-badge-sub">Nahbereich-Zoom aktiv</div>
                 </div>
-                <div class="stat-value" id="bio-energy-text">80%</div>
             </div>
 
-            <div class="stat-group">
-                <div class="stat-label">Mentale Feldstärke</div>
-                <div class="progress-bar-container">
-                    <div id="telepathy-energy-bar" class="progress-bar mental" style="width: 90%;"></div>
-                </div>
-                <div class="stat-value" id="telepathy-energy-text">90%</div>
+            <div id="target-lock-badge" class="target-lock-badge" style="display: none;">
+                <span>🎯 Manuell erfasst</span>
+                <button id="unlock-target-btn" class="unlock-btn" title="Ziel fixierung aufheben [T / B-Taste]">✕</button>
             </div>
 
-            <div class="stat-group">
-                <div class="stat-label">Kosmische Einsamkeit</div>
-                <div class="progress-bar-container">
-                    <div id="loneliness-bar" class="progress-bar loneliness" style="width: 80%;"></div>
+            <div class="scanner-target-summary">
+                <div class="target-row">
+                    <span class="label" id="target-label-text">Zielkörper:</span>
+                    <span id="nearest-planet-name" class="val">Keiner</span>
                 </div>
-                <div class="stat-value" id="loneliness-text" style="color: #ec4899;">80% (Verzweiflung)</div>
-            </div>
-        </header>
-
-        <!-- Left Side: Planetary Scanner & Minimap -->
-        <aside class="hud-left glass-panel" id="left-deck-panel">
-            <!-- Collapse Button -->
-            <button id="left-collapse-btn" class="collapse-toggle-btn left-btn" title="Sensoren ein-/ausblenden">‹</button>
-
-            <h2 class="panel-title">Sensoren & Navigation</h2>
-            
-            <!-- Minimap Wrapper -->
-            <div class="minimap-wrapper">
-                <canvas id="minimap-canvas" width="220" height="220"></canvas>
+                <div class="target-row">
+                    <span class="label">Distanz:</span>
+                    <span id="nearest-planet-distance" class="val">-</span>
+                </div>
             </div>
 
-            <!-- Galaxy Map & Sonar Action Buttons -->
-            <button id="galaxy-map-btn" class="galaxy-map-trigger-btn">🌌 Galaxie-Karte [M]</button>
-            <button id="psionic-sonar-btn" class="psionic-sonar-trigger-btn">📡 Psionischer Ruf [Q]</button>
-            
-            <div class="scanner-scroll-body">
-                <!-- Scan Action Box -->
-                <div class="scan-action-box">
-                    <!-- Orbit Sub-System Telemetry Badge -->
-                    <div id="orbit-subsystem-badge" class="orbit-subsystem-badge" style="display: none;">
-                        <span class="orbit-icon">🪐</span>
-                        <div class="orbit-details">
-                            <div class="orbit-title" id="orbit-badge-title">ORBIT-SUB-SYSTEM</div>
-                            <div class="orbit-sub" id="orbit-badge-sub">Nahbereich-Zoom aktiv</div>
-                        </div>
-                    </div>
-
-                    <div id="target-lock-badge" class="target-lock-badge" style="display: none;">
-                        <span>🎯 Manuell erfasst</span>
-                        <button id="unlock-target-btn" class="unlock-btn" title="Ziel fixierung aufheben [T / B-Taste]">✕</button>
-                    </div>
-                    <div class="nearest-planet-info">
-                        <span class="label" id="target-label-text">Nächster Planet:</span>
-                        <span id="nearest-planet-name" class="val">Keiner</span>
-                    </div>
-                    <div class="nearest-planet-dist">
-                        <span class="label">Distanz:</span>
-                        <span id="nearest-planet-distance" class="val">-</span>
-                    </div>
-                    
-                    <button id="start-scan-btn" class="scan-trigger-btn" disabled>Scan initiieren [F]</button>
-                    
-                    <!-- Scan Progress -->
-                    <div id="scan-progress-container" class="scan-progress-container" style="display: none;">
-                        <div class="scan-progress-label">Frequenz-Sweep aktiv: <span id="scan-progress-text">0%</span></div>
-                        <div class="scan-progress-bar-bg">
-                            <div id="scan-progress-bar" class="scan-progress-bar" style="width: 0%;"></div>
-                        </div>
-                    </div>
+            <!-- Scan Action Button & Progress -->
+            <button id="start-scan-btn" class="scan-trigger-btn" disabled>Scan initiieren [F]</button>
+            <div id="scan-progress-container" class="scan-progress-container" style="display: none;">
+                <div class="scan-progress-label">Frequenz-Sweep: <span id="scan-progress-text">0%</span></div>
+                <div class="scan-progress-bar-bg">
+                    <div id="scan-progress-bar" class="scan-progress-bar" style="width: 0%;"></div>
                 </div>
+            </div>
+
+            <!-- Scanned Planet Database -->
+            <div id="scan-results-box" class="scan-results-box" style="display: none;">
+                <h3 class="results-title" id="scan-planet-title">Planetenanalyse</h3>
+                <div class="result-row"><span class="label">Typus:</span><span id="scan-planet-type" class="val">-</span></div>
+                <div class="result-row"><span class="label">Temperatur:</span><span id="scan-planet-temp" class="val">-</span></div>
+                <div class="result-row"><span class="label">Biosignatur:</span><span id="scan-planet-bio" class="val">-</span></div>
+                <div class="result-row"><span class="label">Atmosphäre:</span><span id="scan-planet-atmos" class="val">-</span></div>
+                <div class="result-row" id="scan-planet-species-row" style="display: none;"><span class="label">Intelligentes Leben:</span><span id="scan-planet-species" class="val" style="color: #d946ef; font-weight: bold;">-</span></div>
+                <div class="result-row" id="scan-planet-tech-row" style="display: none;"><span class="label">Zivilisation:</span><span id="scan-planet-tech" class="val" style="color: #6366f1; font-weight: bold;">-</span></div>
+                <div class="result-row" id="scan-planet-fleet-row" style="display: none;"><span class="label">Verteidigung:</span><span id="scan-planet-fleet" class="val" style="color: #f43f5e; font-weight: bold;">-</span></div>
+                <div class="result-row" style="flex-direction: column; align-items: flex-start; gap: 4px; border-bottom: none;"><span class="label">Ressourcendichte:</span><span id="scan-planet-resources" class="val" style="color: #06b6d4; font-size: 0.7rem;">-</span></div>
                 
-                <!-- Scanned Planet Database -->
-                <div id="scan-results-box" class="scan-results-box" style="display: none;">
-                    <h3 class="results-title" id="scan-planet-title">Planetenanalyse</h3>
-                    
-                    <div class="result-row">
-                        <span class="label">Typus:</span>
-                        <span id="scan-planet-type" class="val">-</span>
-                    </div>
-                    <div class="result-row">
-                        <span class="label">Temperatur:</span>
-                        <span id="scan-planet-temp" class="val">-</span>
-                    </div>
-                    <div class="result-row">
-                        <span class="label">Biosignatur:</span>
-                        <span id="scan-planet-bio" class="val">-</span>
-                    </div>
-                    <div class="result-row">
-                        <span class="label">Atmosphäre:</span>
-                        <span id="scan-planet-atmos" class="val">-</span>
-                    </div>
-                    <div class="result-row" id="scan-planet-species-row" style="display: none;">
-                        <span class="label">Intelligentes Leben:</span>
-                        <span id="scan-planet-species" class="val" style="color: #d946ef; font-weight: bold;">-</span>
-                    </div>
-                    <div class="result-row" id="scan-planet-tech-row" style="display: none;">
-                        <span class="label">Zivilisation & Tech:</span>
-                        <span id="scan-planet-tech" class="val" style="color: #6366f1; font-weight: bold;">-</span>
-                    </div>
-                    <div class="result-row" id="scan-planet-fleet-row" style="display: none;">
-                        <span class="label">Orbitale Verteidigung:</span>
-                        <span id="scan-planet-fleet" class="val" style="color: #f43f5e; font-weight: bold;">-</span>
-                    </div>
-                    <div class="result-row" style="flex-direction: column; align-items: flex-start; gap: 4px; border-bottom: none;">
-                        <span class="label">Ressourcendichte:</span>
-                        <span id="scan-planet-resources" class="val" style="color: #06b6d4; font-weight: normal; font-size: 0.72rem; line-height: 1.3;">-</span>
-                    </div>
-                    
-                    <!-- Status Badge -->
-                    <div class="result-row" style="margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08);">
-                        <span class="label">Status:</span>
-                        <span id="scan-planet-status" class="planet-badge badge-ready">Bereit zur Assimilation</span>
-                    </div>
-
-                    <!-- Diplomacy & Comms Trigger Button -->
-                    <button id="start-comms-btn" class="comms-btn" style="display: none;">📡 Erstkontakt & Diplomatie [C]</button>
-
-                    <!-- Harvest Trigger Button & Progress -->
-                    <button id="start-harvest-btn" class="harvest-btn">🌿 Ressourcen assimilieren [E]</button>
-                    
+                <div class="scanner-actions-group">
+                    <button id="start-comms-btn" class="comms-btn" style="display: none;">📡 Funk & Diplomatie [C]</button>
+                    <button id="start-harvest-btn" class="harvest-btn">🌿 Assimilieren [E]</button>
                     <div id="harvest-progress-container" class="harvest-progress-container" style="display: none;">
-                        <div class="harvest-progress-label">Bio-Siphon aktiv: <span id="harvest-progress-text">0%</span></div>
-                        <div class="harvest-progress-bar-bg">
-                            <div id="harvest-progress-bar" class="harvest-progress-bar" style="width: 0%;"></div>
-                        </div>
+                        <div class="harvest-progress-label">Bio-Siphon: <span id="harvest-progress-text">0%</span></div>
+                        <div class="harvest-progress-bar-bg"><div id="harvest-progress-bar" class="harvest-progress-bar" style="width: 0%;"></div></div>
                     </div>
-
-                    <!-- Abduction Trigger Button & Progress -->
                     <button id="start-abduct-btn" class="abduct-btn" style="display: none;">🛸 Psionische Entführung [F]</button>
                     <div id="abduct-progress-container" class="abduct-progress-container" style="display: none;">
-                        <div class="abduct-progress-label">Traum-Matrix-Transfer: <span id="abduct-progress-text">0%</span></div>
-                        <div class="abduct-progress-bar-bg">
-                            <div id="abduct-progress-bar" class="abduct-progress-bar" style="width: 0%;"></div>
-                        </div>
+                        <div class="abduct-progress-label">Transfer: <span id="abduct-progress-text">0%</span></div>
+                        <div class="abduct-progress-bar-bg"><div id="abduct-progress-bar" class="abduct-progress-bar" style="width: 0%;"></div></div>
                     </div>
                 </div>
-                <div id="scan-placeholder-box" class="scan-placeholder-box">
-                    Fliege in die Nähe eines Planeten (Abstand &lt; 20), um die Sensoren zu kalibrieren und einen Oberflächendetektor-Scan durchzuführen.
-                </div>
+            </div>
+
+            <div id="scan-placeholder-box" class="scan-placeholder-box">
+                Fliege in die Nähe eines Planeten (Abstand &lt; 25), um die Sensoren zu kalibrieren.
             </div>
         </aside>
 
-        <!-- Right Side: Crew & Evolution deck (tabbed) -->
-        <aside class="hud-right glass-panel" id="right-deck-panel">
-            <!-- Collapse Button -->
-            <button id="right-collapse-btn" class="collapse-toggle-btn right-btn" title="Status-Deck ein-/ausblenden">›</button>
+        <!-- 4. Fading Toast Log Stream (Bottom Left) -->
+        <div id="hud-fading-log-stream" class="hud-fading-log-stream">
+            <!-- Dynamic fading toasts populated via addLogEntry -->
+        </div>
 
-            <!-- Tabs Header -->
-            <div id="right-deck-tabs" class="deck-tabs">
-                <button class="tab-btn active" data-tab="crew">🔮 Traum-Matrix (<span id="crew-count-badge">0</span>)</button>
-                <button class="tab-btn" data-tab="evolution">🧬 Evolution</button>
-                <button class="tab-btn" data-tab="factions">🏛️ Fraktionen</button>
-            </div>
-            
-            <!-- Crew Tab Container -->
-            <div id="tab-content-crew" class="tab-content active">
-                <!-- Graphic schematic of the ship inside the organic entity -->
-                <div class="vessel-schematic">
-                    <svg viewBox="0 0 200 120" class="schematic-svg">
-                        <!-- Outer organic hull -->
-                        <path d="M10,60 Q50,10 100,15 Q150,20 190,60 Q150,100 100,105 Q50,110 10,60" fill="none" stroke="rgba(0, 255, 136, 0.2)" stroke-width="3" stroke-dasharray="5 3" />
-                        <!-- MUTATION: Chitin Armor -->
-                        <path id="svg-armor" d="M8,60 Q50,6 100,11 Q150,16 192,60 Q150,104 100,109 Q50,114 8,60" fill="none" stroke="#10b981" stroke-width="4" style="display: none; opacity: 0.8;" />
-                        
-                        <!-- Captured mechanical ship cabin inside -->
-                        <rect x="55" y="40" width="90" height="40" rx="5" fill="rgba(30, 41, 59, 0.7)" stroke="#d946ef" stroke-width="2" id="schematic-cabin" />
-                        
-                        <!-- MUTATION: Sauerstoff-Drüse (Oxygen Core) -->
-                        <circle id="svg-o2" cx="100" cy="50" r="8" fill="#10b981" style="display: none;" />
-                        
-                        <!-- MUTATION: Synapsen-Netzwerk -->
-                        <path id="svg-synapses-1" d="M55,50 Q75,30 100,40" stroke="#d946ef" stroke-width="2" fill="none" style="display: none;" />
-                        <path id="svg-synapses-2" d="M145,50 Q125,70 100,60" stroke="#d946ef" stroke-width="2" fill="none" style="display: none;" />
-                        
-                        <!-- MUTATION: Dschinn-Übersetzer Core -->
-                        <polygon id="svg-translator" points="100,34 106,44 94,44" fill="#06b6d4" style="display: none;" />
+        <!-- 5. Floating Action Dock (Bottom Center) -->
+        <div id="hud-action-dock" class="hud-action-dock glass-capsule">
+            <button id="dock-deck-btn" class="dock-btn" title="Bio-Cockpit & Traum-Matrix [TAB]">
+                <span class="dock-key">TAB</span>
+                <span class="dock-label">🧬 Bio-Deck</span>
+            </button>
+            <button id="dock-map-btn" class="dock-btn" title="Galaktische Sternenkarte [M]">
+                <span class="dock-key">M</span>
+                <span class="dock-label">🌌 Sternenkarte</span>
+            </button>
+            <button id="dock-sonar-btn" class="dock-btn" title="Psionischen Ruf / Sonar aussenden [Q]">
+                <span class="dock-key">Q</span>
+                <span class="dock-label">📡 Psio-Sonar</span>
+            </button>
+            <button id="trigger-emp-btn" class="dock-btn emp-btn" title="Bio-EMP Schockwelle [X]">
+                <span class="dock-key">X</span>
+                <span class="dock-label">⚡ Bio-EMP</span>
+            </button>
+            <button id="dock-assist-btn" class="dock-btn" title="Flug-Assistent [Z]">
+                <span class="dock-key">Z</span>
+                <span id="dock-assist-label" class="dock-label">🛸 Assist: AUS</span>
+            </button>
+        </div>
 
-                        <!-- Connection tentacles -->
-                        <path d="M30,60 Q50,60 55,60" stroke="#d946ef" stroke-width="2" fill="none" />
-                        <path d="M145,60 Q170,60 180,60" stroke="#d946ef" stroke-width="2" fill="none" />
-                        <path d="M100,15 Q100,35 100,40" stroke="rgba(236, 72, 153, 0.5)" stroke-width="1.5" stroke-dasharray="2 2" fill="none" class="telepathic-pulse-line" />
-                        <!-- Status text overlay -->
-                        <text x="100" y="65" font-family="'Orbitron', sans-serif" font-size="10" fill="#d946ef" text-anchor="middle" id="schematic-status">Traum-Matrix aktiv</text>
-                    </svg>
+        <!-- 6. Compact Minimap Radar Orb (Bottom Right) -->
+        <div id="hud-minimap-orb" class="hud-minimap-orb glass-capsule">
+            <canvas id="minimap-canvas" width="160" height="160"></canvas>
+        </div>
+    </div>
+
+    <!-- 7. Central Bio-Cockpit Overlay Modal (Opened via [TAB] or Dock Button) -->
+    <div id="deck-modal" class="modal-overlay" style="display: none; z-index: 1040;">
+        <div class="deck-modal-content glass-panel">
+            <header class="deck-modal-header">
+                <div class="deck-title-group">
+                    <h2>🧬 Organisches Bio-Deck & Traum-Matrix</h2>
+                    <p class="deck-subtitle">Verwalte gefangene Bewusstseine, evolviere Organe und studiere Fraktionen.</p>
                 </div>
-
-                <!-- Crew Meta & Synergy Header -->
-                <div class="crew-meta-panel">
-                    <div class="crew-capacity-row">
-                        <span class="meta-label">Kokon-Kapazität:</span>
-                        <span id="crew-capacity-text" class="meta-val highlight">0 / 2</span>
+                <div class="deck-header-actions">
+                    <div id="right-deck-tabs" class="deck-tabs">
+                        <button class="tab-btn active" data-tab="crew">🔮 Traum-Matrix (<span id="crew-count-badge">0</span>)</button>
+                        <button class="tab-btn" data-tab="evolution">🧬 Evolution</button>
+                        <button class="tab-btn" data-tab="factions">🏛️ Fraktionen</button>
+                        <button class="tab-btn" data-tab="log">📜 Logbuch</button>
                     </div>
+                    <button id="close-deck-modal-btn" class="close-deck-btn">✕ [TAB]</button>
+                </div>
+            </header>
 
-                    <!-- Role Synergy Diversity Slots -->
-                    <div class="role-synergy-slots" id="role-synergy-slots">
-                        <div class="role-slot" id="slot-pilot" title="Astral-Pilot (+30% Schubkraft)">🛸 Pilot</div>
-                        <div class="role-slot" id="slot-biologist" title="Bio-Architekt (+45% Biomasse)">🌱 Biologe</div>
-                        <div class="role-slot" id="slot-engineer" title="Naniten-Meister (+Naniten-Reparatur)">🔧 Ingenieur</div>
-                        <div class="role-slot" id="slot-psychologist" title="Gedanken-Diplomatin (-40% Crew-Stress)">🧘 Psychologe</div>
+            <div class="deck-modal-body">
+                <!-- Tab 1: Crew & Traum-Matrix -->
+                <div id="tab-content-crew" class="tab-content active">
+                    <div class="deck-two-columns">
+                        <!-- Left: Vessel Schematic & Synergy Slots -->
+                        <div class="deck-schematic-col">
+                            <div class="vessel-schematic">
+                                <svg viewBox="0 0 200 120" class="schematic-svg">
+                                    <path d="M10,60 Q50,10 100,15 Q150,20 190,60 Q150,100 100,105 Q50,110 10,60" fill="none" stroke="rgba(0, 255, 136, 0.2)" stroke-width="3" stroke-dasharray="5 3" />
+                                    <path id="svg-armor" d="M8,60 Q50,6 100,11 Q150,16 192,60 Q150,104 100,109 Q50,114 8,60" fill="none" stroke="#10b981" stroke-width="4" style="display: none; opacity: 0.8;" />
+                                    <rect x="55" y="40" width="90" height="40" rx="5" fill="rgba(30, 41, 59, 0.7)" stroke="#d946ef" stroke-width="2" id="schematic-cabin" />
+                                    <circle id="svg-o2" cx="100" cy="50" r="8" fill="#10b981" style="display: none;" />
+                                    <path id="svg-synapses-1" d="M55,50 Q75,30 100,40" stroke="#d946ef" stroke-width="2" fill="none" style="display: none;" />
+                                    <path id="svg-synapses-2" d="M145,50 Q125,70 100,60" stroke="#d946ef" stroke-width="2" fill="none" style="display: none;" />
+                                    <polygon id="svg-translator" points="100,34 106,44 94,44" fill="#06b6d4" style="display: none;" />
+                                    <path d="M30,60 Q50,60 55,60" stroke="#d946ef" stroke-width="2" fill="none" />
+                                    <path d="M145,60 Q170,60 180,60" stroke="#d946ef" stroke-width="2" fill="none" />
+                                    <path d="M100,15 Q100,35 100,40" stroke="rgba(236, 72, 153, 0.5)" stroke-width="1.5" stroke-dasharray="2 2" fill="none" class="telepathic-pulse-line" />
+                                    <text x="100" y="65" font-family="'Orbitron', sans-serif" font-size="10" fill="#d946ef" text-anchor="middle" id="schematic-status">Traum-Matrix aktiv</text>
+                                </svg>
+                            </div>
+
+                            <div class="crew-meta-panel">
+                                <div class="crew-capacity-row">
+                                    <span class="meta-label">Kokon-Kapazität:</span>
+                                    <span id="crew-capacity-text" class="meta-val highlight">0 / 2</span>
+                                </div>
+                                <div class="role-synergy-slots" id="role-synergy-slots">
+                                    <div class="role-slot" id="slot-pilot" title="Astral-Pilot (+30% Schubkraft)">🛸 Pilot</div>
+                                    <div class="role-slot" id="slot-biologist" title="Bio-Architekt (+45% Biomasse)">🌱 Biologe</div>
+                                    <div class="role-slot" id="slot-engineer" title="Naniten-Meister (+Naniten-Reparatur)">🔧 Ingenieur</div>
+                                    <div class="role-slot" id="slot-psychologist" title="Gedanken-Diplomatin (-40% Crew-Stress)">🧘 Psychologe</div>
+                                </div>
+                                <div id="crew-synergy-banner" class="crew-synergy-banner">
+                                    <span id="crew-synergy-title" class="synergy-title">🌌 Kosmische Einsamkeit</span>
+                                    <span id="crew-synergy-desc" class="synergy-desc">Keine Geister an Bord.</span>
+                                </div>
+                            </div>
+
+                            <div class="telepathy-control-panel">
+                                <button id="telepathy-toggle-btn" class="telepathy-btn">
+                                    <span class="btn-glow"></span>
+                                    <span class="btn-text">Traum-Matrix stabilisieren [LEERTASTE]</span>
+                                </button>
+                                <div class="btn-hint">Webt die Illusion neu & beruhigt das Bewusstsein</div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Dynamic Crew List -->
+                        <div class="deck-crew-col">
+                            <div class="crew-list" id="crew-list-container"></div>
+                        </div>
                     </div>
-
-                    <div id="crew-synergy-banner" class="crew-synergy-banner">
-                        <span id="crew-synergy-title" class="synergy-title">🌌 Kosmische Einsamkeit</span>
-                        <span id="crew-synergy-desc" class="synergy-desc">Keine Geister an Bord. Das Wesen sehnt sich nach Gedanken-Resonanz.</span>
-                    </div>
                 </div>
 
-                <!-- Dynamic Crew / Matrix list -->
-                <div class="crew-list" id="crew-list-container">
-                    <!-- Populated dynamically via renderCrewUI() in game.js -->
-                </div>
-
-                <!-- Telepathy Controls -->
-                <div class="telepathy-control-panel">
-                    <button id="telepathy-toggle-btn" class="telepathy-btn">
-                        <span class="btn-glow"></span>
-                        <span class="btn-text">Traum-Matrix stabilisieren [LEERTASTE]</span>
-                    </button>
-                    <div class="btn-hint">Webt die Illusion neu & beruhigt das Bewusstsein</div>
-                </div>
-            </div>
-
-            <!-- Evolution Tab Container -->
-            <div id="tab-content-evolution" class="tab-content">
-                <!-- Evolution & Mutations Panel -->
-                <div class="evolution-panel" style="margin-top: 0; border: none; padding-top: 0; padding-bottom: 0;">
+                <!-- Tab 2: Evolution & Mutationen -->
+                <div id="tab-content-evolution" class="tab-content">
                     <div class="mutation-list">
                         <div class="mutation-item" id="mut-armor">
                             <div class="mut-details">
@@ -574,46 +566,25 @@
                     </div>
                 </div>
 
-                <!-- Factions Tab Container -->
+                <!-- Tab 3: Fraktionen -->
                 <div id="tab-content-factions" class="tab-content">
                     <div class="faction-tab-header">
                         <h4 style="margin: 0 0 4px 0; color: #f8fafc; font-size: 0.95rem;">🏛️ Galaktische Mächte</h4>
                         <p style="margin: 0 0 12px 0; color: #94a3b8; font-size: 0.72rem;">Einflusszonen & Reputation der 5 Großfraktionen</p>
                     </div>
-                    <div id="faction-reputation-list" class="faction-reputation-list">
-                        <!-- Dynamic Faction Cards -->
+                    <div id="faction-reputation-list" class="faction-reputation-list"></div>
+                </div>
+
+                <!-- Tab 4: Vollständiges Logbuch -->
+                <div id="tab-content-log" class="tab-content">
+                    <div class="full-log-container">
+                        <ul id="log-list" class="full-log-list">
+                            <!-- Populated with full history -->
+                        </ul>
                     </div>
                 </div>
             </div>
-        </aside>
-
-        <!-- Bottom bar: Instructions & Log -->
-        <footer class="hud-bottom glass-panel">
-            <div class="controls-guide">
-                <div class="control-item"><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> Schubdüsen | <span class="key">LEERTASTE</span> Beruhigungsfeld</div>
-                <div class="control-item"><span class="key">F</span> Scan | <span class="key">E</span> Assimilieren | <span class="key">M</span> Sternenkarte | <span class="key">ESC</span> Pause</div>
-                
-                <!-- Dedicated EMP Ability & Cooldown Bar -->
-                <div id="emp-ability-widget" class="emp-ability-widget">
-                    <button id="trigger-emp-btn" class="emp-action-btn ready" title="Zünde bio-elektrische EMP-Schockwelle gegen feindliche Schiffe">
-                        <span class="emp-icon">⚡</span>
-                        <span class="emp-name">BIO-EMP [X]</span>
-                        <span id="emp-status-badge" class="emp-status-badge">BEREIT</span>
-                    </button>
-                    <div class="emp-bar-track">
-                        <div id="emp-bar-fill" class="emp-bar-fill" style="width: 100%;"></div>
-                    </div>
-                </div>
-
-                <div class="control-item" style="margin-top: 4px;">
-                    <button id="music-toggle-btn" class="music-btn">🔇 Musik: Aus</button>
-                </div>
-            </div>
-            <div class="game-log" id="log-box">
-                <div class="log-entry system">[SYSTEM] Organismus in Milchstraße eingetreten. Suche nach stabilen Orbits.</div>
-                <div class="log-entry crew-chat" id="init-crew-log">[CREW] Capt. Miller: "⏁⊑⟒ ⌇⊑⟟⌿ ⟟⌇ ⏃⌰⟟⎎⟒! ⏃⏃⏃⊑!"</div>
-            </div>
-        </footer>
+        </div>
     </div>
 
     <!-- Script loading -->

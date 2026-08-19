@@ -4,34 +4,30 @@ import { addLogEntry } from './hud';
 import { calculateCrewBuffs, renderCrewUI } from '../systems/crew';
 import { renderFactionReputationUI } from '../systems/factions';
 
+export function isDeckOpen(): boolean {
+    const modal = document.getElementById('deck-modal');
+    return modal ? modal.style.display === 'flex' : false;
+}
+
+export function toggleDeckModal(force?: boolean) {
+    const modal = document.getElementById('deck-modal');
+    if (!modal) return;
+    const isVisible = modal.style.display === 'flex';
+    const show = force !== undefined ? force : !isVisible;
+    modal.style.display = show ? 'flex' : 'none';
+    if (show) {
+        renderCrewUI();
+        updateMutationUI();
+        renderFactionReputationUI();
+    }
+}
+
 export function initDeckUI() {
     const leftCollapseBtn = document.getElementById('left-collapse-btn');
     const leftDeckPanel = document.getElementById('left-deck-panel');
     if (leftCollapseBtn && leftDeckPanel) {
         leftCollapseBtn.addEventListener('click', () => {
-            leftDeckPanel.classList.toggle('collapsed');
-            if (leftDeckPanel.classList.contains('collapsed')) {
-                leftCollapseBtn.innerText = '›';
-                leftCollapseBtn.title = "Sensoren ausklappen";
-            } else {
-                leftCollapseBtn.innerText = '‹';
-                leftCollapseBtn.title = "Sensoren einklappen";
-            }
-        });
-    }
-
-    const rightCollapseBtn = document.getElementById('right-collapse-btn');
-    const rightDeckPanel = document.getElementById('right-deck-panel');
-    if (rightCollapseBtn && rightDeckPanel) {
-        rightCollapseBtn.addEventListener('click', () => {
-            rightDeckPanel.classList.toggle('collapsed');
-            if (rightDeckPanel.classList.contains('collapsed')) {
-                rightCollapseBtn.innerText = '‹';
-                rightCollapseBtn.title = "Status-Deck ausklappen";
-            } else {
-                rightCollapseBtn.innerText = '›';
-                rightCollapseBtn.title = "Status-Deck einklappen";
-            }
+            leftDeckPanel.classList.toggle('visible');
         });
     }
 
@@ -45,9 +41,11 @@ export function initDeckUI() {
             const crewContent = document.getElementById('tab-content-crew');
             const evoContent = document.getElementById('tab-content-evolution');
             const facContent = document.getElementById('tab-content-factions');
+            const logContent = document.getElementById('tab-content-log');
 
             if (crewContent) crewContent.classList.toggle('active', targetTab === 'crew');
             if (evoContent) evoContent.classList.toggle('active', targetTab === 'evolution');
+            if (logContent) logContent.classList.toggle('active', targetTab === 'log');
             if (facContent) {
                 facContent.classList.toggle('active', targetTab === 'factions');
                 if (targetTab === 'factions') {

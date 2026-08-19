@@ -287,6 +287,7 @@ export function stopScanSound() {
 }
 
 export function updateScannerUI(planet: any, dist: number) {
+    const scannerPanel = document.getElementById('left-deck-panel');
     const nameEl = document.getElementById('nearest-planet-name');
     const distEl = document.getElementById('nearest-planet-distance');
     const scanBtn = document.getElementById('start-scan-btn') as HTMLButtonElement;
@@ -296,12 +297,24 @@ export function updateScannerUI(planet: any, dist: number) {
     const placeholderBox = document.getElementById('scan-placeholder-box');
 
     if (!planet) {
+        if (scannerPanel && !scannerPanel.classList.contains('manual-pin')) {
+            scannerPanel.classList.remove('visible');
+        }
         if (nameEl) nameEl.innerText = "Keiner in Reichweite";
         if (distEl) distEl.innerText = "-";
         if (scanBtn) scanBtn.disabled = true;
         if (resultsBox) resultsBox.style.display = 'none';
         if (placeholderBox) placeholderBox.style.display = 'block';
         return;
+    }
+
+    const shouldShow = STATE.isInPlanetOrbit || STATE.lockedTarget !== null || dist < 65;
+    if (scannerPanel) {
+        if (shouldShow) {
+            scannerPanel.classList.add('visible');
+        } else if (!scannerPanel.classList.contains('manual-pin')) {
+            scannerPanel.classList.remove('visible');
+        }
     }
 
     if (nameEl) nameEl.innerText = `${planet.name} (${planet.isMoon ? 'Mond' : planet.type})`;

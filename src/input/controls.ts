@@ -11,6 +11,8 @@ import { triggerPsionicSonar, addLogEntry } from '../ui/hud';
 import { buyMutation } from '../ui/deck';
 import { openDiplomacyComms, closeDiplomacyComms } from '../systems/diplomacy';
 
+import { toggleDeckModal, isDeckOpen } from '../ui/deck';
+
 const raycaster = new THREE.Raycaster();
 const mouseVec = new THREE.Vector2();
 let prevGpButtons: boolean[] = [];
@@ -19,6 +21,10 @@ export function setupControls() {
     // Keyboard down
     window.addEventListener('keydown', (e) => {
         let key = e.key.toLowerCase();
+        if (key === 'tab' || e.code === 'Tab') {
+            e.preventDefault();
+            toggleDeckModal();
+        }
         if (key === ' ' || e.code === 'Space') {
             toggleTelepathy();
             e.preventDefault();
@@ -46,6 +52,8 @@ export function setupControls() {
         }
         if (key === 'escape') {
             closeDiplomacyComms();
+            if (isMapOpen()) toggleGalaxyMap();
+            if (isDeckOpen()) toggleDeckModal(false);
         }
         if (key === 'f') {
             if (STATE.nearestPlanet) {
@@ -288,6 +296,11 @@ export function toggleTelepathy() {
 
 export function toggleFlightAssist() {
     STATE.flightAssist = !STATE.flightAssist;
+    const dockLabel = document.getElementById('dock-assist-label');
+    const dockBtn = document.getElementById('dock-assist-btn');
+    if (dockLabel) dockLabel.innerText = STATE.flightAssist ? "🛸 Assist: AN" : "🛸 Assist: AUS";
+    if (dockBtn) dockBtn.classList.toggle('active', STATE.flightAssist);
+
     if (STATE.flightAssist) {
         addLogEntry("SYSTEM", "🕹️ Flug-Assistent AKTIVIERT: Automatische Trägheitsbremsen online.");
     } else {

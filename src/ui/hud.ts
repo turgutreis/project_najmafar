@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
 import { scene } from '../engine/scene';
 import { playSonarChime } from '../engine/audio';
+import { toggleDeckModal } from './deck';
+import { toggleGalaxyMap } from '../systems/galaxy-map';
+import { toggleFlightAssist } from '../input/controls';
+import { triggerBioDischarge } from '../systems/fleet';
 
 let minimapCanvas: HTMLCanvasElement | null = null;
 let minimapCtx: CanvasRenderingContext2D | null = null;
@@ -15,18 +19,35 @@ export function initHUD() {
         minimapCtx = minimapCanvas.getContext('2d');
     }
 
-    const sonarBtn = document.getElementById('psionic-sonar-btn');
+    const sonarBtn = document.getElementById('psionic-sonar-btn') || document.getElementById('dock-sonar-btn');
     if (sonarBtn) {
         sonarBtn.addEventListener('click', triggerPsionicSonar);
+    }
+
+    const dockDeckBtn = document.getElementById('dock-deck-btn');
+    if (dockDeckBtn) {
+        dockDeckBtn.addEventListener('click', () => toggleDeckModal());
+    }
+
+    const closeDeckBtn = document.getElementById('close-deck-modal-btn');
+    if (closeDeckBtn) {
+        closeDeckBtn.addEventListener('click', () => toggleDeckModal(false));
+    }
+
+    const dockMapBtn = document.getElementById('dock-map-btn');
+    if (dockMapBtn) {
+        dockMapBtn.addEventListener('click', () => toggleGalaxyMap());
+    }
+
+    const dockAssistBtn = document.getElementById('dock-assist-btn');
+    if (dockAssistBtn) {
+        dockAssistBtn.addEventListener('click', () => toggleFlightAssist());
     }
 }
 
 export function addLogEntry(category: string, message: string) {
     const list = document.getElementById('log-list');
-    if (!list) return;
-
-    const li = document.createElement('li');
-    li.className = 'log-item';
+    const toastStream = document.getElementById('hud-fading-log-stream');
 
     const now = new Date();
     const timeStr = `${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
@@ -39,17 +60,43 @@ export function addLogEntry(category: string, message: string) {
     } else if (category === 'CREW') {
         catClass = 'crew';
         catText = 'CREW-FUNK';
+    } else if (category === 'EVOLUTION') {
+        catClass = 'evolution';
+        catText = 'EVOLUTION';
     }
 
-    li.innerHTML = `
-        <span class="log-time">[${timeStr}]</span>
-        <span class="log-cat ${catClass}">[${catText}]</span>
-        <span class="log-msg">${message}</span>
-    `;
+    // 1. Persistent Log History (Inside Deck Modal)
+    if (list) {
+        const li = document.createElement('li');
+        li.className = 'log-item';
+        li.innerHTML = `
+            <span class="log-time">[${timeStr}]</span>
+            <span class="log-cat ${catClass}">[${catText}]</span>
+            <span class="log-msg">${message}</span>
+        `;
+        list.prepend(li);
+        while (list.children.length > 50) {
+            list.removeChild(list.lastChild!);
+        }
+    }
 
-    list.prepend(li);
-    while (list.children.length > 30) {
-        list.removeChild(list.lastChild!);
+    // 2. Fading Toast on HUD (Auto-cleans after 5 seconds)
+    if (toastStream) {
+        const toast = document.createElement('div');
+        toast.className = `fading-toast ${catClass}`;
+        toast.innerHTML = `<span style="font-weight: bold; margin-right: 4px;">[${catText}]</span> ${message}`;
+        toastStream.appendChild(toast);
+
+        // Keep maximum 4 toasts visible simultaneously
+        while (toastStream.children.length > 4) {
+            toastStream.removeChild(toastStream.firstChild!);
+        }
+
+        setTimeout(() => {
+            if (toast.parentNode === toastStream) {
+                toastStream.removeChild(toast);
+            }
+        }, 5000);
     }
 }
 
@@ -94,6 +141,28 @@ export function updateHUDStats(isHarmony = false) {
         else if (STATE.loneliness < 60) loneState = "Erste Bindung";
         else if (STATE.loneliness < 70) loneState = "Geistige Sättigung";
         loneTxt.innerText = `${Math.round(STATE.loneliness)}% (${loneState})`;
+    }
+
+    const currentSys = STATE.universe?.systems?.find(s => s.id === STATE.currentSystemId);
+    const sysNameEl = document.getElementById('hud-current-system-name');
+    if (sysNameEl) {
+        sysNameEl.innerText = `🪐 ${currentSys ? currentSys.name : 'Sol Invictus'}`;
+    }
+
+    const bioCountEl = document.getElementById('res-bio-count');
+    if (bioCountEl) {
+        bioCountEl.innerText = `${Math.floor(STATE.bioRes || 0)}`;
+    }
+
+    const silCountEl = document.getElementById('res-silicon-count');
+    if (silCountEl) {
+        silCountEl.innerText = `${Math.floor(STATE.siliconRes || 0)}`;
+    }
+
+    const chronosCountEl = document.getElementById('chronos-count');
+    if (chronosCountEl) {
+        const visited = STATE.visitedSystemIds ? STATE.visitedSystemIds.length : (STATE.systemsVisited || 1);
+        chronosCountEl.innerText = `${visited}`;
     }
 }
 

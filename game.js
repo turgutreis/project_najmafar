@@ -31458,6 +31458,679 @@ function updateMusicButtonsUI() {
   }
 }
 
+// src/systems/crew.ts
+function calculateCrewBuffs() {
+  let thrustMult = 1;
+  let bioMult = 1;
+  let scanMult = 1;
+  let repair = 0;
+  let stressDamp = 1;
+  let psioBonus = 0;
+  const hiveBonus = STATE.mutations.hivemind && STATE.mutations.hivemind.purchased ? 1.2 : 1;
+  STATE.crew.forEach((c) => {
+    const agePenalty = c.ageCategory === "critical" ? 0.6 : c.ageCategory === "senescent" ? 0.85 : 1;
+    if (c.role === "pilot")
+      thrustMult += 0.15 * hiveBonus * agePenalty;
+    if (c.role === "biologist") {
+      bioMult += 0.3 * hiveBonus * agePenalty;
+      scanMult += 0.25 * hiveBonus * agePenalty;
+    }
+    if (c.role === "engineer")
+      repair += 0.6 * hiveBonus * agePenalty;
+    if (c.role === "psychologist")
+      stressDamp *= 1 - 0.4 * hiveBonus * agePenalty;
+    if (c.role === "cryptologist")
+      psioBonus += 30 * hiveBonus * agePenalty;
+  });
+  STATE.crewBuffs = {
+    thrust: thrustMult,
+    bioGain: bioMult,
+    scanSpeed: scanMult,
+    repairRate: repair,
+    stressDampening: stressDamp,
+    psionicBonus: Math.round(psioBonus)
+  };
+  const basePsio = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 140 : 75;
+  STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
+}
+var STORY_LOGS = [
+  { time: 6, sender: "Capt. Miller", text: "Das Ding lebt! Wir sind im Bauch eines Lovecraft-Monsters gefangen! Wo ist die Luft?" },
+  { time: 24, sender: "Dr. Song", text: "Die Schiffswände atmen... Valeria, das Schiff absorbiert Weltraummaterie um sich zu heilen!" },
+  { time: 48, sender: "Valeria", text: "Jamal, guck dir die Messgeräte an. Die kosmische Hintergrundstrahlung... Die Expansion verlangsamt sich!" },
+  { time: 70, sender: "Jamal", text: "Das ist kein Fehler. Jemand macht eine kosmische Vollbremsung. Dieses Wesen... versucht es uns zu warnen?" },
+  { time: 95, sender: "Capt. Miller", text: "Es sendet Gedankenwellen. Die Software übersetzt es als... Dschinn? Es ist einsam." }
+];
+var storyIndex = 0;
+var playTime = 0;
+function encryptText(text) {
+  const alienGlyphs = "⏁⊑⟒⋔⍜⋏☿⏁⟒⍃⍜⌰⎍⌇⌇⊑⟟⌿⌇⏃⋏⎅⌇⏁⏃⍀⌇⏁⍀⟒☍⏁⊑⟒⌇⊑⟟⌿⟟⌇⏃⌰⟟⎎⟒";
+  return text.split("").map((char) => {
+    if (char === " " || char === '"' || char === "'" || char === ":" || char === "." || char === "," || char === "?" || char === "!" || char === "-" || char === "(" || char === ")")
+      return char;
+    return alienGlyphs[Math.floor(Math.random() * alienGlyphs.length)];
+  }).join("");
+}
+function encryptCrewMessage(sender, text) {
+  let outText = text;
+  if (!STATE.mutations.translator.purchased) {
+    outText = encryptText(text);
+  }
+  return `${sender}: "${outText}"`;
+}
+function updateCrewSimulation(dt) {
+  playTime += dt;
+  if (storyIndex < STORY_LOGS.length && playTime >= STORY_LOGS[storyIndex].time) {
+    const logObj = STORY_LOGS[storyIndex];
+    storyIndex++;
+    addLogEntry("CREW", encryptCrewMessage(logObj.sender, logObj.text));
+  }
+  const totalCrew = STATE.crew.length;
+  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
+  let targetLoneliness = 100;
+  let isHarmony = false;
+  if (totalCrew === 0) {
+    targetLoneliness = 100;
+  } else if (totalCrew === 1) {
+    STATE.crewSatietyTimer += dt;
+    const decay = Math.min(20, STATE.crewSatietyTimer / 120 * 20);
+    targetLoneliness = 45 + decay;
+  } else if (totalCrew === 2) {
+    targetLoneliness = uniqueRoles === 2 ? 20 : 30;
+  } else if (totalCrew >= 3) {
+    if (uniqueRoles >= 3) {
+      targetLoneliness = Math.max(0, 5 - (totalCrew - 3) * 2);
+      isHarmony = true;
+    } else {
+      targetLoneliness = Math.max(5, 15 - (totalCrew - 3) * 3);
+      if (totalCrew >= 4)
+        isHarmony = true;
+    }
+  }
+  if (STATE.loneliness < targetLoneliness) {
+    STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 3 * dt);
+  } else if (STATE.loneliness > targetLoneliness) {
+    STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 18 * dt);
+  }
+  if (isHarmony) {
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
+    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
+  }
+  let speed = STATE.playerVelocity.length();
+  let speedStressModifier = speed > 10 ? 0.6 : 0;
+  for (let i = STATE.crew.length - 1;i >= 0; i--) {
+    const c = STATE.crew[i];
+    c.age = (c.age || 0) + dt;
+    const maxLife = c.maxLifespan || 540;
+    const lifeRatio = Math.min(1, c.age / maxLife);
+    if (lifeRatio < 0.55) {
+      c.ageCategory = "vital";
+    } else if (lifeRatio < 0.85) {
+      c.ageCategory = "mature";
+      c.stress = Math.min(100, c.stress + 0.35 * dt);
+    } else if (lifeRatio < 0.95) {
+      c.ageCategory = "senescent";
+      c.stress = Math.min(100, c.stress + 0.9 * dt);
+    } else {
+      c.ageCategory = "critical";
+      c.stress = Math.min(100, c.stress + 1.8 * dt);
+    }
+    if (c.age >= maxLife) {
+      addLogEntry("SYSTEM", `⚰️ BIOLOGISCHER ZELLTOD: ${c.name} (${c.species}) ist an Altersschwäche gestorben. Biomasse resorbiert (+45 Bio-Energie).`);
+      STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 45);
+      STATE.loneliness = Math.min(100, STATE.loneliness + 20);
+      STATE.crew.forEach((other) => {
+        if (other !== c) {
+          other.stress = Math.min(100, other.stress + 20);
+          other.illusionStability = Math.max(0, other.illusionStability - 15);
+        }
+      });
+      STATE.crew.splice(i, 1);
+      calculateCrewBuffs();
+      continue;
+    }
+    const decayRate = (0.35 + c.stress * 0.006) * dt;
+    c.illusionStability = Math.max(0, c.illusionStability - decayRate);
+    if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
+      c.stress = Math.max(0, c.stress - 7.5 * dt);
+      c.illusionStability = Math.min(100, c.illusionStability + 8 * dt);
+      c.status = "Traum-Trance";
+      c.thought = "Fühlt eine warme, beruhigende Welle... 'Alles ist friedlich.'";
+    } else {
+      if (c.illusionStability < 35) {
+        c.stress = Math.min(100, c.stress + (4.5 + speedStressModifier) * dt);
+        c.status = "Panik";
+        c.thought = "Verzweifelt: 'Die Wände pulsieren... das ist keine Station!'";
+      } else if (c.illusionStability < 65) {
+        c.stress = Math.min(100, c.stress + (1.2 + speedStressModifier) * dt);
+        c.status = "Misstrauisch";
+        c.thought = "Stutzt: 'Höre ich ein Atmen in den Lüftungsschächten?'";
+      } else {
+        c.stress = Math.max(0, c.stress - 2 * dt);
+        c.status = "Arbeitet";
+        if (c.ageCategory === "senescent") {
+          c.thought = "Erschöpft: 'Die Jahre vergehen... aber die Sterne bleiben ewig.'";
+        } else {
+          c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
+        }
+      }
+    }
+    if (c.illusionStability >= 50) {
+      if (c.role === "engineer") {
+        STATE.health = Math.min(STATE.maxHealth, STATE.health + 0.25 * dt);
+      } else if (c.role === "biologist") {
+        STATE.bioRes += 0.1 * dt;
+      } else if (c.role === "psychologist") {
+        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 1.5 * dt);
+      }
+    }
+    if (c.stress >= 80) {
+      STATE.health = Math.max(0, STATE.health - 3.2 * dt);
+      if (Math.random() < 0.008) {
+        addLogEntry("CREW", `MATRIX-ALARM: ${c.name} randaliert in Panik und beschädigt Zellwände! Beruhige mit [LEERTASTE]!`);
+      }
+    }
+  }
+  if (STATE.telepathyActive) {
+    STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 8.5 * dt);
+    if (STATE.mentalEnergy === 0) {
+      toggleTelepathy();
+      addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
+    }
+  } else {
+    const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 7 * dt : 3.5 * dt;
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
+  }
+  STATE.crewDialogueTimer -= dt;
+  if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
+    STATE.crewDialogueTimer = 20 + Math.random() * 8;
+    triggerMultiCrewDialogue();
+  }
+  renderCrewUI();
+}
+function rejuvenateCrewMember(id) {
+  const member = STATE.crew.find((c) => c.id === id);
+  if (!member)
+    return;
+  if (STATE.bioEnergy < 20 || STATE.bioRes < 10) {
+    addLogEntry("SYSTEM", `Zu wenig Bio-Energie oder Biomasse für Zell-Verjüngung (benötigt 20 Bio / 10 Biomasse)!`);
+    return;
+  }
+  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 20);
+  STATE.bioRes = Math.max(0, STATE.bioRes - 10);
+  const maxLife = member.maxLifespan || 540;
+  member.age = Math.max(0, member.age - maxLife * 0.35);
+  member.stress = Math.max(0, member.stress - 25);
+  member.rejuvenationCount = (member.rejuvenationCount || 0) + 1;
+  playBioHarvestSound();
+  addLogEntry("SYSTEM", `\uD83D\uDC89 ZELL-REGENERATION: Telomere von ${member.name} erneuert (-35% Alter)! Lebenszeit verlängert.`);
+  calculateCrewBuffs();
+  renderCrewUI();
+}
+function assimilateCrewMember(id) {
+  const idx = STATE.crew.findIndex((c) => c.id === id);
+  if (idx === -1)
+    return;
+  const member = STATE.crew[idx];
+  STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 50);
+  STATE.bioRes += 35;
+  STATE.siliconRes += 20;
+  addLogEntry("SYSTEM", `\uD83E\uDDEC GENOM-ASSIMILATION: ${member.name} (${member.species}) aufgelöst: +50 Bio-Energie, +35 Biomasse & +20 Silizium.`);
+  playCrashSound();
+  STATE.crew.splice(idx, 1);
+  calculateCrewBuffs();
+  renderCrewUI();
+}
+function renderCrewUI() {
+  const container = document.getElementById("crew-list-container");
+  const badge = document.getElementById("crew-count-badge");
+  const capText = document.getElementById("crew-capacity-text");
+  const synTitle = document.getElementById("crew-synergy-title");
+  const synDesc = document.getElementById("crew-synergy-desc");
+  const synBanner = document.getElementById("crew-synergy-banner");
+  if (badge)
+    badge.innerText = String(STATE.crew.length);
+  if (capText)
+    capText.innerText = `${STATE.crew.length} / ${STATE.maxCrewCapacity}`;
+  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
+  const totalCrew = STATE.crew.length;
+  const rolesPresent = new Set(STATE.crew.map((c) => c.role));
+  const slotPilot = document.getElementById("slot-pilot");
+  const slotBio = document.getElementById("slot-biologist");
+  const slotEng = document.getElementById("slot-engineer");
+  const slotPsych = document.getElementById("slot-psychologist");
+  if (slotPilot)
+    slotPilot.className = rolesPresent.has("pilot") ? "role-slot active" : "role-slot";
+  if (slotBio)
+    slotBio.className = rolesPresent.has("biologist") ? "role-slot active" : "role-slot";
+  if (slotEng)
+    slotEng.className = rolesPresent.has("engineer") ? "role-slot active" : "role-slot";
+  if (slotPsych)
+    slotPsych.className = rolesPresent.has("psychologist") || rolesPresent.has("cryptologist") ? "role-slot active" : "role-slot";
+  if (synBanner && synTitle && synDesc) {
+    if (totalCrew === 0) {
+      synBanner.className = "crew-synergy-banner";
+      synTitle.innerText = "\uD83C\uDF0C Kosmische Einsamkeit (100%)";
+      synDesc.innerText = "Keine Geister im Kollektiv. Entführe Wesen von habitablen Planeten, um Einsamkeit zu lindern.";
+    } else if (totalCrew === 1) {
+      synBanner.className = "crew-synergy-banner";
+      synTitle.innerText = `\uD83C\uDF31 Erste Bindung (${Math.round(STATE.loneliness)}% Einsamkeit)`;
+      synDesc.innerText = `1 Geist an Bord (${STATE.crew[0]?.roleName || "Begleiter"}). Finde weitere Wesen mit anderen Rollen für Synergien!`;
+    } else if (totalCrew >= 2 && uniqueRoles === 1) {
+      synBanner.className = "crew-synergy-banner";
+      synTitle.innerText = `\uD83D\uDC65 Doppelter Rollen-Fokus (${Math.round(STATE.loneliness)}% Einsamkeit)`;
+      synDesc.innerText = `${totalCrew}x selbe Rolle an Bord: Rollen-Effekt verstärkt! Finde eine andere Rolle für "Duale Resonanz".`;
+    } else if (uniqueRoles === 2) {
+      synBanner.className = "crew-synergy-banner";
+      synTitle.innerText = `✨ Duale Resonanz (${Math.round(STATE.loneliness)}% Einsamkeit)`;
+      synDesc.innerText = "2 verschiedene Rollen im Einklang! Einsamkeit stark gesenkt. Noch 1 weitere Rolle für 'Kosmische Harmonie'.";
+    } else if (uniqueRoles >= 3 || totalCrew >= 3) {
+      synBanner.className = "crew-synergy-banner harmony";
+      synTitle.innerText = "\uD83D\uDCAB Kosmische Harmonie (0% Einsamkeit)";
+      synDesc.innerText = "Diverses Trio aktiv! Einsamkeit vollständig beseitigt & passive Bio-/Mentalenergie-Regeneration online!";
+    }
+  }
+  if (!container)
+    return;
+  if (STATE.crew.length === 0) {
+    container.innerHTML = `
+            <div class="matrix-empty-card">
+                <span class="highlight">Keine Vernunftbegabten Wesen</span>
+                Die psionische Traum-Matrix ist leer. Das Schiff leidet unter existenzieller kosmischer Einsamkeit.<br><br>
+                <em>Scanne habitable Planeten nach intelligentem Leben und starte eine psionische Entführung [F]!</em>
+            </div>
+        `;
+    return;
+  }
+  let html = "";
+  STATE.crew.forEach((c) => {
+    let cardClass = "crew-member";
+    if (c.illusionStability < 35 || c.stress > 70)
+      cardClass += " panic";
+    else if (c.illusionStability < 65 || c.stress > 45)
+      cardClass += " suspicious";
+    const maxLife = c.maxLifespan || 540;
+    const currentAge = Math.min(maxLife, Math.floor(c.age || 0));
+    const lifePercent = Math.max(0, Math.min(100, Math.round((1 - currentAge / maxLife) * 100)));
+    let speciesTag = "\uD83D\uDC68‍\uD83D\uDE80 Mortal";
+    if (c.speciesType === "ephemeral")
+      speciesTag = "\uD83E\uDEB2 Ephemeral";
+    else if (c.speciesType === "longlived")
+      speciesTag = "\uD83E\uDD16 Synthet";
+    else if (c.speciesType === "ancient")
+      speciesTag = "\uD83D\uDC8E Uralt";
+    let ageLabel = "\uD83D\uDFE2 Vital";
+    let ageColor = "#00ff88";
+    if (c.ageCategory === "mature") {
+      ageLabel = "\uD83D\uDFE1 Reife";
+      ageColor = "#facc15";
+    } else if (c.ageCategory === "senescent") {
+      ageLabel = "\uD83D\uDFE0 Seneszenz";
+      ageColor = "#fb923c";
+    } else if (c.ageCategory === "critical") {
+      ageLabel = "\uD83D\uDD34 Altersschwäche";
+      ageColor = "#f43f5e";
+    }
+    const ageMin = Math.floor(currentAge / 60);
+    const ageSec = String(currentAge % 60).padStart(2, "0");
+    const maxMin = Math.floor(maxLife / 60);
+    html += `
+            <div class="${cardClass}">
+                <div class="crew-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
+                        <span style="font-size: 0.65rem; color: #94a3b8; margin-left: 4px;">(${speciesTag})</span>
+                    </div>
+                    <span class="crew-role-badge">${c.roleIcon || "\uD83D\uDC64"} ${c.roleName || c.role}</span>
+                </div>
+                <div class="crew-buff-tag">⚡ ${c.buffDesc || c.perk}</div>
+
+                <!-- Lifespan & Biological Age Bar -->
+                <div class="lifespan-container" style="margin: 4px 0; background: rgba(15,23,42,0.6); padding: 4px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: #cbd5e1; margin-bottom: 2px;">
+                        <span>⏳ Alter: ${ageMin}:${ageSec} / ${maxMin}:00 Min.</span>
+                        <span style="color: ${ageColor}; font-weight: 700;">${ageLabel} (${lifePercent}% übrig)</span>
+                    </div>
+                    <div class="lifespan-bar-bg" style="height: 4px; background: rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden;">
+                        <div class="lifespan-bar" style="width: ${lifePercent}%; height: 100%; background: ${ageColor}; transition: width 0.3s ease;"></div>
+                    </div>
+                </div>
+                
+                <div class="stability-container">
+                    <span class="stability-label">Traum-Stabilität:</span>
+                    <div class="stability-bar-bg">
+                        <div class="stability-bar" style="width: ${c.illusionStability}%;"></div>
+                    </div>
+                    <span style="color: #a855f7; font-size: 0.68rem; font-weight: 700;">${Math.round(c.illusionStability)}%</span>
+                </div>
+
+                <div class="stress-container" style="display: flex; align-items: center; gap: 6px;">
+                    <span class="stress-label" style="width: 90px; font-size: 0.68rem; color: #94a3b8;">Stress:</span>
+                    <div class="stress-bar-bg" style="flex: 1; height: 5px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden;">
+                        <div class="stress-bar" style="width: ${c.stress}%; height: 100%; background: ${c.stress > 70 ? "#ef4444" : "#f59e0b"};"></div>
+                    </div>
+                    <span class="stress-percentage" style="font-size: 0.68rem;">${Math.round(c.stress)}%</span>
+                </div>
+
+                <div class="thought-whisper ${c.illusionStability < 35 ? "terrified" : ""}">
+                    \uD83D\uDCAD "${c.thought}"
+                </div>
+
+                <!-- Interactive Crew Care & Action Buttons -->
+                <div class="crew-actions" style="display: flex; gap: 6px; margin-top: 6px;">
+                    <button class="crew-action-btn rejuv-btn" onclick="window.rejuvenateCrew(${c.id})" title="Zell-Verjüngung: -35% Alter (Kosten: 20 Bio / 10 Biomasse)">
+                        \uD83D\uDC89 Verjüngen
+                    </button>
+                    <button class="crew-action-btn assimilate-btn" onclick="window.assimilateCrew(${c.id})" title="Genom-Assimilation: Löst das Wesen in +50 Bio-Energie, +35 Biomasse & +20 Silizium auf">
+                        \uD83E\uDDEC Assimilieren
+                    </button>
+                </div>
+            </div>
+        `;
+  });
+  container.innerHTML = html;
+}
+if (typeof window !== "undefined") {
+  window.rejuvenateCrew = (id) => rejuvenateCrewMember(id);
+  window.assimilateCrew = (id) => assimilateCrewMember(id);
+}
+var crewDialogueBank = {
+  pilot_engineer: [
+    { lineA: 'Miller: "Petrov, diese biomolekularen Trägheitsdämpfer... das Schiff richtet die Schubvektoren aus, bevor ich überhaupt lenke."', lineB: 'Petrov: "Die Naniten im Chitin leiten unsere Gedanken direkt weiter. Das ist kein Raumschiff, das ist ein lebendes Cockpit."' },
+    { lineA: 'Miller: "Wie sieht die Hüllenintegrität aus, wenn wir durch Asteroidengürtel tauchen?"', lineB: 'Petrov: "Silizium-Naniten schließen Risse im Flug. Solange wir Mineralien aufnehmen, hält die organische Panzerung stand."' }
+  ],
+  biologist_psychologist: [
+    { lineA: 'Dr. Song: "Die Traum-Matrix synchronisiert unsere neuronalen REM-Phasen. Es absorbiert nicht unsere Körper, sondern unsere Gefühle."', lineB: 'Dr. Vance: "Ein psionischer Stoffwechsel. Solange wir Gelassenheit und Zuversicht ausstrahlen, ernährt sich die Entität von Harmonie statt Verzweiflung."' },
+    { lineA: 'Dr. Song: "Die Biolumineszenz an den Synapsen-Wänden pulsiert im Takt unseres Herzschlags."', lineB: 'Dr. Vance: "Ein biologischer Resonanzraum. Wir halten das Wesen am Leben – und es beschützt uns vor der tödlichen Kälte des Alls."' }
+  ],
+  cryptologist_pilot: [
+    { lineA: 'Novak: "Ich fange schwache Tachyonen-Echos aus dem nächsten Sternensystem auf. Psio-Sensorhorizont erweitert."', lineB: 'Miller: "Kurs ist korrigiert, Novak. Bringen wir uns in den nächsten planetaren Orbit."' }
+  ],
+  engineer_biologist: [
+    { lineA: 'Petrov: "Dr. Song, die organischen Leitungen um die Faltungsmembran regenerieren erstaunlich schnell."', lineB: 'Dr. Song: "Es ist ein symbiotisches Ökosystem. Jede Ressource, die wir assimilieren, stärkt die Zellwände des Schiffes."' }
+  ],
+  general: [
+    { lineA: 'Crew-Funk: "Die Traum-Matrix flüstert Erinnerungen an Sternensysteme, die Lichtjahre entfernt liegen..."', lineB: 'Crew-Funk: "Wir reisen durch das Herz einer Galaxie, die kein Mensch zuvor erblickt hat."' }
+  ]
+};
+function triggerMultiCrewDialogue() {
+  if (STATE.crew.length < 2)
+    return;
+  const hasTranslator = STATE.mutations.translator && STATE.mutations.translator.purchased;
+  const c1 = STATE.crew[Math.floor(Math.random() * STATE.crew.length)];
+  const others = STATE.crew.filter((c) => c !== c1);
+  const c2 = others[Math.floor(Math.random() * others.length)];
+  let pairKey = `${c1.role}_${c2.role}`;
+  let revPairKey = `${c2.role}_${c1.role}`;
+  let dialogues = crewDialogueBank[pairKey] || crewDialogueBank[revPairKey] || crewDialogueBank.general;
+  const dialog = dialogues[Math.floor(Math.random() * dialogues.length)];
+  const name1 = c1.name.split(" ")[1] || c1.name;
+  const name2 = c2.name.split(" ")[1] || c2.name;
+  if (hasTranslator) {
+    addLogEntry("CREW", dialog.lineA.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name1));
+    setTimeout(() => {
+      addLogEntry("CREW", dialog.lineB.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name2));
+    }, 3200);
+  } else {
+    addLogEntry("CREW", `[Verschlüsselter Datenstrom zwischen ${c1.name} & ${c2.name}... Dschinn-Übersetzer benötigt!]`);
+  }
+}
+
+// src/systems/factions.ts
+var FACTIONS = {
+  vega_collective: {
+    id: "vega_collective",
+    name: "Das Vega-Qubit-Kollektiv",
+    shortName: "Vega-Kollektiv",
+    emblem: "⚛️",
+    color: "0x6366f1",
+    colorCss: "#6366f1",
+    doctrine: "Quanten-Logik & Kybernetische Ordnung",
+    description: "Ein Verbund aus vernetzten Maschinen-Intelligenzen und Transhumanen, die das Universum als gigantische Rechenoperation begreifen.",
+    specialTrait: "+30% Silizium-Handelskurs | EMP-Resistente Drohnen",
+    baseDisposition: "Defensive"
+  },
+  olyndar_psion: {
+    id: "olyndar_psion",
+    name: "Der Psionische Bund von Olyndar",
+    shortName: "Psioniker von Olyndar",
+    emblem: "\uD83D\uDD2E",
+    color: "0xd946ef",
+    colorCss: "#d946ef",
+    doctrine: "Telepathische Resonanz & Bio-Götterkult",
+    description: "Spirituelle Wesen, die mit der kosmischen Leere resonieren und dein Bio-Schiff als lebendige Sternengottheit verehren.",
+    specialTrait: "Freiwillige Crew-Kandidaten | Keine Abfangstaffeln",
+    baseDisposition: "Pacifist"
+  },
+  xenomilitary_ash: {
+    id: "xenomilitary_ash",
+    name: "Die Asche-Gilde der Xenomilitärs",
+    shortName: "Asche-Gilde",
+    emblem: "⚔️",
+    color: "0xf43f5e",
+    colorCss: "#f43f5e",
+    doctrine: "Totale Vorherrschaft & Kinetische Feuerkraft",
+    description: "Eine schwer gepanzerte Militär-Junta mit Schlachtschiffen und automatisierten Orbital-Bastionen. Misstraut organischen Anomalien.",
+    specialTrait: "Schwere Kampf-Korvetten | Verfolgung über Sektorgrenzen",
+    baseDisposition: "Militaristic"
+  },
+  free_traders: {
+    id: "free_traders",
+    name: "Konsortium der Freien Sternen-Händler",
+    shortName: "Händler-Konsortium",
+    emblem: "\uD83C\uDF3F",
+    color: "0x10b981",
+    colorCss: "#10b981",
+    doctrine: "Freier Austausch & Symbiotische Allianzen",
+    description: "Pragmatische interstellare Händlergilden, die bereitwillig Silizium gegen Biomasse tauschen und Schiffsreparaturen anbieten.",
+    specialTrait: "Günstiger Ressourcentausch | Kartographie-Angebote",
+    baseDisposition: "Pacifist"
+  },
+  aethelgard_guardians: {
+    id: "aethelgard_guardians",
+    name: "Die Vorläufer-Wächter von Aethelgard",
+    shortName: "Aethelgard-Wächter",
+    emblem: "\uD83C\uDF0C",
+    color: "0x38bdf8",
+    colorCss: "#38bdf8",
+    doctrine: "Bewahrung des Kosmischen Gleichgewichts",
+    description: "Eine uralte, schlummernde Zivilisation, deren Relikte und Megastrukturen seit Millionen Jahren die Expansion der Galaxie dämpfen.",
+    specialTrait: "Exklusive Vorläufer-Mutationen | Hyper-Raumzeit-Schilde",
+    baseDisposition: "Defensive"
+  }
+};
+function getFaction(id) {
+  return FACTIONS[id] || FACTIONS.free_traders;
+}
+function getReputationTitle(score) {
+  if (score >= 60) {
+    return { label: "\uD83C\uDF1F Verehrt / Heilige Allianz", color: "#d946ef", tier: "allied" };
+  } else if (score >= 20) {
+    return { label: "\uD83E\uDD1D Kooperativ / Handelspartner", color: "#10b981", tier: "friendly" };
+  } else if (score > -20) {
+    return { label: "⚖️ Neutral", color: "#94a3b8", tier: "neutral" };
+  } else if (score > -60) {
+    return { label: "⚔️ Feindselig / Wachsam", color: "#f59e0b", tier: "hostile" };
+  } else {
+    return { label: "\uD83D\uDEA8 Todfeind / Galaktisches Kopfgeld", color: "#f43f5e", tier: "nemesis" };
+  }
+}
+function modifyReputation(factionId, delta, reason) {
+  if (!STATE.reputation[factionId]) {
+    STATE.reputation[factionId] = 0;
+  }
+  const prevScore = STATE.reputation[factionId];
+  STATE.reputation[factionId] = Math.max(-100, Math.min(100, STATE.reputation[factionId] + delta));
+  const newScore = STATE.reputation[factionId];
+  const faction = getFaction(factionId);
+  const sign2 = delta > 0 ? `+${delta}` : `${delta}`;
+  if (delta > 0) {
+    addLogEntry("SYSTEM", `\uD83C\uDF1F REPUTATION GESTIEGEN: ${faction.name} (${sign2} -> ${newScore} Punkte). ${reason}`);
+  } else {
+    addLogEntry("SYSTEM", `⚠️ REPUTATION GESUNKEN: ${faction.name} (${sign2} -> ${newScore} Punkte). ${reason}`);
+  }
+  renderFactionReputationUI();
+}
+function renderFactionReputationUI() {
+  const listContainer = document.getElementById("faction-reputation-list");
+  if (!listContainer)
+    return;
+  listContainer.innerHTML = "";
+  Object.keys(FACTIONS).forEach((fId) => {
+    const faction = FACTIONS[fId];
+    const score = STATE.reputation[fId] || 0;
+    const repInfo = getReputationTitle(score);
+    const card = document.createElement("div");
+    card.className = "faction-rep-card";
+    card.innerHTML = `
+            <div class="faction-card-header">
+                <span class="faction-emblem">${faction.emblem}</span>
+                <div class="faction-title-group">
+                    <span class="faction-name" style="color: ${faction.colorCss};">${faction.shortName}</span>
+                    <span class="faction-doctrine">${faction.doctrine}</span>
+                </div>
+                <span class="faction-score" style="color: ${repInfo.color};">${score > 0 ? "+" : ""}${score}</span>
+            </div>
+            <div class="faction-rep-bar-bg">
+                <div class="faction-rep-bar" style="width: ${Math.max(5, (score + 100) / 2)}%; background: ${repInfo.color};"></div>
+            </div>
+            <div class="faction-status-row">
+                <span class="faction-status-label" style="color: ${repInfo.color};">${repInfo.label}</span>
+                <span class="faction-trait-tag">${faction.specialTrait}</span>
+            </div>
+        `;
+    listContainer.appendChild(card);
+  });
+}
+
+// src/ui/deck.ts
+function isDeckOpen() {
+  const modal = document.getElementById("deck-modal");
+  return modal ? modal.style.display === "flex" : false;
+}
+function toggleDeckModal(force) {
+  const modal = document.getElementById("deck-modal");
+  if (!modal)
+    return;
+  const isVisible = modal.style.display === "flex";
+  const show = force !== undefined ? force : !isVisible;
+  modal.style.display = show ? "flex" : "none";
+  if (show) {
+    renderCrewUI();
+    updateMutationUI();
+    renderFactionReputationUI();
+  }
+}
+function initDeckUI() {
+  const leftCollapseBtn = document.getElementById("left-collapse-btn");
+  const leftDeckPanel = document.getElementById("left-deck-panel");
+  if (leftCollapseBtn && leftDeckPanel) {
+    leftCollapseBtn.addEventListener("click", () => {
+      leftDeckPanel.classList.toggle("visible");
+    });
+  }
+  const tabButtons = document.querySelectorAll("#right-deck-tabs .tab-btn");
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetTab = btn.getAttribute("data-tab");
+      tabButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const crewContent = document.getElementById("tab-content-crew");
+      const evoContent = document.getElementById("tab-content-evolution");
+      const facContent = document.getElementById("tab-content-factions");
+      const logContent = document.getElementById("tab-content-log");
+      if (crewContent)
+        crewContent.classList.toggle("active", targetTab === "crew");
+      if (evoContent)
+        evoContent.classList.toggle("active", targetTab === "evolution");
+      if (logContent)
+        logContent.classList.toggle("active", targetTab === "log");
+      if (facContent) {
+        facContent.classList.toggle("active", targetTab === "factions");
+        if (targetTab === "factions") {
+          renderFactionReputationUI();
+        }
+      }
+    });
+  });
+  renderFactionReputationUI();
+  const mutButtons = document.querySelectorAll(".mut-btn");
+  mutButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mutType = btn.getAttribute("data-mutation");
+      if (mutType) {
+        buyMutation(mutType);
+      }
+    });
+  });
+}
+function buyMutation(type) {
+  const mut = STATE.mutations[type];
+  if (!mut || mut.purchased)
+    return;
+  if (STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost) {
+    STATE.bioRes -= mut.bioCost;
+    STATE.siliconRes -= mut.siliconCost;
+    mut.purchased = true;
+    playSiliconCollectSound();
+    const btn = document.querySelector(`.mut-btn[data-mutation="${type}"]`);
+    if (btn) {
+      btn.classList.add("purchased");
+      btn.innerHTML = "Aktiviert ✓";
+    }
+    if (type === "armor") {
+      addLogEntry("EVOLUTION", "Organische Chitin-Panzerung gehärtet. Kollisionsschaden um 50% reduziert.");
+      const hull = document.getElementById("schematic-hull");
+      if (hull)
+        hull.setAttribute("stroke-width", "4");
+    } else if (type === "o2") {
+      addLogEntry("EVOLUTION", "Metabolische O2-Synthese aktiviert. Stress-Zuwachs halbiert.");
+    } else if (type === "synapses") {
+      STATE.psionicRange = 140;
+      calculateCrewBuffs();
+      addLogEntry("EVOLUTION", "Psionische Synapsen erweitert! Gedanken-Echo Reichweite auf 140 LJ vergrößert.");
+    } else if (type === "cocoon") {
+      STATE.maxCrewCapacity = 4;
+      addLogEntry("EVOLUTION", "Neuronales Kokon-Gewebe mutiert! Maximale Crew-Kapazität auf 4 erweitert.");
+      renderCrewUI();
+    } else if (type === "hivemind") {
+      STATE.maxCrewCapacity = 6;
+      calculateCrewBuffs();
+      addLogEntry("EVOLUTION", "Symbiotische Synapsen-Kammer erwacht! Kapazität auf 6 erhöht & alle Spezialisten-Buffs um +20% verstärkt!");
+      renderCrewUI();
+    } else if (type === "folddrive") {
+      STATE.warpRange = 160;
+      addLogEntry("EVOLUTION", "Raumfaltungs-Membran mutiert! Warp-Reichweite auf 160 LJ erweitert, Faltungskosten um 30% gesenkt.");
+    } else if (type === "translator") {
+      addLogEntry("EVOLUTION", "Dschinn-Übersetzer integriert! Alien-Funksignale & Crew-Dialoge werden vollautomatisch dechiffriert.");
+    }
+    updateMutationUI();
+  } else {
+    addLogEntry("SYSTEM", `Evolution fehlgeschlagen: Nicht genügend Ressourcen (${mut.bioCost} Bio | ${mut.siliconCost} Silizium benötigt)!`);
+  }
+}
+function updateMutationUI() {
+  const bioEl = document.getElementById("res-bio-count");
+  const silEl = document.getElementById("res-silicon-count");
+  if (bioEl)
+    bioEl.innerText = `${Math.floor(STATE.bioRes)}`;
+  if (silEl)
+    silEl.innerText = `${Math.floor(STATE.siliconRes)}`;
+  Object.keys(STATE.mutations).forEach((key) => {
+    const mut = STATE.mutations[key];
+    const btn = document.querySelector(`.mut-btn[data-mutation="${key}"]`);
+    if (btn) {
+      if (mut.purchased) {
+        btn.disabled = true;
+        btn.classList.add("purchased");
+        btn.innerText = "Aktiviert ✓";
+      } else {
+        const canAfford = STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost;
+        btn.disabled = !canAfford;
+      }
+    }
+  });
+}
+
 // src/ui/hud.ts
 var minimapCanvas = null;
 var minimapCtx = null;
@@ -31468,17 +32141,30 @@ function initHUD() {
   if (minimapCanvas) {
     minimapCtx = minimapCanvas.getContext("2d");
   }
-  const sonarBtn = document.getElementById("psionic-sonar-btn");
+  const sonarBtn = document.getElementById("psionic-sonar-btn") || document.getElementById("dock-sonar-btn");
   if (sonarBtn) {
     sonarBtn.addEventListener("click", triggerPsionicSonar);
+  }
+  const dockDeckBtn = document.getElementById("dock-deck-btn");
+  if (dockDeckBtn) {
+    dockDeckBtn.addEventListener("click", () => toggleDeckModal());
+  }
+  const closeDeckBtn = document.getElementById("close-deck-modal-btn");
+  if (closeDeckBtn) {
+    closeDeckBtn.addEventListener("click", () => toggleDeckModal(false));
+  }
+  const dockMapBtn = document.getElementById("dock-map-btn");
+  if (dockMapBtn) {
+    dockMapBtn.addEventListener("click", () => toggleGalaxyMap());
+  }
+  const dockAssistBtn = document.getElementById("dock-assist-btn");
+  if (dockAssistBtn) {
+    dockAssistBtn.addEventListener("click", () => toggleFlightAssist());
   }
 }
 function addLogEntry(category, message) {
   const list = document.getElementById("log-list");
-  if (!list)
-    return;
-  const li = document.createElement("li");
-  li.className = "log-item";
+  const toastStream = document.getElementById("hud-fading-log-stream");
   const now = new Date;
   const timeStr = `${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
   let catClass = "sys";
@@ -31489,15 +32175,36 @@ function addLogEntry(category, message) {
   } else if (category === "CREW") {
     catClass = "crew";
     catText = "CREW-FUNK";
+  } else if (category === "EVOLUTION") {
+    catClass = "evolution";
+    catText = "EVOLUTION";
   }
-  li.innerHTML = `
-        <span class="log-time">[${timeStr}]</span>
-        <span class="log-cat ${catClass}">[${catText}]</span>
-        <span class="log-msg">${message}</span>
-    `;
-  list.prepend(li);
-  while (list.children.length > 30) {
-    list.removeChild(list.lastChild);
+  if (list) {
+    const li = document.createElement("li");
+    li.className = "log-item";
+    li.innerHTML = `
+            <span class="log-time">[${timeStr}]</span>
+            <span class="log-cat ${catClass}">[${catText}]</span>
+            <span class="log-msg">${message}</span>
+        `;
+    list.prepend(li);
+    while (list.children.length > 50) {
+      list.removeChild(list.lastChild);
+    }
+  }
+  if (toastStream) {
+    const toast = document.createElement("div");
+    toast.className = `fading-toast ${catClass}`;
+    toast.innerHTML = `<span style="font-weight: bold; margin-right: 4px;">[${catText}]</span> ${message}`;
+    toastStream.appendChild(toast);
+    while (toastStream.children.length > 4) {
+      toastStream.removeChild(toastStream.firstChild);
+    }
+    setTimeout(() => {
+      if (toast.parentNode === toastStream) {
+        toastStream.removeChild(toast);
+      }
+    }, 5000);
   }
 }
 function updateHUDStats(isHarmony = false) {
@@ -31546,6 +32253,24 @@ function updateHUDStats(isHarmony = false) {
     else if (STATE.loneliness < 70)
       loneState = "Geistige Sättigung";
     loneTxt.innerText = `${Math.round(STATE.loneliness)}% (${loneState})`;
+  }
+  const currentSys = STATE.universe?.systems?.find((s) => s.id === STATE.currentSystemId);
+  const sysNameEl = document.getElementById("hud-current-system-name");
+  if (sysNameEl) {
+    sysNameEl.innerText = `\uD83E\uDE90 ${currentSys ? currentSys.name : "Sol Invictus"}`;
+  }
+  const bioCountEl = document.getElementById("res-bio-count");
+  if (bioCountEl) {
+    bioCountEl.innerText = `${Math.floor(STATE.bioRes || 0)}`;
+  }
+  const silCountEl = document.getElementById("res-silicon-count");
+  if (silCountEl) {
+    silCountEl.innerText = `${Math.floor(STATE.siliconRes || 0)}`;
+  }
+  const chronosCountEl = document.getElementById("chronos-count");
+  if (chronosCountEl) {
+    const visited = STATE.visitedSystemIds ? STATE.visitedSystemIds.length : STATE.systemsVisited || 1;
+    chronosCountEl.innerText = `${visited}`;
   }
 }
 function updateMinimap() {
@@ -31938,133 +32663,6 @@ function collapseQuantumCivilization(systemId, planetIndex, seed) {
   };
 }
 
-// src/systems/factions.ts
-var FACTIONS = {
-  vega_collective: {
-    id: "vega_collective",
-    name: "Das Vega-Qubit-Kollektiv",
-    shortName: "Vega-Kollektiv",
-    emblem: "⚛️",
-    color: "0x6366f1",
-    colorCss: "#6366f1",
-    doctrine: "Quanten-Logik & Kybernetische Ordnung",
-    description: "Ein Verbund aus vernetzten Maschinen-Intelligenzen und Transhumanen, die das Universum als gigantische Rechenoperation begreifen.",
-    specialTrait: "+30% Silizium-Handelskurs | EMP-Resistente Drohnen",
-    baseDisposition: "Defensive"
-  },
-  olyndar_psion: {
-    id: "olyndar_psion",
-    name: "Der Psionische Bund von Olyndar",
-    shortName: "Psioniker von Olyndar",
-    emblem: "\uD83D\uDD2E",
-    color: "0xd946ef",
-    colorCss: "#d946ef",
-    doctrine: "Telepathische Resonanz & Bio-Götterkult",
-    description: "Spirituelle Wesen, die mit der kosmischen Leere resonieren und dein Bio-Schiff als lebendige Sternengottheit verehren.",
-    specialTrait: "Freiwillige Crew-Kandidaten | Keine Abfangstaffeln",
-    baseDisposition: "Pacifist"
-  },
-  xenomilitary_ash: {
-    id: "xenomilitary_ash",
-    name: "Die Asche-Gilde der Xenomilitärs",
-    shortName: "Asche-Gilde",
-    emblem: "⚔️",
-    color: "0xf43f5e",
-    colorCss: "#f43f5e",
-    doctrine: "Totale Vorherrschaft & Kinetische Feuerkraft",
-    description: "Eine schwer gepanzerte Militär-Junta mit Schlachtschiffen und automatisierten Orbital-Bastionen. Misstraut organischen Anomalien.",
-    specialTrait: "Schwere Kampf-Korvetten | Verfolgung über Sektorgrenzen",
-    baseDisposition: "Militaristic"
-  },
-  free_traders: {
-    id: "free_traders",
-    name: "Konsortium der Freien Sternen-Händler",
-    shortName: "Händler-Konsortium",
-    emblem: "\uD83C\uDF3F",
-    color: "0x10b981",
-    colorCss: "#10b981",
-    doctrine: "Freier Austausch & Symbiotische Allianzen",
-    description: "Pragmatische interstellare Händlergilden, die bereitwillig Silizium gegen Biomasse tauschen und Schiffsreparaturen anbieten.",
-    specialTrait: "Günstiger Ressourcentausch | Kartographie-Angebote",
-    baseDisposition: "Pacifist"
-  },
-  aethelgard_guardians: {
-    id: "aethelgard_guardians",
-    name: "Die Vorläufer-Wächter von Aethelgard",
-    shortName: "Aethelgard-Wächter",
-    emblem: "\uD83C\uDF0C",
-    color: "0x38bdf8",
-    colorCss: "#38bdf8",
-    doctrine: "Bewahrung des Kosmischen Gleichgewichts",
-    description: "Eine uralte, schlummernde Zivilisation, deren Relikte und Megastrukturen seit Millionen Jahren die Expansion der Galaxie dämpfen.",
-    specialTrait: "Exklusive Vorläufer-Mutationen | Hyper-Raumzeit-Schilde",
-    baseDisposition: "Defensive"
-  }
-};
-function getFaction(id) {
-  return FACTIONS[id] || FACTIONS.free_traders;
-}
-function getReputationTitle(score) {
-  if (score >= 60) {
-    return { label: "\uD83C\uDF1F Verehrt / Heilige Allianz", color: "#d946ef", tier: "allied" };
-  } else if (score >= 20) {
-    return { label: "\uD83E\uDD1D Kooperativ / Handelspartner", color: "#10b981", tier: "friendly" };
-  } else if (score > -20) {
-    return { label: "⚖️ Neutral", color: "#94a3b8", tier: "neutral" };
-  } else if (score > -60) {
-    return { label: "⚔️ Feindselig / Wachsam", color: "#f59e0b", tier: "hostile" };
-  } else {
-    return { label: "\uD83D\uDEA8 Todfeind / Galaktisches Kopfgeld", color: "#f43f5e", tier: "nemesis" };
-  }
-}
-function modifyReputation(factionId, delta, reason) {
-  if (!STATE.reputation[factionId]) {
-    STATE.reputation[factionId] = 0;
-  }
-  const prevScore = STATE.reputation[factionId];
-  STATE.reputation[factionId] = Math.max(-100, Math.min(100, STATE.reputation[factionId] + delta));
-  const newScore = STATE.reputation[factionId];
-  const faction = getFaction(factionId);
-  const sign2 = delta > 0 ? `+${delta}` : `${delta}`;
-  if (delta > 0) {
-    addLogEntry("SYSTEM", `\uD83C\uDF1F REPUTATION GESTIEGEN: ${faction.name} (${sign2} -> ${newScore} Punkte). ${reason}`);
-  } else {
-    addLogEntry("SYSTEM", `⚠️ REPUTATION GESUNKEN: ${faction.name} (${sign2} -> ${newScore} Punkte). ${reason}`);
-  }
-  renderFactionReputationUI();
-}
-function renderFactionReputationUI() {
-  const listContainer = document.getElementById("faction-reputation-list");
-  if (!listContainer)
-    return;
-  listContainer.innerHTML = "";
-  Object.keys(FACTIONS).forEach((fId) => {
-    const faction = FACTIONS[fId];
-    const score = STATE.reputation[fId] || 0;
-    const repInfo = getReputationTitle(score);
-    const card = document.createElement("div");
-    card.className = "faction-rep-card";
-    card.innerHTML = `
-            <div class="faction-card-header">
-                <span class="faction-emblem">${faction.emblem}</span>
-                <div class="faction-title-group">
-                    <span class="faction-name" style="color: ${faction.colorCss};">${faction.shortName}</span>
-                    <span class="faction-doctrine">${faction.doctrine}</span>
-                </div>
-                <span class="faction-score" style="color: ${repInfo.color};">${score > 0 ? "+" : ""}${score}</span>
-            </div>
-            <div class="faction-rep-bar-bg">
-                <div class="faction-rep-bar" style="width: ${Math.max(5, (score + 100) / 2)}%; background: ${repInfo.color};"></div>
-            </div>
-            <div class="faction-status-row">
-                <span class="faction-status-label" style="color: ${repInfo.color};">${repInfo.label}</span>
-                <span class="faction-trait-tag">${faction.specialTrait}</span>
-            </div>
-        `;
-    listContainer.appendChild(card);
-  });
-}
-
 // src/systems/diplomacy.ts
 var ALIEN_GLYPHS = ["⍝", "⏁", "⍀", "⏃", "⋏", "⌇", "⌰", "⏃", "⏁", "⟟", "⍜", "⋏", "⍾", "⎍", "⏃", "⋏", "⏁", "⎍", "⋔", "Ψ", "Ω", "Δ", "Ξ", "Φ", "λ", "θ", "π", "Σ"];
 function generateAlienGlyphs(length = 120) {
@@ -32443,6 +33041,7 @@ function stopScanSound() {
   }
 }
 function updateScannerUI(planet, dist) {
+  const scannerPanel = document.getElementById("left-deck-panel");
   const nameEl = document.getElementById("nearest-planet-name");
   const distEl = document.getElementById("nearest-planet-distance");
   const scanBtn = document.getElementById("start-scan-btn");
@@ -32451,6 +33050,9 @@ function updateScannerUI(planet, dist) {
   const resultsBox = document.getElementById("scan-results-box");
   const placeholderBox = document.getElementById("scan-placeholder-box");
   if (!planet) {
+    if (scannerPanel && !scannerPanel.classList.contains("manual-pin")) {
+      scannerPanel.classList.remove("visible");
+    }
     if (nameEl)
       nameEl.innerText = "Keiner in Reichweite";
     if (distEl)
@@ -32462,6 +33064,14 @@ function updateScannerUI(planet, dist) {
     if (placeholderBox)
       placeholderBox.style.display = "block";
     return;
+  }
+  const shouldShow = STATE.isInPlanetOrbit || STATE.lockedTarget !== null || dist < 65;
+  if (scannerPanel) {
+    if (shouldShow) {
+      scannerPanel.classList.add("visible");
+    } else if (!scannerPanel.classList.contains("manual-pin")) {
+      scannerPanel.classList.remove("visible");
+    }
   }
   if (nameEl)
     nameEl.innerText = `${planet.name} (${planet.isMoon ? "Mond" : planet.type})`;
@@ -34587,553 +35197,6 @@ function warpToSystem(systemId) {
   }, 1200);
 }
 
-// src/systems/crew.ts
-function calculateCrewBuffs() {
-  let thrustMult = 1;
-  let bioMult = 1;
-  let scanMult = 1;
-  let repair = 0;
-  let stressDamp = 1;
-  let psioBonus = 0;
-  const hiveBonus = STATE.mutations.hivemind && STATE.mutations.hivemind.purchased ? 1.2 : 1;
-  STATE.crew.forEach((c) => {
-    const agePenalty = c.ageCategory === "critical" ? 0.6 : c.ageCategory === "senescent" ? 0.85 : 1;
-    if (c.role === "pilot")
-      thrustMult += 0.15 * hiveBonus * agePenalty;
-    if (c.role === "biologist") {
-      bioMult += 0.3 * hiveBonus * agePenalty;
-      scanMult += 0.25 * hiveBonus * agePenalty;
-    }
-    if (c.role === "engineer")
-      repair += 0.6 * hiveBonus * agePenalty;
-    if (c.role === "psychologist")
-      stressDamp *= 1 - 0.4 * hiveBonus * agePenalty;
-    if (c.role === "cryptologist")
-      psioBonus += 30 * hiveBonus * agePenalty;
-  });
-  STATE.crewBuffs = {
-    thrust: thrustMult,
-    bioGain: bioMult,
-    scanSpeed: scanMult,
-    repairRate: repair,
-    stressDampening: stressDamp,
-    psionicBonus: Math.round(psioBonus)
-  };
-  const basePsio = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 140 : 75;
-  STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
-}
-var STORY_LOGS = [
-  { time: 6, sender: "Capt. Miller", text: "Das Ding lebt! Wir sind im Bauch eines Lovecraft-Monsters gefangen! Wo ist die Luft?" },
-  { time: 24, sender: "Dr. Song", text: "Die Schiffswände atmen... Valeria, das Schiff absorbiert Weltraummaterie um sich zu heilen!" },
-  { time: 48, sender: "Valeria", text: "Jamal, guck dir die Messgeräte an. Die kosmische Hintergrundstrahlung... Die Expansion verlangsamt sich!" },
-  { time: 70, sender: "Jamal", text: "Das ist kein Fehler. Jemand macht eine kosmische Vollbremsung. Dieses Wesen... versucht es uns zu warnen?" },
-  { time: 95, sender: "Capt. Miller", text: "Es sendet Gedankenwellen. Die Software übersetzt es als... Dschinn? Es ist einsam." }
-];
-var storyIndex = 0;
-var playTime = 0;
-function encryptText(text) {
-  const alienGlyphs = "⏁⊑⟒⋔⍜⋏☿⏁⟒⍃⍜⌰⎍⌇⌇⊑⟟⌿⌇⏃⋏⎅⌇⏁⏃⍀⌇⏁⍀⟒☍⏁⊑⟒⌇⊑⟟⌿⟟⌇⏃⌰⟟⎎⟒";
-  return text.split("").map((char) => {
-    if (char === " " || char === '"' || char === "'" || char === ":" || char === "." || char === "," || char === "?" || char === "!" || char === "-" || char === "(" || char === ")")
-      return char;
-    return alienGlyphs[Math.floor(Math.random() * alienGlyphs.length)];
-  }).join("");
-}
-function encryptCrewMessage(sender, text) {
-  let outText = text;
-  if (!STATE.mutations.translator.purchased) {
-    outText = encryptText(text);
-  }
-  return `${sender}: "${outText}"`;
-}
-function updateCrewSimulation(dt) {
-  playTime += dt;
-  if (storyIndex < STORY_LOGS.length && playTime >= STORY_LOGS[storyIndex].time) {
-    const logObj = STORY_LOGS[storyIndex];
-    storyIndex++;
-    addLogEntry("CREW", encryptCrewMessage(logObj.sender, logObj.text));
-  }
-  const totalCrew = STATE.crew.length;
-  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
-  let targetLoneliness = 100;
-  let isHarmony = false;
-  if (totalCrew === 0) {
-    targetLoneliness = 100;
-  } else if (totalCrew === 1) {
-    STATE.crewSatietyTimer += dt;
-    const decay = Math.min(20, STATE.crewSatietyTimer / 120 * 20);
-    targetLoneliness = 45 + decay;
-  } else if (totalCrew === 2) {
-    targetLoneliness = uniqueRoles === 2 ? 20 : 30;
-  } else if (totalCrew >= 3) {
-    if (uniqueRoles >= 3) {
-      targetLoneliness = Math.max(0, 5 - (totalCrew - 3) * 2);
-      isHarmony = true;
-    } else {
-      targetLoneliness = Math.max(5, 15 - (totalCrew - 3) * 3);
-      if (totalCrew >= 4)
-        isHarmony = true;
-    }
-  }
-  if (STATE.loneliness < targetLoneliness) {
-    STATE.loneliness = Math.min(targetLoneliness, STATE.loneliness + 3 * dt);
-  } else if (STATE.loneliness > targetLoneliness) {
-    STATE.loneliness = Math.max(targetLoneliness, STATE.loneliness - 18 * dt);
-  }
-  if (isHarmony) {
-    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 0.5 * dt);
-    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.3 * dt);
-  }
-  let speed = STATE.playerVelocity.length();
-  let speedStressModifier = speed > 10 ? 0.6 : 0;
-  for (let i = STATE.crew.length - 1;i >= 0; i--) {
-    const c = STATE.crew[i];
-    c.age = (c.age || 0) + dt;
-    const maxLife = c.maxLifespan || 540;
-    const lifeRatio = Math.min(1, c.age / maxLife);
-    if (lifeRatio < 0.55) {
-      c.ageCategory = "vital";
-    } else if (lifeRatio < 0.85) {
-      c.ageCategory = "mature";
-      c.stress = Math.min(100, c.stress + 0.35 * dt);
-    } else if (lifeRatio < 0.95) {
-      c.ageCategory = "senescent";
-      c.stress = Math.min(100, c.stress + 0.9 * dt);
-    } else {
-      c.ageCategory = "critical";
-      c.stress = Math.min(100, c.stress + 1.8 * dt);
-    }
-    if (c.age >= maxLife) {
-      addLogEntry("SYSTEM", `⚰️ BIOLOGISCHER ZELLTOD: ${c.name} (${c.species}) ist an Altersschwäche gestorben. Biomasse resorbiert (+45 Bio-Energie).`);
-      STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 45);
-      STATE.loneliness = Math.min(100, STATE.loneliness + 20);
-      STATE.crew.forEach((other) => {
-        if (other !== c) {
-          other.stress = Math.min(100, other.stress + 20);
-          other.illusionStability = Math.max(0, other.illusionStability - 15);
-        }
-      });
-      STATE.crew.splice(i, 1);
-      calculateCrewBuffs();
-      continue;
-    }
-    const decayRate = (0.35 + c.stress * 0.006) * dt;
-    c.illusionStability = Math.max(0, c.illusionStability - decayRate);
-    if (STATE.telepathyActive && STATE.mentalEnergy > 0) {
-      c.stress = Math.max(0, c.stress - 7.5 * dt);
-      c.illusionStability = Math.min(100, c.illusionStability + 8 * dt);
-      c.status = "Traum-Trance";
-      c.thought = "Fühlt eine warme, beruhigende Welle... 'Alles ist friedlich.'";
-    } else {
-      if (c.illusionStability < 35) {
-        c.stress = Math.min(100, c.stress + (4.5 + speedStressModifier) * dt);
-        c.status = "Panik";
-        c.thought = "Verzweifelt: 'Die Wände pulsieren... das ist keine Station!'";
-      } else if (c.illusionStability < 65) {
-        c.stress = Math.min(100, c.stress + (1.2 + speedStressModifier) * dt);
-        c.status = "Misstrauisch";
-        c.thought = "Stutzt: 'Höre ich ein Atmen in den Lüftungsschächten?'";
-      } else {
-        c.stress = Math.max(0, c.stress - 2 * dt);
-        c.status = "Arbeitet";
-        if (c.ageCategory === "senescent") {
-          c.thought = "Erschöpft: 'Die Jahre vergehen... aber die Sterne bleiben ewig.'";
-        } else {
-          c.thought = "Konzentriert: 'Sternenkartierung verläuft nach Plan.'";
-        }
-      }
-    }
-    if (c.illusionStability >= 50) {
-      if (c.role === "engineer") {
-        STATE.health = Math.min(STATE.maxHealth, STATE.health + 0.25 * dt);
-      } else if (c.role === "biologist") {
-        STATE.bioRes += 0.1 * dt;
-      } else if (c.role === "psychologist") {
-        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 1.5 * dt);
-      }
-    }
-    if (c.stress >= 80) {
-      STATE.health = Math.max(0, STATE.health - 3.2 * dt);
-      if (Math.random() < 0.008) {
-        addLogEntry("CREW", `MATRIX-ALARM: ${c.name} randaliert in Panik und beschädigt Zellwände! Beruhige mit [LEERTASTE]!`);
-      }
-    }
-  }
-  if (STATE.telepathyActive) {
-    STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 8.5 * dt);
-    if (STATE.mentalEnergy === 0) {
-      toggleTelepathy();
-      addLogEntry("SYSTEM", "Mentale Reserven erschöpft! Telepathische Traum-Matrix flackert.");
-    }
-  } else {
-    const regenSpeed = STATE.mutations.synapses && STATE.mutations.synapses.purchased ? 7 * dt : 3.5 * dt;
-    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + regenSpeed);
-  }
-  STATE.crewDialogueTimer -= dt;
-  if (STATE.crewDialogueTimer <= 0 && STATE.crew.length >= 2) {
-    STATE.crewDialogueTimer = 20 + Math.random() * 8;
-    triggerMultiCrewDialogue();
-  }
-  renderCrewUI();
-}
-function rejuvenateCrewMember(id) {
-  const member = STATE.crew.find((c) => c.id === id);
-  if (!member)
-    return;
-  if (STATE.bioEnergy < 20 || STATE.bioRes < 10) {
-    addLogEntry("SYSTEM", `Zu wenig Bio-Energie oder Biomasse für Zell-Verjüngung (benötigt 20 Bio / 10 Biomasse)!`);
-    return;
-  }
-  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 20);
-  STATE.bioRes = Math.max(0, STATE.bioRes - 10);
-  const maxLife = member.maxLifespan || 540;
-  member.age = Math.max(0, member.age - maxLife * 0.35);
-  member.stress = Math.max(0, member.stress - 25);
-  member.rejuvenationCount = (member.rejuvenationCount || 0) + 1;
-  playBioHarvestSound();
-  addLogEntry("SYSTEM", `\uD83D\uDC89 ZELL-REGENERATION: Telomere von ${member.name} erneuert (-35% Alter)! Lebenszeit verlängert.`);
-  calculateCrewBuffs();
-  renderCrewUI();
-}
-function assimilateCrewMember(id) {
-  const idx = STATE.crew.findIndex((c) => c.id === id);
-  if (idx === -1)
-    return;
-  const member = STATE.crew[idx];
-  STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 50);
-  STATE.bioRes += 35;
-  STATE.siliconRes += 20;
-  addLogEntry("SYSTEM", `\uD83E\uDDEC GENOM-ASSIMILATION: ${member.name} (${member.species}) aufgelöst: +50 Bio-Energie, +35 Biomasse & +20 Silizium.`);
-  playCrashSound();
-  STATE.crew.splice(idx, 1);
-  calculateCrewBuffs();
-  renderCrewUI();
-}
-function renderCrewUI() {
-  const container = document.getElementById("crew-list-container");
-  const badge = document.getElementById("crew-count-badge");
-  const capText = document.getElementById("crew-capacity-text");
-  const synTitle = document.getElementById("crew-synergy-title");
-  const synDesc = document.getElementById("crew-synergy-desc");
-  const synBanner = document.getElementById("crew-synergy-banner");
-  if (badge)
-    badge.innerText = String(STATE.crew.length);
-  if (capText)
-    capText.innerText = `${STATE.crew.length} / ${STATE.maxCrewCapacity}`;
-  const uniqueRoles = new Set(STATE.crew.map((c) => c.role)).size;
-  const totalCrew = STATE.crew.length;
-  const rolesPresent = new Set(STATE.crew.map((c) => c.role));
-  const slotPilot = document.getElementById("slot-pilot");
-  const slotBio = document.getElementById("slot-biologist");
-  const slotEng = document.getElementById("slot-engineer");
-  const slotPsych = document.getElementById("slot-psychologist");
-  if (slotPilot)
-    slotPilot.className = rolesPresent.has("pilot") ? "role-slot active" : "role-slot";
-  if (slotBio)
-    slotBio.className = rolesPresent.has("biologist") ? "role-slot active" : "role-slot";
-  if (slotEng)
-    slotEng.className = rolesPresent.has("engineer") ? "role-slot active" : "role-slot";
-  if (slotPsych)
-    slotPsych.className = rolesPresent.has("psychologist") || rolesPresent.has("cryptologist") ? "role-slot active" : "role-slot";
-  if (synBanner && synTitle && synDesc) {
-    if (totalCrew === 0) {
-      synBanner.className = "crew-synergy-banner";
-      synTitle.innerText = "\uD83C\uDF0C Kosmische Einsamkeit (100%)";
-      synDesc.innerText = "Keine Geister im Kollektiv. Entführe Wesen von habitablen Planeten, um Einsamkeit zu lindern.";
-    } else if (totalCrew === 1) {
-      synBanner.className = "crew-synergy-banner";
-      synTitle.innerText = `\uD83C\uDF31 Erste Bindung (${Math.round(STATE.loneliness)}% Einsamkeit)`;
-      synDesc.innerText = `1 Geist an Bord (${STATE.crew[0]?.roleName || "Begleiter"}). Finde weitere Wesen mit anderen Rollen für Synergien!`;
-    } else if (totalCrew >= 2 && uniqueRoles === 1) {
-      synBanner.className = "crew-synergy-banner";
-      synTitle.innerText = `\uD83D\uDC65 Doppelter Rollen-Fokus (${Math.round(STATE.loneliness)}% Einsamkeit)`;
-      synDesc.innerText = `${totalCrew}x selbe Rolle an Bord: Rollen-Effekt verstärkt! Finde eine andere Rolle für "Duale Resonanz".`;
-    } else if (uniqueRoles === 2) {
-      synBanner.className = "crew-synergy-banner";
-      synTitle.innerText = `✨ Duale Resonanz (${Math.round(STATE.loneliness)}% Einsamkeit)`;
-      synDesc.innerText = "2 verschiedene Rollen im Einklang! Einsamkeit stark gesenkt. Noch 1 weitere Rolle für 'Kosmische Harmonie'.";
-    } else if (uniqueRoles >= 3 || totalCrew >= 3) {
-      synBanner.className = "crew-synergy-banner harmony";
-      synTitle.innerText = "\uD83D\uDCAB Kosmische Harmonie (0% Einsamkeit)";
-      synDesc.innerText = "Diverses Trio aktiv! Einsamkeit vollständig beseitigt & passive Bio-/Mentalenergie-Regeneration online!";
-    }
-  }
-  if (!container)
-    return;
-  if (STATE.crew.length === 0) {
-    container.innerHTML = `
-            <div class="matrix-empty-card">
-                <span class="highlight">Keine Vernunftbegabten Wesen</span>
-                Die psionische Traum-Matrix ist leer. Das Schiff leidet unter existenzieller kosmischer Einsamkeit.<br><br>
-                <em>Scanne habitable Planeten nach intelligentem Leben und starte eine psionische Entführung [F]!</em>
-            </div>
-        `;
-    return;
-  }
-  let html = "";
-  STATE.crew.forEach((c) => {
-    let cardClass = "crew-member";
-    if (c.illusionStability < 35 || c.stress > 70)
-      cardClass += " panic";
-    else if (c.illusionStability < 65 || c.stress > 45)
-      cardClass += " suspicious";
-    const maxLife = c.maxLifespan || 540;
-    const currentAge = Math.min(maxLife, Math.floor(c.age || 0));
-    const lifePercent = Math.max(0, Math.min(100, Math.round((1 - currentAge / maxLife) * 100)));
-    let speciesTag = "\uD83D\uDC68‍\uD83D\uDE80 Mortal";
-    if (c.speciesType === "ephemeral")
-      speciesTag = "\uD83E\uDEB2 Ephemeral";
-    else if (c.speciesType === "longlived")
-      speciesTag = "\uD83E\uDD16 Synthet";
-    else if (c.speciesType === "ancient")
-      speciesTag = "\uD83D\uDC8E Uralt";
-    let ageLabel = "\uD83D\uDFE2 Vital";
-    let ageColor = "#00ff88";
-    if (c.ageCategory === "mature") {
-      ageLabel = "\uD83D\uDFE1 Reife";
-      ageColor = "#facc15";
-    } else if (c.ageCategory === "senescent") {
-      ageLabel = "\uD83D\uDFE0 Seneszenz";
-      ageColor = "#fb923c";
-    } else if (c.ageCategory === "critical") {
-      ageLabel = "\uD83D\uDD34 Altersschwäche";
-      ageColor = "#f43f5e";
-    }
-    const ageMin = Math.floor(currentAge / 60);
-    const ageSec = String(currentAge % 60).padStart(2, "0");
-    const maxMin = Math.floor(maxLife / 60);
-    html += `
-            <div class="${cardClass}">
-                <div class="crew-header" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <span class="crew-name" style="font-weight: 700; color: #f8fafc; font-size: 0.8rem;">${c.name}</span>
-                        <span style="font-size: 0.65rem; color: #94a3b8; margin-left: 4px;">(${speciesTag})</span>
-                    </div>
-                    <span class="crew-role-badge">${c.roleIcon || "\uD83D\uDC64"} ${c.roleName || c.role}</span>
-                </div>
-                <div class="crew-buff-tag">⚡ ${c.buffDesc || c.perk}</div>
-
-                <!-- Lifespan & Biological Age Bar -->
-                <div class="lifespan-container" style="margin: 4px 0; background: rgba(15,23,42,0.6); padding: 4px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.06);">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: #cbd5e1; margin-bottom: 2px;">
-                        <span>⏳ Alter: ${ageMin}:${ageSec} / ${maxMin}:00 Min.</span>
-                        <span style="color: ${ageColor}; font-weight: 700;">${ageLabel} (${lifePercent}% übrig)</span>
-                    </div>
-                    <div class="lifespan-bar-bg" style="height: 4px; background: rgba(0,0,0,0.5); border-radius: 2px; overflow: hidden;">
-                        <div class="lifespan-bar" style="width: ${lifePercent}%; height: 100%; background: ${ageColor}; transition: width 0.3s ease;"></div>
-                    </div>
-                </div>
-                
-                <div class="stability-container">
-                    <span class="stability-label">Traum-Stabilität:</span>
-                    <div class="stability-bar-bg">
-                        <div class="stability-bar" style="width: ${c.illusionStability}%;"></div>
-                    </div>
-                    <span style="color: #a855f7; font-size: 0.68rem; font-weight: 700;">${Math.round(c.illusionStability)}%</span>
-                </div>
-
-                <div class="stress-container" style="display: flex; align-items: center; gap: 6px;">
-                    <span class="stress-label" style="width: 90px; font-size: 0.68rem; color: #94a3b8;">Stress:</span>
-                    <div class="stress-bar-bg" style="flex: 1; height: 5px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden;">
-                        <div class="stress-bar" style="width: ${c.stress}%; height: 100%; background: ${c.stress > 70 ? "#ef4444" : "#f59e0b"};"></div>
-                    </div>
-                    <span class="stress-percentage" style="font-size: 0.68rem;">${Math.round(c.stress)}%</span>
-                </div>
-
-                <div class="thought-whisper ${c.illusionStability < 35 ? "terrified" : ""}">
-                    \uD83D\uDCAD "${c.thought}"
-                </div>
-
-                <!-- Interactive Crew Care & Action Buttons -->
-                <div class="crew-actions" style="display: flex; gap: 6px; margin-top: 6px;">
-                    <button class="crew-action-btn rejuv-btn" onclick="window.rejuvenateCrew(${c.id})" title="Zell-Verjüngung: -35% Alter (Kosten: 20 Bio / 10 Biomasse)">
-                        \uD83D\uDC89 Verjüngen
-                    </button>
-                    <button class="crew-action-btn assimilate-btn" onclick="window.assimilateCrew(${c.id})" title="Genom-Assimilation: Löst das Wesen in +50 Bio-Energie, +35 Biomasse & +20 Silizium auf">
-                        \uD83E\uDDEC Assimilieren
-                    </button>
-                </div>
-            </div>
-        `;
-  });
-  container.innerHTML = html;
-}
-if (typeof window !== "undefined") {
-  window.rejuvenateCrew = (id) => rejuvenateCrewMember(id);
-  window.assimilateCrew = (id) => assimilateCrewMember(id);
-}
-var crewDialogueBank = {
-  pilot_engineer: [
-    { lineA: 'Miller: "Petrov, diese biomolekularen Trägheitsdämpfer... das Schiff richtet die Schubvektoren aus, bevor ich überhaupt lenke."', lineB: 'Petrov: "Die Naniten im Chitin leiten unsere Gedanken direkt weiter. Das ist kein Raumschiff, das ist ein lebendes Cockpit."' },
-    { lineA: 'Miller: "Wie sieht die Hüllenintegrität aus, wenn wir durch Asteroidengürtel tauchen?"', lineB: 'Petrov: "Silizium-Naniten schließen Risse im Flug. Solange wir Mineralien aufnehmen, hält die organische Panzerung stand."' }
-  ],
-  biologist_psychologist: [
-    { lineA: 'Dr. Song: "Die Traum-Matrix synchronisiert unsere neuronalen REM-Phasen. Es absorbiert nicht unsere Körper, sondern unsere Gefühle."', lineB: 'Dr. Vance: "Ein psionischer Stoffwechsel. Solange wir Gelassenheit und Zuversicht ausstrahlen, ernährt sich die Entität von Harmonie statt Verzweiflung."' },
-    { lineA: 'Dr. Song: "Die Biolumineszenz an den Synapsen-Wänden pulsiert im Takt unseres Herzschlags."', lineB: 'Dr. Vance: "Ein biologischer Resonanzraum. Wir halten das Wesen am Leben – und es beschützt uns vor der tödlichen Kälte des Alls."' }
-  ],
-  cryptologist_pilot: [
-    { lineA: 'Novak: "Ich fange schwache Tachyonen-Echos aus dem nächsten Sternensystem auf. Psio-Sensorhorizont erweitert."', lineB: 'Miller: "Kurs ist korrigiert, Novak. Bringen wir uns in den nächsten planetaren Orbit."' }
-  ],
-  engineer_biologist: [
-    { lineA: 'Petrov: "Dr. Song, die organischen Leitungen um die Faltungsmembran regenerieren erstaunlich schnell."', lineB: 'Dr. Song: "Es ist ein symbiotisches Ökosystem. Jede Ressource, die wir assimilieren, stärkt die Zellwände des Schiffes."' }
-  ],
-  general: [
-    { lineA: 'Crew-Funk: "Die Traum-Matrix flüstert Erinnerungen an Sternensysteme, die Lichtjahre entfernt liegen..."', lineB: 'Crew-Funk: "Wir reisen durch das Herz einer Galaxie, die kein Mensch zuvor erblickt hat."' }
-  ]
-};
-function triggerMultiCrewDialogue() {
-  if (STATE.crew.length < 2)
-    return;
-  const hasTranslator = STATE.mutations.translator && STATE.mutations.translator.purchased;
-  const c1 = STATE.crew[Math.floor(Math.random() * STATE.crew.length)];
-  const others = STATE.crew.filter((c) => c !== c1);
-  const c2 = others[Math.floor(Math.random() * others.length)];
-  let pairKey = `${c1.role}_${c2.role}`;
-  let revPairKey = `${c2.role}_${c1.role}`;
-  let dialogues = crewDialogueBank[pairKey] || crewDialogueBank[revPairKey] || crewDialogueBank.general;
-  const dialog = dialogues[Math.floor(Math.random() * dialogues.length)];
-  const name1 = c1.name.split(" ")[1] || c1.name;
-  const name2 = c2.name.split(" ")[1] || c2.name;
-  if (hasTranslator) {
-    addLogEntry("CREW", dialog.lineA.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name1));
-    setTimeout(() => {
-      addLogEntry("CREW", dialog.lineB.replace("Miller", name1).replace("Petrov", name2).replace("Dr. Song", c1.name).replace("Dr. Vance", c2.name).replace("Novak", name2));
-    }, 3200);
-  } else {
-    addLogEntry("CREW", `[Verschlüsselter Datenstrom zwischen ${c1.name} & ${c2.name}... Dschinn-Übersetzer benötigt!]`);
-  }
-}
-
-// src/ui/deck.ts
-function initDeckUI() {
-  const leftCollapseBtn = document.getElementById("left-collapse-btn");
-  const leftDeckPanel = document.getElementById("left-deck-panel");
-  if (leftCollapseBtn && leftDeckPanel) {
-    leftCollapseBtn.addEventListener("click", () => {
-      leftDeckPanel.classList.toggle("collapsed");
-      if (leftDeckPanel.classList.contains("collapsed")) {
-        leftCollapseBtn.innerText = "›";
-        leftCollapseBtn.title = "Sensoren ausklappen";
-      } else {
-        leftCollapseBtn.innerText = "‹";
-        leftCollapseBtn.title = "Sensoren einklappen";
-      }
-    });
-  }
-  const rightCollapseBtn = document.getElementById("right-collapse-btn");
-  const rightDeckPanel = document.getElementById("right-deck-panel");
-  if (rightCollapseBtn && rightDeckPanel) {
-    rightCollapseBtn.addEventListener("click", () => {
-      rightDeckPanel.classList.toggle("collapsed");
-      if (rightDeckPanel.classList.contains("collapsed")) {
-        rightCollapseBtn.innerText = "‹";
-        rightCollapseBtn.title = "Status-Deck ausklappen";
-      } else {
-        rightCollapseBtn.innerText = "›";
-        rightCollapseBtn.title = "Status-Deck einklappen";
-      }
-    });
-  }
-  const tabButtons = document.querySelectorAll("#right-deck-tabs .tab-btn");
-  tabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetTab = btn.getAttribute("data-tab");
-      tabButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const crewContent = document.getElementById("tab-content-crew");
-      const evoContent = document.getElementById("tab-content-evolution");
-      const facContent = document.getElementById("tab-content-factions");
-      if (crewContent)
-        crewContent.classList.toggle("active", targetTab === "crew");
-      if (evoContent)
-        evoContent.classList.toggle("active", targetTab === "evolution");
-      if (facContent) {
-        facContent.classList.toggle("active", targetTab === "factions");
-        if (targetTab === "factions") {
-          renderFactionReputationUI();
-        }
-      }
-    });
-  });
-  renderFactionReputationUI();
-  const mutButtons = document.querySelectorAll(".mut-btn");
-  mutButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const mutType = btn.getAttribute("data-mutation");
-      if (mutType) {
-        buyMutation(mutType);
-      }
-    });
-  });
-}
-function buyMutation(type) {
-  const mut = STATE.mutations[type];
-  if (!mut || mut.purchased)
-    return;
-  if (STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost) {
-    STATE.bioRes -= mut.bioCost;
-    STATE.siliconRes -= mut.siliconCost;
-    mut.purchased = true;
-    playSiliconCollectSound();
-    const btn = document.querySelector(`.mut-btn[data-mutation="${type}"]`);
-    if (btn) {
-      btn.classList.add("purchased");
-      btn.innerHTML = "Aktiviert ✓";
-    }
-    if (type === "armor") {
-      addLogEntry("EVOLUTION", "Organische Chitin-Panzerung gehärtet. Kollisionsschaden um 50% reduziert.");
-      const hull = document.getElementById("schematic-hull");
-      if (hull)
-        hull.setAttribute("stroke-width", "4");
-    } else if (type === "o2") {
-      addLogEntry("EVOLUTION", "Metabolische O2-Synthese aktiviert. Stress-Zuwachs halbiert.");
-    } else if (type === "synapses") {
-      STATE.psionicRange = 140;
-      calculateCrewBuffs();
-      addLogEntry("EVOLUTION", "Psionische Synapsen erweitert! Gedanken-Echo Reichweite auf 140 LJ vergrößert.");
-    } else if (type === "cocoon") {
-      STATE.maxCrewCapacity = 4;
-      addLogEntry("EVOLUTION", "Neuronales Kokon-Gewebe mutiert! Maximale Crew-Kapazität auf 4 erweitert.");
-      renderCrewUI();
-    } else if (type === "hivemind") {
-      STATE.maxCrewCapacity = 6;
-      calculateCrewBuffs();
-      addLogEntry("EVOLUTION", "Symbiotische Synapsen-Kammer erwacht! Kapazität auf 6 erhöht & alle Spezialisten-Buffs um +20% verstärkt!");
-      renderCrewUI();
-    } else if (type === "folddrive") {
-      STATE.warpRange = 160;
-      addLogEntry("EVOLUTION", "Raumfaltungs-Membran mutiert! Warp-Reichweite auf 160 LJ erweitert, Faltungskosten um 30% gesenkt.");
-    } else if (type === "translator") {
-      addLogEntry("EVOLUTION", "Dschinn-Übersetzer integriert! Alien-Funksignale & Crew-Dialoge werden vollautomatisch dechiffriert.");
-    }
-    updateMutationUI();
-  } else {
-    addLogEntry("SYSTEM", `Evolution fehlgeschlagen: Nicht genügend Ressourcen (${mut.bioCost} Bio | ${mut.siliconCost} Silizium benötigt)!`);
-  }
-}
-function updateMutationUI() {
-  const bioEl = document.getElementById("res-bio-count");
-  const silEl = document.getElementById("res-silicon-count");
-  if (bioEl)
-    bioEl.innerText = `${Math.floor(STATE.bioRes)}`;
-  if (silEl)
-    silEl.innerText = `${Math.floor(STATE.siliconRes)}`;
-  Object.keys(STATE.mutations).forEach((key) => {
-    const mut = STATE.mutations[key];
-    const btn = document.querySelector(`.mut-btn[data-mutation="${key}"]`);
-    if (btn) {
-      if (mut.purchased) {
-        btn.disabled = true;
-        btn.classList.add("purchased");
-        btn.innerText = "Aktiviert ✓";
-      } else {
-        const canAfford = STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost;
-        btn.disabled = !canAfford;
-      }
-    }
-  });
-}
-
 // src/systems/harvesting.ts
 var harvestOsc = null;
 var harvestGain = null;
@@ -35407,6 +35470,10 @@ var prevGpButtons = [];
 function setupControls() {
   window.addEventListener("keydown", (e) => {
     let key = e.key.toLowerCase();
+    if (key === "tab" || e.code === "Tab") {
+      e.preventDefault();
+      toggleDeckModal();
+    }
     if (key === " " || e.code === "Space") {
       toggleTelepathy();
       e.preventDefault();
@@ -35434,6 +35501,10 @@ function setupControls() {
     }
     if (key === "escape") {
       closeDiplomacyComms();
+      if (isMapOpen())
+        toggleGalaxyMap();
+      if (isDeckOpen())
+        toggleDeckModal(false);
     }
     if (key === "f") {
       if (STATE.nearestPlanet) {
@@ -35662,6 +35733,12 @@ function toggleTelepathy() {
 }
 function toggleFlightAssist() {
   STATE.flightAssist = !STATE.flightAssist;
+  const dockLabel = document.getElementById("dock-assist-label");
+  const dockBtn = document.getElementById("dock-assist-btn");
+  if (dockLabel)
+    dockLabel.innerText = STATE.flightAssist ? "\uD83D\uDEF8 Assist: AN" : "\uD83D\uDEF8 Assist: AUS";
+  if (dockBtn)
+    dockBtn.classList.toggle("active", STATE.flightAssist);
   if (STATE.flightAssist) {
     addLogEntry("SYSTEM", "\uD83D\uDD79️ Flug-Assistent AKTIVIERT: Automatische Trägheitsbremsen online.");
   } else {
