@@ -426,20 +426,22 @@ html {
     color: #38bdf8;
 }
 
-/* 6. Compact Minimap Radar Orb */
+/* 6. Minimap Radar Orb */
 .hud-minimap-orb {
     position: absolute;
     bottom: 16px;
     right: 16px;
-    width: 160px;
-    height: 160px;
+    width: 220px;
+    height: 220px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 4px;
+    padding: 6px;
     overflow: hidden;
     z-index: 25;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.7), inset 0 0 16px rgba(56, 189, 248, 0.08);
 }
 
 /* 7. Central Bio-Deck Modal */

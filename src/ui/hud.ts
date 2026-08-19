@@ -182,6 +182,7 @@ export function updateMinimap() {
     minimapCtx.strokeStyle = 'rgba(56, 189, 248, 0.15)';
     minimapCtx.lineWidth = 1;
 
+    // Range rings
     minimapCtx.beginPath();
     minimapCtx.arc(cx, cy, radius * 0.33, 0, Math.PI * 2);
     minimapCtx.stroke();
@@ -192,6 +193,15 @@ export function updateMinimap() {
 
     minimapCtx.beginPath();
     minimapCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+    minimapCtx.stroke();
+
+    // Crosshair axes
+    minimapCtx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+    minimapCtx.beginPath();
+    minimapCtx.moveTo(cx, cy - radius);
+    minimapCtx.lineTo(cx, cy + radius);
+    minimapCtx.moveTo(cx - radius, cy);
+    minimapCtx.lineTo(cx + radius, cy);
     minimapCtx.stroke();
 
     const invRangeRadius = radius / range;
@@ -211,7 +221,7 @@ export function updateMinimap() {
             if (source.type === 'star') {
                 minimapCtx.fillStyle = '#f59e0b';
                 minimapCtx.beginPath();
-                minimapCtx.arc(sx, sy, 4, 0, Math.PI * 2);
+                minimapCtx.arc(sx, sy, 5, 0, Math.PI * 2);
                 minimapCtx.fill();
             } else if (source.type === 'planet') {
                 const planetEntry = activePlanets.find(p => p.source === source);
@@ -220,17 +230,17 @@ export function updateMinimap() {
                 if (hasSentient) {
                     minimapCtx.fillStyle = '#d946ef';
                     minimapCtx.beginPath();
-                    minimapCtx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+                    minimapCtx.arc(sx, sy, 4.5, 0, Math.PI * 2);
                     minimapCtx.fill();
 
                     minimapCtx.strokeStyle = 'rgba(217, 70, 239, 0.8)';
                     minimapCtx.beginPath();
-                    minimapCtx.arc(sx, sy, 5.5 + Math.sin(Date.now() * 0.008) * 1.5, 0, Math.PI * 2);
+                    minimapCtx.arc(sx, sy, 6.5 + Math.sin(Date.now() * 0.008) * 1.5, 0, Math.PI * 2);
                     minimapCtx.stroke();
                 } else {
                     minimapCtx.fillStyle = planetEntry && planetEntry.isMoon ? '#94a3b8' : '#38bdf8';
                     minimapCtx.beginPath();
-                    minimapCtx.arc(sx, sy, planetEntry && planetEntry.isMoon ? 1.5 : 2.5, 0, Math.PI * 2);
+                    minimapCtx.arc(sx, sy, planetEntry && planetEntry.isMoon ? 2 : 3.5, 0, Math.PI * 2);
                     minimapCtx.fill();
                 }
             } else if (source.type === 'asteroid') {
@@ -239,6 +249,22 @@ export function updateMinimap() {
             }
         }
     });
+
+    // Draw Locked Target Indicator
+    if (STATE.lockedTarget && STATE.lockedTarget.source) {
+        const dx = STATE.lockedTarget.source.position.x - STATE.playerPosition.x;
+        const dz = STATE.lockedTarget.source.position.z - STATE.playerPosition.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < range) {
+            const sx = cx + dx * invRangeRadius;
+            const sy = cy + dz * invRangeRadius;
+            minimapCtx.strokeStyle = '#38bdf8';
+            minimapCtx.lineWidth = 1.5;
+            minimapCtx.beginPath();
+            minimapCtx.arc(sx, sy, 8, 0, Math.PI * 2);
+            minimapCtx.stroke();
+        }
+    }
 
     // Draw Fleet Ships (Spacefaring Defense Fleets)
     STATE.fleetShips.forEach(ship => {
@@ -256,18 +282,18 @@ export function updateMinimap() {
             } else if (ship.state === 'intercept') {
                 minimapCtx.fillStyle = '#f43f5e';
                 minimapCtx.beginPath();
-                minimapCtx.arc(sx, sy, 3, 0, Math.PI * 2);
+                minimapCtx.arc(sx, sy, 3.5, 0, Math.PI * 2);
                 minimapCtx.fill();
 
                 minimapCtx.strokeStyle = 'rgba(244, 63, 94, 0.8)';
                 minimapCtx.beginPath();
-                minimapCtx.arc(sx, sy, 5.0 + Math.sin(Date.now() * 0.015) * 1.5, 0, Math.PI * 2);
+                minimapCtx.arc(sx, sy, 5.5 + Math.sin(Date.now() * 0.015) * 1.5, 0, Math.PI * 2);
                 minimapCtx.stroke();
             } else {
                 // Patrol
                 minimapCtx.fillStyle = '#f59e0b';
                 minimapCtx.beginPath();
-                minimapCtx.arc(sx, sy, 2, 0, Math.PI * 2);
+                minimapCtx.arc(sx, sy, 2.5, 0, Math.PI * 2);
                 minimapCtx.fill();
             }
         }
@@ -287,19 +313,22 @@ export function updateMinimap() {
         }
     });
 
-    // Draw Player
-    minimapCtx.fillStyle = '#10b981';
-    minimapCtx.beginPath();
-    minimapCtx.arc(cx, cy, 3, 0, Math.PI * 2);
-    minimapCtx.fill();
-
-    minimapCtx.strokeStyle = '#38bdf8';
-    minimapCtx.lineWidth = 1.5;
-    minimapCtx.beginPath();
-    minimapCtx.moveTo(cx, cy);
+    // Draw Player Ship (Directional arrow)
     const heading = (STATE.playerGroup ? STATE.playerGroup.rotation.y : 0);
-    minimapCtx.lineTo(cx + Math.sin(heading) * 8, cy + Math.cos(heading) * 8);
-    minimapCtx.stroke();
+    minimapCtx.save();
+    minimapCtx.translate(cx, cy);
+    minimapCtx.rotate(-heading);
+    minimapCtx.fillStyle = '#10b981';
+    minimapCtx.shadowColor = '#10b981';
+    minimapCtx.shadowBlur = 8;
+    minimapCtx.beginPath();
+    minimapCtx.moveTo(0, -7);
+    minimapCtx.lineTo(5, 5);
+    minimapCtx.lineTo(0, 2.5);
+    minimapCtx.lineTo(-5, 5);
+    minimapCtx.closePath();
+    minimapCtx.fill();
+    minimapCtx.restore();
 }
 
 export function triggerPsionicSonar() {
