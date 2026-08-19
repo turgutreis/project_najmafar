@@ -37,6 +37,8 @@ export function initTrajectory() {
     });
 
     trajectoryLines = new THREE.LineSegments(trajectoryGeometry, material);
+    trajectoryLines.frustumCulled = false; // Prevent Three.js from culling when moving away from origin (0,0,0)
+    trajectoryLines.renderOrder = 999;
     scene.add(trajectoryLines);
 }
 
@@ -82,18 +84,18 @@ function calculateGravityAt(pos: THREE.Vector3, simTime: number, outAcc: THREE.V
 export function updateTrajectory() {
     if (!trajectoryLines) return;
 
-    const curSpeed = STATE.playerVelocity.length();
-
-    // Hide trajectory if ship is nearly stationary
-    if (curSpeed < 0.15) {
-        trajectoryLines.visible = false;
-        return;
-    }
     trajectoryLines.visible = true;
 
-    // Pure ballistic orbital trajectory based strictly on current position & velocity
+    const curSpeed = STATE.playerVelocity.length();
     _predPos.copy(STATE.playerPosition);
-    _predVel.copy(STATE.playerVelocity);
+    if (curSpeed > 0.05) {
+        _predVel.copy(STATE.playerVelocity);
+    } else {
+        // Minimal heading indicator when stopped
+        const fX = Math.cos(STATE.shipHeading || 0);
+        const fZ = -Math.sin(STATE.shipHeading || 0);
+        _predVel.set(fX * 0.5, 0, fZ * 0.5);
+    }
 
     for (let seg = 0; seg < DASH_SEGMENTS; seg++) {
         const simTime = seg * TRAJECTORY_DT;

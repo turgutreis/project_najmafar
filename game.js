@@ -29910,6 +29910,8 @@ function initTrajectory() {
     depthWrite: false
   });
   trajectoryLines = new LineSegments(trajectoryGeometry, material);
+  trajectoryLines.frustumCulled = false;
+  trajectoryLines.renderOrder = 999;
   scene.add(trajectoryLines);
 }
 function calculateGravityAt(pos, simTime, outAcc) {
@@ -29946,14 +29948,16 @@ function calculateGravityAt(pos, simTime, outAcc) {
 function updateTrajectory() {
   if (!trajectoryLines)
     return;
-  const curSpeed = STATE.playerVelocity.length();
-  if (curSpeed < 0.15) {
-    trajectoryLines.visible = false;
-    return;
-  }
   trajectoryLines.visible = true;
+  const curSpeed = STATE.playerVelocity.length();
   _predPos.copy(STATE.playerPosition);
-  _predVel.copy(STATE.playerVelocity);
+  if (curSpeed > 0.05) {
+    _predVel.copy(STATE.playerVelocity);
+  } else {
+    const fX = Math.cos(STATE.shipHeading || 0);
+    const fZ = -Math.sin(STATE.shipHeading || 0);
+    _predVel.set(fX * 0.5, 0, fZ * 0.5);
+  }
   for (let seg = 0;seg < DASH_SEGMENTS; seg++) {
     const simTime = seg * TRAJECTORY_DT;
     _segmentStart.copy(_predPos);
