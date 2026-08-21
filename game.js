@@ -29885,39 +29885,78 @@ function onWindowResize() {
 }
 
 // src/engine/trajectory.ts
-var DASH_SEGMENTS = 140;
-var TRAJECTORY_DT = 0.08;
-var DASH_RATIO = 0.65;
+var FLOW_SEGMENTS = 36;
+var FLOW_DT = 0.075;
+var DASH_RATIO = 0.72;
 var SOFTENING_SQ = 25;
 var trajectoryGeometry;
 var trajectoryLines;
 var trajectoryPositions;
 var trajectoryColors;
+var progradeGroup;
+var progradeRingMesh;
+var progradeDotMesh;
+var progradeChevronMesh;
+var progradeMaterial;
+var progradeDotMaterial;
 var _predPos = new Vector3;
 var _predVel = new Vector3;
 var _predAcc = new Vector3;
 var _segmentStart = new Vector3;
 var _segmentEnd = new Vector3;
 var _impactPos = new Vector3;
+var _reticleTargetPos = new Vector3;
 function initTrajectory() {
-  const vertexCount = DASH_SEGMENTS * 2;
+  const vertexCount = FLOW_SEGMENTS * 2;
   trajectoryGeometry = new BufferGeometry;
   trajectoryPositions = new Float32Array(vertexCount * 3);
   trajectoryColors = new Float32Array(vertexCount * 3);
   trajectoryGeometry.setAttribute("position", new BufferAttribute(trajectoryPositions, 3));
   trajectoryGeometry.setAttribute("color", new BufferAttribute(trajectoryColors, 3));
-  const material = new LineBasicMaterial({
+  const lineMaterial = new LineBasicMaterial({
     vertexColors: true,
     transparent: true,
-    opacity: 0.9,
+    opacity: 0.95,
     linewidth: 2,
     blending: AdditiveBlending,
     depthWrite: false
   });
-  trajectoryLines = new LineSegments(trajectoryGeometry, material);
+  trajectoryLines = new LineSegments(trajectoryGeometry, lineMaterial);
   trajectoryLines.frustumCulled = false;
   trajectoryLines.renderOrder = 999;
   scene.add(trajectoryLines);
+  progradeGroup = new Group;
+  progradeGroup.renderOrder = 1000;
+  progradeMaterial = new MeshBasicMaterial({
+    color: 3718648,
+    transparent: true,
+    opacity: 0,
+    side: DoubleSide,
+    blending: AdditiveBlending,
+    depthWrite: false
+  });
+  progradeDotMaterial = new MeshBasicMaterial({
+    color: 1096065,
+    transparent: true,
+    opacity: 0,
+    blending: AdditiveBlending,
+    depthWrite: false
+  });
+  const ringGeo = new RingGeometry(0.65, 0.85, 32);
+  ringGeo.rotateX(Math.PI / 2);
+  progradeRingMesh = new Mesh(ringGeo, progradeMaterial);
+  progradeGroup.add(progradeRingMesh);
+  const dotGeo = new SphereGeometry(0.22, 16, 16);
+  progradeDotMesh = new Mesh(dotGeo, progradeDotMaterial);
+  progradeDotMesh.position.y = 0.25;
+  progradeGroup.add(progradeDotMesh);
+  const chevronGeo = new ConeGeometry(0.35, 0.8, 4);
+  chevronGeo.rotateX(Math.PI / 2);
+  progradeChevronMesh = new Mesh(chevronGeo, progradeMaterial);
+  progradeChevronMesh.position.set(0, 0.25, 0.95);
+  progradeGroup.add(progradeChevronMesh);
+  progradeGroup.visible = false;
+  scene.add(progradeGroup);
 }
 function calculateGravityAndCheckCollision(pos, simTime, outAcc, outImpactPoint) {
   outAcc.set(0, 0, 0);
@@ -29962,20 +30001,24 @@ function calculateGravityAndCheckCollision(pos, simTime, outAcc, outImpactPoint)
   return collided;
 }
 function updateTrajectory() {
-  if (!trajectoryLines)
+  if (!trajectoryLines || !progradeGroup)
     return;
-  trajectoryLines.visible = true;
   const curSpeed = STATE.playerVelocity.length();
-  _predPos.copy(STATE.playerPosition);
-  if (curSpeed > 0.05) {
-    _predVel.copy(STATE.playerVelocity);
-  } else {
-    const fX = Math.cos(STATE.shipHeading || 0);
-    const fZ = -Math.sin(STATE.shipHeading || 0);
-    _predVel.set(fX * 0.5, 0, fZ * 0.5);
+  const speedFactor = Math.min(1, Math.max(0, (curSpeed - 0.8) / 4));
+  if (curSpeed < 0.6) {
+    trajectoryLines.visible = false;
+    progradeGroup.visible = false;
+    return;
   }
+  trajectoryLines.visible = true;
+  progradeGroup.visible = true;
+  _predPos.copy(STATE.playerPosition);
+  _predVel.copy(STATE.playerVelocity);
   let hasImpacted = false;
-  for (let seg = 0;seg < DASH_SEGMENTS; seg++) {
+  _reticleTargetPos.copy(STATE.playerPosition);
+  const timeNow = Date.now() * 0.001;
+  const wavePhase = timeNow * 4.2 % (Math.PI * 2);
+  for (let seg = 0;seg < FLOW_SEGMENTS; seg++) {
     const v0 = seg * 2;
     const v1 = seg * 2 + 1;
     if (hasImpacted) {
@@ -29993,23 +30036,26 @@ function updateTrajectory() {
       trajectoryColors[v1 * 3 + 2] = 0;
       continue;
     }
-    const simTime = seg * TRAJECTORY_DT;
+    const simTime = seg * FLOW_DT;
     _segmentStart.copy(_predPos);
     if (calculateGravityAndCheckCollision(_segmentStart, simTime, _predAcc, _impactPos)) {
       hasImpacted = true;
       _segmentStart.copy(_impactPos);
       _segmentEnd.copy(_impactPos);
+      _reticleTargetPos.copy(_impactPos);
     } else {
-      const dashDt = TRAJECTORY_DT * DASH_RATIO;
+      const dashDt = FLOW_DT * DASH_RATIO;
       _predVel.addScaledVector(_predAcc, dashDt);
       _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * dashDt));
       _predPos.addScaledVector(_predVel, dashDt);
       _segmentEnd.copy(_predPos);
+      _reticleTargetPos.copy(_segmentEnd);
       if (calculateGravityAndCheckCollision(_segmentEnd, simTime + dashDt, _predAcc, _impactPos)) {
         hasImpacted = true;
         _segmentEnd.copy(_impactPos);
+        _reticleTargetPos.copy(_impactPos);
       } else {
-        const gapDt = TRAJECTORY_DT * (1 - DASH_RATIO);
+        const gapDt = FLOW_DT * (1 - DASH_RATIO);
         calculateGravityAndCheckCollision(_predPos, simTime + dashDt, _predAcc);
         _predVel.addScaledVector(_predAcc, gapDt);
         _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * gapDt));
@@ -30022,11 +30068,15 @@ function updateTrajectory() {
     trajectoryPositions[v1 * 3 + 0] = _segmentEnd.x;
     trajectoryPositions[v1 * 3 + 1] = 0.25;
     trajectoryPositions[v1 * 3 + 2] = _segmentEnd.z;
-    const progress = seg / DASH_SEGMENTS;
-    const alpha = Math.max(0.06, Math.pow(1 - progress, 1.2) * 0.92);
-    const r = 0.2 * alpha;
-    const g = 0.76 * alpha;
-    const b = 0.98 * alpha;
+    const progress = seg / FLOW_SEGMENTS;
+    const distFade = Math.pow(1 - progress, 1.4);
+    const nearFade = Math.min(1, seg * 0.4);
+    const flowWave = Math.sin(seg * 0.5 - wavePhase);
+    const pulseBoost = flowWave > 0 ? flowWave * 0.45 : 0;
+    const totalAlpha = (distFade * nearFade * 0.75 + pulseBoost * 0.35) * speedFactor;
+    const r = 0.12 * totalAlpha;
+    const g = 0.85 * totalAlpha;
+    const b = 0.95 * totalAlpha;
     trajectoryColors[v0 * 3 + 0] = r;
     trajectoryColors[v0 * 3 + 1] = g;
     trajectoryColors[v0 * 3 + 2] = b;
@@ -30036,6 +30086,23 @@ function updateTrajectory() {
   }
   trajectoryGeometry.attributes.position.needsUpdate = true;
   trajectoryGeometry.attributes.color.needsUpdate = true;
+  if (progradeGroup) {
+    progradeGroup.position.set(_reticleTargetPos.x, 0.25, _reticleTargetPos.z);
+    const velHeading = Math.atan2(-STATE.playerVelocity.z, STATE.playerVelocity.x);
+    progradeGroup.rotation.y = velHeading - Math.PI / 2;
+    const reticleAlpha = speedFactor * (hasImpacted ? 0.95 : 0.8);
+    const pulseScale = 1 + Math.sin(timeNow * 6) * 0.08;
+    progradeGroup.scale.set(pulseScale, pulseScale, pulseScale);
+    if (hasImpacted) {
+      progradeMaterial.color.setHex(16007006);
+      progradeDotMaterial.color.setHex(16096779);
+    } else {
+      progradeMaterial.color.setHex(3718648);
+      progradeDotMaterial.color.setHex(1096065);
+    }
+    progradeMaterial.opacity = reticleAlpha;
+    progradeDotMaterial.opacity = reticleAlpha;
+  }
 }
 
 // src/procedural/textures.ts
