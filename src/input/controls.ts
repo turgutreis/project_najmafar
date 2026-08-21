@@ -391,17 +391,18 @@ export function processInput(dt: number) {
         prevGpButtons = gp.buttons.map(b => b ? (b.pressed || b.value > 0.5) : false);
     }
 
-    // 3. Yaw Steering & Heading Dynamics
+    // 3. Yaw Steering & Heading Dynamics (Snappy and responsive turning)
     if (turnInput !== 0) {
         STATE.shipAngularVelocity = turnInput * STATE.turnSpeed;
     } else {
-        STATE.shipAngularVelocity = THREE.MathUtils.lerp(STATE.shipAngularVelocity || 0, 0, Math.min(1.0, dt * 8.0));
+        STATE.shipAngularVelocity = THREE.MathUtils.lerp(STATE.shipAngularVelocity || 0, 0, Math.min(1.0, dt * 14.0));
     }
     STATE.shipHeading = (STATE.shipHeading || 0) + STATE.shipAngularVelocity * dt;
 
-    // 4. Main Forward Thrust (Along Ship Nose Vector)
+    // 4. Main Forward Thrust (Along Ship Nose Vector with Pilot Synergy)
     const hasEnergy = STATE.bioEnergy > 0;
-    const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
+    const pilotMult = STATE.crewBuffs ? (STATE.crewBuffs.thrust || 1.0) : 1.0;
+    const effectiveThrust = (hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.4) * pilotMult;
 
     const forwardX = Math.cos(STATE.shipHeading);
     const forwardZ = -Math.sin(STATE.shipHeading);
@@ -411,15 +412,15 @@ export function processInput(dt: number) {
         STATE.playerAcceleration.addScaledVector(forwardDir, effectiveThrust);
 
         if (hasEnergy) {
-            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 5.5 * dt);
+            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 4.5 * dt);
         }
 
         setThrusterSound(true);
     } else {
         setThrusterSound(false);
-        // Passive slow bio-energy metabolism when not thrusting
+        // Passive steady bio-energy metabolism when cruising
         if (!isRetroBraking && STATE.bioEnergy < STATE.maxBioEnergy) {
-            STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.8 * dt);
+            STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 1.5 * dt);
         }
     }
 
@@ -428,21 +429,21 @@ export function processInput(dt: number) {
         const curSpeed = STATE.playerVelocity.length();
         if (curSpeed > 0.4) {
             const counterDir = STATE.playerVelocity.clone().normalize().negate();
-            STATE.playerAcceleration.addScaledVector(counterDir, STATE.retroThrustStrength);
+            STATE.playerAcceleration.addScaledVector(counterDir, STATE.retroThrustStrength * pilotMult);
         } else {
-            STATE.playerAcceleration.addScaledVector(forwardDir, -effectiveThrust * 0.4);
+            STATE.playerAcceleration.addScaledVector(forwardDir, -effectiveThrust * 0.5);
         }
 
         if (hasEnergy) {
-            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.5 * dt);
+            STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.0 * dt);
         }
     }
 
     // 6. Space Drag & Flight Assist Integration
     if (STATE.flightAssist) {
-        // Flight Assist ON: Gentle retro-dampening only when no keys are pressed
+        // Flight Assist ON: Snappy retro-dampening when no keys are pressed
         if (!isThrusting && !isRetroBraking) {
-            STATE.currentDrag = 0.85;
+            STATE.currentDrag = 1.45;
         } else {
             STATE.currentDrag = STATE.drag;
         }

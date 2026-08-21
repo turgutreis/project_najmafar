@@ -28747,15 +28747,15 @@ var STATE = {
     translator: { purchased: false, bioCost: 120, siliconCost: 80 }
   },
   playerPosition: new Vector3(0, 0, 95),
-  playerVelocity: new Vector3(1.5, 0, 0),
+  playerVelocity: new Vector3(2.5, 0, 0),
   playerAcceleration: new Vector3(0, 0, 0),
-  thrustStrength: 12.5,
-  retroThrustStrength: 10,
-  turnSpeed: 2.1,
+  thrustStrength: 22,
+  retroThrustStrength: 18,
+  turnSpeed: 3.6,
   shipHeading: 0,
   shipAngularVelocity: 0,
   flightAssist: false,
-  shipSpeed: 1.5,
+  shipSpeed: 2.5,
   progradeVector: new Vector3(1, 0, 0),
   drag: 0.005,
   brakeDrag: 1.2,
@@ -35853,41 +35853,42 @@ function processInput(dt) {
   if (turnInput !== 0) {
     STATE.shipAngularVelocity = turnInput * STATE.turnSpeed;
   } else {
-    STATE.shipAngularVelocity = MathUtils.lerp(STATE.shipAngularVelocity || 0, 0, Math.min(1, dt * 8));
+    STATE.shipAngularVelocity = MathUtils.lerp(STATE.shipAngularVelocity || 0, 0, Math.min(1, dt * 14));
   }
   STATE.shipHeading = (STATE.shipHeading || 0) + STATE.shipAngularVelocity * dt;
   const hasEnergy = STATE.bioEnergy > 0;
-  const effectiveThrust = hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.35;
+  const pilotMult = STATE.crewBuffs ? STATE.crewBuffs.thrust || 1 : 1;
+  const effectiveThrust = (hasEnergy ? STATE.thrustStrength : STATE.thrustStrength * 0.4) * pilotMult;
   const forwardX = Math.cos(STATE.shipHeading);
   const forwardZ = -Math.sin(STATE.shipHeading);
   const forwardDir = new Vector3(forwardX, 0, forwardZ);
   if (isThrusting) {
     STATE.playerAcceleration.addScaledVector(forwardDir, effectiveThrust);
     if (hasEnergy) {
-      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 5.5 * dt);
+      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 4.5 * dt);
     }
     setThrusterSound(true);
   } else {
     setThrusterSound(false);
     if (!isRetroBraking && STATE.bioEnergy < STATE.maxBioEnergy) {
-      STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 0.8 * dt);
+      STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 1.5 * dt);
     }
   }
   if (isRetroBraking) {
     const curSpeed = STATE.playerVelocity.length();
     if (curSpeed > 0.4) {
       const counterDir = STATE.playerVelocity.clone().normalize().negate();
-      STATE.playerAcceleration.addScaledVector(counterDir, STATE.retroThrustStrength);
+      STATE.playerAcceleration.addScaledVector(counterDir, STATE.retroThrustStrength * pilotMult);
     } else {
-      STATE.playerAcceleration.addScaledVector(forwardDir, -effectiveThrust * 0.4);
+      STATE.playerAcceleration.addScaledVector(forwardDir, -effectiveThrust * 0.5);
     }
     if (hasEnergy) {
-      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3.5 * dt);
+      STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 3 * dt);
     }
   }
   if (STATE.flightAssist) {
     if (!isThrusting && !isRetroBraking) {
-      STATE.currentDrag = 0.85;
+      STATE.currentDrag = 1.45;
     } else {
       STATE.currentDrag = STATE.drag;
     }
@@ -36258,7 +36259,8 @@ function updatePhysics(dt) {
   STATE.playerVelocity.z += netGz * dt;
   const effectiveDrag = STATE.currentDrag;
   STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
-  const maxSpeed = 22;
+  const pilotMult = STATE.crewBuffs ? STATE.crewBuffs.thrust || 1 : 1;
+  const maxSpeed = 36 * Math.max(1, pilotMult * 0.85);
   const curSpeed = STATE.playerVelocity.length();
   if (curSpeed > maxSpeed) {
     STATE.playerVelocity.multiplyScalar(maxSpeed / curSpeed);
