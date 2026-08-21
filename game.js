@@ -28747,15 +28747,15 @@ var STATE = {
     translator: { purchased: false, bioCost: 120, siliconCost: 80 }
   },
   playerPosition: new Vector3(0, 0, 95),
-  playerVelocity: new Vector3(2.5, 0, 0),
+  playerVelocity: new Vector3(2, 0, 0),
   playerAcceleration: new Vector3(0, 0, 0),
-  thrustStrength: 22,
-  retroThrustStrength: 18,
-  turnSpeed: 3.6,
+  thrustStrength: 16.5,
+  retroThrustStrength: 14,
+  turnSpeed: 2.85,
   shipHeading: 0,
   shipAngularVelocity: 0,
   flightAssist: false,
-  shipSpeed: 2.5,
+  shipSpeed: 2,
   progradeVector: new Vector3(1, 0, 0),
   drag: 0.005,
   brakeDrag: 1.2,
@@ -36327,7 +36327,7 @@ function updatePhysics(dt) {
   const effectiveDrag = STATE.currentDrag;
   STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
   const pilotMult = STATE.crewBuffs ? STATE.crewBuffs.thrust || 1 : 1;
-  const maxSpeed = 36 * Math.max(1, pilotMult * 0.85);
+  const maxSpeed = 28 * Math.max(1, pilotMult * 0.85);
   const curSpeed = STATE.playerVelocity.length();
   if (curSpeed > maxSpeed) {
     STATE.playerVelocity.multiplyScalar(maxSpeed / curSpeed);

@@ -205,9 +205,9 @@ export function updatePhysics(dt: number) {
     const effectiveDrag = STATE.currentDrag;
     STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
 
-    // Top Speed Clamp (Swift cosmic cruise speed)
+    // Top Speed Clamp (Harmonized cosmic cruise speed)
     const pilotMult = STATE.crewBuffs ? (STATE.crewBuffs.thrust || 1.0) : 1.0;
-    const maxSpeed = 36.0 * Math.max(1.0, pilotMult * 0.85);
+    const maxSpeed = 28.0 * Math.max(1.0, pilotMult * 0.85);
     const curSpeed = STATE.playerVelocity.length();
     if (curSpeed > maxSpeed) {
         STATE.playerVelocity.multiplyScalar(maxSpeed / curSpeed);
