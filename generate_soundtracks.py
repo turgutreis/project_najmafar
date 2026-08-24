@@ -70,20 +70,39 @@ def run_quantum_circuit_score(num_steps=32, use_qpu=False, api_key=None):
     qc.measure(range(4), range(4))
 
     backend_name = "qiskit_simulator"
-    if use_qpu and api_key:
+    if use_qpu:
         try:
             from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
-            service = QiskitRuntimeService(channel="ibm_quantum", token=api_key)
-            backend = service.least_busy(simulator=False, operational=True)
-            backend_name = backend.name
-            print(f"IBM Quantum QPU ausgewählt: {backend_name}. Sende Kompositions-Job...", flush=True)
-            from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
-            pm = generate_preset_pass_manager(optimization_level=1, backend=backend)
-            transpiled_qc = pm.run(qc)
-            sampler = SamplerV2(backend)
-            job = sampler.run([transpiled_qc])
-            result = job.result()[0]
-            bitstrings = list(result.data.c.get_bitstrings())
+            service = None
+            if api_key:
+                try:
+                    service = QiskitRuntimeService(channel="ibm_quantum_platform", token=api_key)
+                except Exception:
+                    try:
+                        service = QiskitRuntimeService(channel="ibm_cloud", token=api_key)
+                    except Exception:
+                        service = QiskitRuntimeService(channel="ibm_quantum", token=api_key)
+            else:
+                try:
+                    service = QiskitRuntimeService()
+                except Exception as e:
+                    print(f"Kein Token übergeben und kein Standard-Account gefunden: {e}", flush=True)
+
+            if service:
+                backend = service.least_busy(simulator=False, operational=True)
+                backend_name = backend.name
+                print(f"IBM Quantum QPU ausgewählt: {backend_name}. Sende Kompositions-Job...", flush=True)
+                from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+                pm = generate_preset_pass_manager(optimization_level=1, backend=backend)
+                transpiled_qc = pm.run(qc)
+                sampler = SamplerV2(backend)
+                job = sampler.run([transpiled_qc])
+                print(f"Job übermittelt (ID: {job.job_id()}). Warte auf QPU-Berechnung...", flush=True)
+                result = job.result()[0]
+                bitstrings = list(result.data.c.get_bitstrings())
+                print("Quanten-Messergebnisse von QPU empfangen!", flush=True)
+            else:
+                use_qpu = False
         except Exception as e:
             print(f"IBM QPU Verbindungsfehler ({e}). Weiche auf lokalen Simulator aus.", flush=True)
             use_qpu = False
