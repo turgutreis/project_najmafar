@@ -222,42 +222,202 @@ export function playExplosionSound() {
     subOsc.stop(time + 1.5);
 }
 
-export function setThrusterSound(active: boolean) {
+// Quantum Scan Telemetry Audio Nodes
+let qScanCarrier1: OscillatorNode | null = null;
+let qScanCarrier2: OscillatorNode | null = null;
+let qScanModulator: OscillatorNode | null = null;
+let qScanModGain: GainNode | null = null;
+let qScanGain: GainNode | null = null;
+let qScanFilter: BiquadFilterNode | null = null;
+let isQuantumScanning = false;
+
+export function startQuantumScanSound() {
     const ctx = getAudioContext();
     if (!ctx) return;
 
-    if (active && !isThrusterPlaying) {
-        isThrusterPlaying = true;
-        thrusterOsc = ctx.createOscillator();
-        thrusterGain = ctx.createGain();
-        thrusterFilter = ctx.createBiquadFilter();
+    if (isQuantumScanning) return;
+    isQuantumScanning = true;
 
-        thrusterOsc.type = 'sawtooth';
-        thrusterOsc.frequency.setValueAtTime(45, ctx.currentTime);
+    const t = ctx.currentTime;
+    qScanCarrier1 = ctx.createOscillator();
+    qScanCarrier2 = ctx.createOscillator();
+    qScanModulator = ctx.createOscillator();
+    qScanModGain = ctx.createGain();
+    qScanGain = ctx.createGain();
+    qScanFilter = ctx.createBiquadFilter();
 
-        thrusterFilter.type = 'lowpass';
-        thrusterFilter.frequency.setValueAtTime(120, ctx.currentTime);
+    // Dual quantum carriers with microtonal frequency shift
+    qScanCarrier1.type = 'sine';
+    qScanCarrier1.frequency.setValueAtTime(1320, t); // E6
 
-        thrusterGain.gain.setValueAtTime(0.01, ctx.currentTime);
-        thrusterGain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.1);
+    qScanCarrier2.type = 'triangle';
+    qScanCarrier2.frequency.setValueAtTime(1760, t); // A6
 
-        thrusterOsc.connect(thrusterFilter);
-        thrusterFilter.connect(thrusterGain);
-        thrusterGain.connect(ctx.destination);
+    // Quantum probability wave FM modulation (38 Hz quantum jitter)
+    qScanModulator.type = 'sine';
+    qScanModulator.frequency.setValueAtTime(38, t);
+    qScanModGain.gain.setValueAtTime(140, t);
+    qScanModulator.connect(qScanModGain);
+    qScanModGain.connect(qScanCarrier1.frequency);
 
-        thrusterOsc.start();
-    } else if (!active && isThrusterPlaying) {
-        isThrusterPlaying = false;
-        if (thrusterGain && thrusterOsc) {
-            const time = ctx.currentTime;
-            thrusterGain.gain.cancelScheduledValues(time);
-            thrusterGain.gain.setValueAtTime(thrusterGain.gain.value, time);
-            thrusterGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-            thrusterOsc.stop(time + 0.18);
+    // Resonant bandpass filter
+    qScanFilter.type = 'bandpass';
+    qScanFilter.frequency.setValueAtTime(1500, t);
+    qScanFilter.Q.setValueAtTime(4.0, t);
+
+    qScanGain.gain.setValueAtTime(0.0, t);
+    qScanGain.gain.linearRampToValueAtTime(0.12, t + 0.1);
+
+    qScanCarrier1.connect(qScanFilter);
+    qScanCarrier2.connect(qScanFilter);
+    qScanFilter.connect(qScanGain);
+    qScanGain.connect(ctx.destination);
+
+    qScanModulator.start(t);
+    qScanCarrier1.start(t);
+    qScanCarrier2.start(t);
+}
+
+export function updateQuantumScanSound(progressPct: number) {
+    const ctx = getAudioContext();
+    if (!ctx || !isQuantumScanning) return;
+
+    const t = ctx.currentTime;
+    const progress = Math.max(0.0, Math.min(1.0, progressPct / 100.0));
+
+    // Pitch ascends as quantum entanglement telemetry resolves
+    const f1 = 1320 + progress * 880; // 1320 -> 2200 Hz
+    const f2 = 1760 + progress * 1174; // 1760 -> 2934 Hz
+    const filterFreq = 1500 + progress * 1600;
+
+    if (qScanCarrier1) qScanCarrier1.frequency.setTargetAtTime(f1, t, 0.05);
+    if (qScanCarrier2) qScanCarrier2.frequency.setTargetAtTime(f2, t, 0.05);
+    if (qScanFilter) qScanFilter.frequency.setTargetAtTime(filterFreq, t, 0.05);
+    if (qScanModGain) qScanModGain.gain.setTargetAtTime(140 + progress * 200, t, 0.05);
+}
+
+export function stopQuantumScanSound(wasCompleted: boolean = false) {
+    if (!isQuantumScanning) return;
+    isQuantumScanning = false;
+
+    const ctx = getAudioContext();
+    if (ctx && qScanGain) {
+        const t = ctx.currentTime;
+        qScanGain.gain.cancelScheduledValues(t);
+        qScanGain.gain.setValueAtTime(qScanGain.gain.value, t);
+        qScanGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+
+        if (qScanCarrier1) qScanCarrier1.stop(t + 0.1);
+        if (qScanCarrier2) qScanCarrier2.stop(t + 0.1);
+        if (qScanModulator) qScanModulator.stop(t + 0.1);
+    }
+
+    qScanCarrier1 = null;
+    qScanCarrier2 = null;
+    qScanModulator = null;
+    qScanModGain = null;
+    qScanFilter = null;
+    qScanGain = null;
+
+    if (wasCompleted) {
+        playScanCompleteChime();
+    }
+}
+
+export function playScanCompleteChime() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    // Ascending Quantum Data Decode Chime (C6 -> E6 -> G6 -> C7)
+    const notes = [1046.5, 1318.5, 1567.98, 2093.0];
+    notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, t + idx * 0.06);
+
+        gain.gain.setValueAtTime(0.0, t + idx * 0.06);
+        gain.gain.linearRampToValueAtTime(0.18, t + idx * 0.06 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.06 + 0.45);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(t + idx * 0.06);
+        osc.stop(t + idx * 0.06 + 0.48);
+    });
+}
+
+// Biomechanical Locomotion Propulsion Engine
+let thrusterSubOsc: OscillatorNode | null = null;
+let thrusterIonOsc: OscillatorNode | null = null;
+let thrusterGainNode: GainNode | null = null;
+let thrusterFilterNode: BiquadFilterNode | null = null;
+let isThrusterActive = false;
+
+export function setThrusterSound(active: boolean, speedRatio: number = 0.5, isRetro: boolean = false) {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    const normSpeed = Math.max(0.0, Math.min(1.0, speedRatio));
+
+    if (active) {
+        if (!isThrusterActive) {
+            isThrusterActive = true;
+            thrusterSubOsc = ctx.createOscillator();
+            thrusterIonOsc = ctx.createOscillator();
+            thrusterGainNode = ctx.createGain();
+            thrusterFilterNode = ctx.createBiquadFilter();
+
+            // Layer 1: Sub-Bass Reactor Core (Sine drone)
+            thrusterSubOsc.type = 'sine';
+            thrusterSubOsc.frequency.setValueAtTime(isRetro ? 32 : 42, t);
+
+            // Layer 2: Plasma Ion-Nozzle (Warm Triangle/Saw blend)
+            thrusterIonOsc.type = isRetro ? 'sawtooth' : 'triangle';
+            thrusterIonOsc.frequency.setValueAtTime(isRetro ? 75 : 95, t);
+
+            thrusterFilterNode.type = 'lowpass';
+            thrusterFilterNode.frequency.setValueAtTime(isRetro ? 140 : 180, t);
+            thrusterFilterNode.Q.setValueAtTime(2.5, t);
+
+            thrusterGainNode.gain.setValueAtTime(0.001, t);
+            thrusterGainNode.gain.linearRampToValueAtTime(isRetro ? 0.10 : 0.12, t + 0.08);
+
+            thrusterSubOsc.connect(thrusterFilterNode);
+            thrusterIonOsc.connect(thrusterFilterNode);
+            thrusterFilterNode.connect(thrusterGainNode);
+            thrusterGainNode.connect(ctx.destination);
+
+            thrusterSubOsc.start(t);
+            thrusterIonOsc.start(t);
+        } else {
+            // Real-time speed & acceleration pitch scaling
+            const targetSubFreq = isRetro ? (30 + normSpeed * 18) : (40 + normSpeed * 32);
+            const targetIonFreq = isRetro ? (70 + normSpeed * 40) : (90 + normSpeed * 95);
+            const targetFilterFreq = isRetro ? (130 + normSpeed * 80) : (160 + normSpeed * 220);
+            const targetVol = (isRetro ? 0.10 : 0.12) + normSpeed * 0.06;
+
+            if (thrusterSubOsc) thrusterSubOsc.frequency.setTargetAtTime(targetSubFreq, t, 0.08);
+            if (thrusterIonOsc) thrusterIonOsc.frequency.setTargetAtTime(targetIonFreq, t, 0.08);
+            if (thrusterFilterNode) thrusterFilterNode.frequency.setTargetAtTime(targetFilterFreq, t, 0.08);
+            if (thrusterGainNode) thrusterGainNode.gain.setTargetAtTime(targetVol, t, 0.08);
         }
-        thrusterOsc = null;
-        thrusterGain = null;
-        thrusterFilter = null;
+    } else if (!active && isThrusterActive) {
+        isThrusterActive = false;
+        if (thrusterGainNode && thrusterSubOsc && thrusterIonOsc) {
+            thrusterGainNode.gain.cancelScheduledValues(t);
+            thrusterGainNode.gain.setValueAtTime(thrusterGainNode.gain.value, t);
+            thrusterGainNode.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+            thrusterSubOsc.stop(t + 0.18);
+            thrusterIonOsc.stop(t + 0.18);
+        }
+        thrusterSubOsc = null;
+        thrusterIonOsc = null;
+        thrusterGainNode = null;
+        thrusterFilterNode = null;
     }
 }
 

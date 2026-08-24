@@ -1,14 +1,11 @@
 import { STATE } from '../core/state';
 import { addLogEntry } from '../ui/hud';
-import { getAudioContext } from '../engine/audio';
+import { startQuantumScanSound, updateQuantumScanSound, stopQuantumScanSound } from '../engine/audio';
 import { collapseQuantumCivilization } from '../procedural/quantum-civ';
 import { getFaction } from '../systems/factions';
 import { openDiplomacyComms } from '../systems/diplomacy';
 import { createScanVisuals, updateScanVisuals, removeScanVisuals } from '../procedural/meshes';
 import { SpeciesData, PlanetAttributes } from '../types/game';
-
-let scanOsc: OscillatorNode | null = null;
-let scanGain: GainNode | null = null;
 
 export function generatePlanetAttributes(p: any) {
     if (p.atmos && p.temp && p.bio && p.res && (p.type !== 'Habitable' || (p.species && p.species.candidates && p.species.candidates.length > 0))) {
@@ -180,7 +177,7 @@ export function triggerScanStart() {
 
     const visualRadius = (planet.size || 3.0) * meshScale;
     createScanVisuals(STATE.playerPosition, planet.mesh.position, visualRadius);
-    startScanSound();
+    startQuantumScanSound();
     addLogEntry("SYSTEM", `Spektral-Scan initiiert für: ${STATE.scanningPlanet.name}. Halte Orbit-Position...`);
 }
 
@@ -204,6 +201,9 @@ export function updateScanning(dt: number) {
     const scanSpeedMult = (STATE.crewBuffs ? STATE.crewBuffs.scanSpeed : 1.0);
     STATE.scanProgress += dt * 35 * scanSpeedMult;
 
+    // Real-time quantum telemetry frequency modulation
+    updateQuantumScanSound(STATE.scanProgress);
+
     const bar = document.getElementById('scan-progress-bar');
     const text = document.getElementById('scan-progress-text');
     if (bar) bar.style.width = `${STATE.scanProgress}%`;
@@ -215,7 +215,7 @@ export function updateScanning(dt: number) {
 }
 
 export function cancelScanning(reason: string) {
-    stopScanSound();
+    stopQuantumScanSound(false);
     removeScanVisuals();
     addLogEntry("SYSTEM", `Scan abgebrochen: ${reason}`);
     STATE.scanningPlanet = null;
@@ -225,7 +225,7 @@ export function cancelScanning(reason: string) {
 }
 
 export function completeScanning() {
-    stopScanSound();
+    stopQuantumScanSound(true);
     removeScanVisuals();
     const progContainer = document.getElementById('scan-progress-container');
     if (progContainer) progContainer.style.display = 'none';
@@ -250,40 +250,6 @@ export function completeScanning() {
 
     STATE.scanningPlanet = null;
     STATE.scanProgress = 0;
-}
-
-export function startScanSound() {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-
-    scanOsc = ctx.createOscillator();
-    scanGain = ctx.createGain();
-    scanOsc.type = 'sawtooth';
-    scanOsc.frequency.setValueAtTime(440, ctx.currentTime);
-    scanOsc.frequency.linearRampToValueAtTime(880, ctx.currentTime + 2.5);
-
-    scanGain.gain.setValueAtTime(0, ctx.currentTime);
-    scanGain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.1);
-
-    scanOsc.connect(scanGain);
-    scanGain.connect(ctx.destination);
-    scanOsc.start();
-}
-
-export function stopScanSound() {
-    if (scanOsc) {
-        const ctx = getAudioContext();
-        if (ctx && scanGain) {
-            scanGain.gain.cancelScheduledValues(ctx.currentTime);
-            scanGain.gain.setValueAtTime(scanGain.gain.value, ctx.currentTime);
-            scanGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-            scanOsc.stop(ctx.currentTime + 0.12);
-        } else {
-            scanOsc.stop();
-        }
-        scanOsc = null;
-        scanGain = null;
-    }
 }
 
 export function updateScannerUI(planet: any, dist: number) {

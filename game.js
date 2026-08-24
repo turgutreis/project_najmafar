@@ -31250,10 +31250,6 @@ function createPlasmaVortexMesh(size, colorHex) {
 var audioCtx = null;
 var musicUserMuted = false;
 var musicPlaying = false;
-var thrusterOsc = null;
-var thrusterGain = null;
-var thrusterFilter = null;
-var isThrusterPlaying = false;
 function getAudioContext() {
   if (!audioCtx) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -31437,37 +31433,174 @@ function playExplosionSound() {
   noise.stop(time + 1.5);
   subOsc.stop(time + 1.5);
 }
-function setThrusterSound(active) {
+var qScanCarrier1 = null;
+var qScanCarrier2 = null;
+var qScanModulator = null;
+var qScanModGain = null;
+var qScanGain = null;
+var qScanFilter = null;
+var isQuantumScanning = false;
+function startQuantumScanSound() {
   const ctx = getAudioContext();
   if (!ctx)
     return;
-  if (active && !isThrusterPlaying) {
-    isThrusterPlaying = true;
-    thrusterOsc = ctx.createOscillator();
-    thrusterGain = ctx.createGain();
-    thrusterFilter = ctx.createBiquadFilter();
-    thrusterOsc.type = "sawtooth";
-    thrusterOsc.frequency.setValueAtTime(45, ctx.currentTime);
-    thrusterFilter.type = "lowpass";
-    thrusterFilter.frequency.setValueAtTime(120, ctx.currentTime);
-    thrusterGain.gain.setValueAtTime(0.01, ctx.currentTime);
-    thrusterGain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.1);
-    thrusterOsc.connect(thrusterFilter);
-    thrusterFilter.connect(thrusterGain);
-    thrusterGain.connect(ctx.destination);
-    thrusterOsc.start();
-  } else if (!active && isThrusterPlaying) {
-    isThrusterPlaying = false;
-    if (thrusterGain && thrusterOsc) {
-      const time = ctx.currentTime;
-      thrusterGain.gain.cancelScheduledValues(time);
-      thrusterGain.gain.setValueAtTime(thrusterGain.gain.value, time);
-      thrusterGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-      thrusterOsc.stop(time + 0.18);
+  if (isQuantumScanning)
+    return;
+  isQuantumScanning = true;
+  const t = ctx.currentTime;
+  qScanCarrier1 = ctx.createOscillator();
+  qScanCarrier2 = ctx.createOscillator();
+  qScanModulator = ctx.createOscillator();
+  qScanModGain = ctx.createGain();
+  qScanGain = ctx.createGain();
+  qScanFilter = ctx.createBiquadFilter();
+  qScanCarrier1.type = "sine";
+  qScanCarrier1.frequency.setValueAtTime(1320, t);
+  qScanCarrier2.type = "triangle";
+  qScanCarrier2.frequency.setValueAtTime(1760, t);
+  qScanModulator.type = "sine";
+  qScanModulator.frequency.setValueAtTime(38, t);
+  qScanModGain.gain.setValueAtTime(140, t);
+  qScanModulator.connect(qScanModGain);
+  qScanModGain.connect(qScanCarrier1.frequency);
+  qScanFilter.type = "bandpass";
+  qScanFilter.frequency.setValueAtTime(1500, t);
+  qScanFilter.Q.setValueAtTime(4, t);
+  qScanGain.gain.setValueAtTime(0, t);
+  qScanGain.gain.linearRampToValueAtTime(0.12, t + 0.1);
+  qScanCarrier1.connect(qScanFilter);
+  qScanCarrier2.connect(qScanFilter);
+  qScanFilter.connect(qScanGain);
+  qScanGain.connect(ctx.destination);
+  qScanModulator.start(t);
+  qScanCarrier1.start(t);
+  qScanCarrier2.start(t);
+}
+function updateQuantumScanSound(progressPct) {
+  const ctx = getAudioContext();
+  if (!ctx || !isQuantumScanning)
+    return;
+  const t = ctx.currentTime;
+  const progress = Math.max(0, Math.min(1, progressPct / 100));
+  const f1 = 1320 + progress * 880;
+  const f2 = 1760 + progress * 1174;
+  const filterFreq = 1500 + progress * 1600;
+  if (qScanCarrier1)
+    qScanCarrier1.frequency.setTargetAtTime(f1, t, 0.05);
+  if (qScanCarrier2)
+    qScanCarrier2.frequency.setTargetAtTime(f2, t, 0.05);
+  if (qScanFilter)
+    qScanFilter.frequency.setTargetAtTime(filterFreq, t, 0.05);
+  if (qScanModGain)
+    qScanModGain.gain.setTargetAtTime(140 + progress * 200, t, 0.05);
+}
+function stopQuantumScanSound(wasCompleted = false) {
+  if (!isQuantumScanning)
+    return;
+  isQuantumScanning = false;
+  const ctx = getAudioContext();
+  if (ctx && qScanGain) {
+    const t = ctx.currentTime;
+    qScanGain.gain.cancelScheduledValues(t);
+    qScanGain.gain.setValueAtTime(qScanGain.gain.value, t);
+    qScanGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    if (qScanCarrier1)
+      qScanCarrier1.stop(t + 0.1);
+    if (qScanCarrier2)
+      qScanCarrier2.stop(t + 0.1);
+    if (qScanModulator)
+      qScanModulator.stop(t + 0.1);
+  }
+  qScanCarrier1 = null;
+  qScanCarrier2 = null;
+  qScanModulator = null;
+  qScanModGain = null;
+  qScanFilter = null;
+  qScanGain = null;
+  if (wasCompleted) {
+    playScanCompleteChime();
+  }
+}
+function playScanCompleteChime() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const t = ctx.currentTime;
+  const notes = [1046.5, 1318.5, 1567.98, 2093];
+  notes.forEach((freq, idx) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(freq, t + idx * 0.06);
+    gain.gain.setValueAtTime(0, t + idx * 0.06);
+    gain.gain.linearRampToValueAtTime(0.18, t + idx * 0.06 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.06 + 0.45);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t + idx * 0.06);
+    osc.stop(t + idx * 0.06 + 0.48);
+  });
+}
+var thrusterSubOsc = null;
+var thrusterIonOsc = null;
+var thrusterGainNode = null;
+var thrusterFilterNode = null;
+var isThrusterActive = false;
+function setThrusterSound(active, speedRatio = 0.5, isRetro = false) {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const t = ctx.currentTime;
+  const normSpeed = Math.max(0, Math.min(1, speedRatio));
+  if (active) {
+    if (!isThrusterActive) {
+      isThrusterActive = true;
+      thrusterSubOsc = ctx.createOscillator();
+      thrusterIonOsc = ctx.createOscillator();
+      thrusterGainNode = ctx.createGain();
+      thrusterFilterNode = ctx.createBiquadFilter();
+      thrusterSubOsc.type = "sine";
+      thrusterSubOsc.frequency.setValueAtTime(isRetro ? 32 : 42, t);
+      thrusterIonOsc.type = isRetro ? "sawtooth" : "triangle";
+      thrusterIonOsc.frequency.setValueAtTime(isRetro ? 75 : 95, t);
+      thrusterFilterNode.type = "lowpass";
+      thrusterFilterNode.frequency.setValueAtTime(isRetro ? 140 : 180, t);
+      thrusterFilterNode.Q.setValueAtTime(2.5, t);
+      thrusterGainNode.gain.setValueAtTime(0.001, t);
+      thrusterGainNode.gain.linearRampToValueAtTime(isRetro ? 0.1 : 0.12, t + 0.08);
+      thrusterSubOsc.connect(thrusterFilterNode);
+      thrusterIonOsc.connect(thrusterFilterNode);
+      thrusterFilterNode.connect(thrusterGainNode);
+      thrusterGainNode.connect(ctx.destination);
+      thrusterSubOsc.start(t);
+      thrusterIonOsc.start(t);
+    } else {
+      const targetSubFreq = isRetro ? 30 + normSpeed * 18 : 40 + normSpeed * 32;
+      const targetIonFreq = isRetro ? 70 + normSpeed * 40 : 90 + normSpeed * 95;
+      const targetFilterFreq = isRetro ? 130 + normSpeed * 80 : 160 + normSpeed * 220;
+      const targetVol = (isRetro ? 0.1 : 0.12) + normSpeed * 0.06;
+      if (thrusterSubOsc)
+        thrusterSubOsc.frequency.setTargetAtTime(targetSubFreq, t, 0.08);
+      if (thrusterIonOsc)
+        thrusterIonOsc.frequency.setTargetAtTime(targetIonFreq, t, 0.08);
+      if (thrusterFilterNode)
+        thrusterFilterNode.frequency.setTargetAtTime(targetFilterFreq, t, 0.08);
+      if (thrusterGainNode)
+        thrusterGainNode.gain.setTargetAtTime(targetVol, t, 0.08);
     }
-    thrusterOsc = null;
-    thrusterGain = null;
-    thrusterFilter = null;
+  } else if (!active && isThrusterActive) {
+    isThrusterActive = false;
+    if (thrusterGainNode && thrusterSubOsc && thrusterIonOsc) {
+      thrusterGainNode.gain.cancelScheduledValues(t);
+      thrusterGainNode.gain.setValueAtTime(thrusterGainNode.gain.value, t);
+      thrusterGainNode.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      thrusterSubOsc.stop(t + 0.18);
+      thrusterIonOsc.stop(t + 0.18);
+    }
+    thrusterSubOsc = null;
+    thrusterIonOsc = null;
+    thrusterGainNode = null;
+    thrusterFilterNode = null;
   }
 }
 var QUANTUM_PLAYLIST = [
@@ -32967,8 +33100,6 @@ function closeDiplomacyComms() {
 }
 
 // src/systems/scanner.ts
-var scanOsc = null;
-var scanGain = null;
 function generatePlanetAttributes(p) {
   if (p.atmos && p.temp && p.bio && p.res && (p.type !== "Habitable" || p.species && p.species.candidates && p.species.candidates.length > 0)) {
     return {
@@ -33102,7 +33233,7 @@ function triggerScanStart() {
     scanBtn.setAttribute("disabled", "true");
   const visualRadius = (planet.size || 3) * meshScale;
   createScanVisuals(STATE.playerPosition, planet.mesh.position, visualRadius);
-  startScanSound();
+  startQuantumScanSound();
   addLogEntry("SYSTEM", `Spektral-Scan initiiert für: ${STATE.scanningPlanet.name}. Halte Orbit-Position...`);
 }
 function updateScanning(dt) {
@@ -33120,6 +33251,7 @@ function updateScanning(dt) {
   updateScanVisuals(STATE.playerPosition, STATE.scanningPlanet.mesh.position);
   const scanSpeedMult = STATE.crewBuffs ? STATE.crewBuffs.scanSpeed : 1;
   STATE.scanProgress += dt * 35 * scanSpeedMult;
+  updateQuantumScanSound(STATE.scanProgress);
   const bar = document.getElementById("scan-progress-bar");
   const text = document.getElementById("scan-progress-text");
   if (bar)
@@ -33131,7 +33263,7 @@ function updateScanning(dt) {
   }
 }
 function cancelScanning(reason) {
-  stopScanSound();
+  stopQuantumScanSound(false);
   removeScanVisuals();
   addLogEntry("SYSTEM", `Scan abgebrochen: ${reason}`);
   STATE.scanningPlanet = null;
@@ -33141,7 +33273,7 @@ function cancelScanning(reason) {
     progContainer.style.display = "none";
 }
 function completeScanning() {
-  stopScanSound();
+  stopQuantumScanSound(true);
   removeScanVisuals();
   const progContainer = document.getElementById("scan-progress-container");
   if (progContainer)
@@ -33161,36 +33293,6 @@ function completeScanning() {
   }
   STATE.scanningPlanet = null;
   STATE.scanProgress = 0;
-}
-function startScanSound() {
-  const ctx = getAudioContext();
-  if (!ctx)
-    return;
-  scanOsc = ctx.createOscillator();
-  scanGain = ctx.createGain();
-  scanOsc.type = "sawtooth";
-  scanOsc.frequency.setValueAtTime(440, ctx.currentTime);
-  scanOsc.frequency.linearRampToValueAtTime(880, ctx.currentTime + 2.5);
-  scanGain.gain.setValueAtTime(0, ctx.currentTime);
-  scanGain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.1);
-  scanOsc.connect(scanGain);
-  scanGain.connect(ctx.destination);
-  scanOsc.start();
-}
-function stopScanSound() {
-  if (scanOsc) {
-    const ctx = getAudioContext();
-    if (ctx && scanGain) {
-      scanGain.gain.cancelScheduledValues(ctx.currentTime);
-      scanGain.gain.setValueAtTime(scanGain.gain.value, ctx.currentTime);
-      scanGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-      scanOsc.stop(ctx.currentTime + 0.12);
-    } else {
-      scanOsc.stop();
-    }
-    scanOsc = null;
-    scanGain = null;
-  }
 }
 function updateScannerUI(planet, dist) {
   const scannerPanel = document.getElementById("left-deck-panel");
@@ -36012,7 +36114,11 @@ function processInput(dt) {
     if (hasEnergy) {
       STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 4.5 * dt);
     }
-    setThrusterSound(true);
+    const speedRatio = (STATE.shipSpeed || 0) / 28;
+    setThrusterSound(true, speedRatio, false);
+  } else if (isRetroBraking) {
+    const speedRatio = (STATE.shipSpeed || 0) / 28;
+    setThrusterSound(true, speedRatio, true);
   } else {
     setThrusterSound(false);
     if (!isRetroBraking && STATE.bioEnergy < STATE.maxBioEnergy) {

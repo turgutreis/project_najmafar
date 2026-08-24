@@ -433,7 +433,11 @@ export function processInput(dt: number) {
             STATE.bioEnergy = Math.max(0, STATE.bioEnergy - 4.5 * dt);
         }
 
-        setThrusterSound(true);
+        const speedRatio = (STATE.shipSpeed || 0) / 28.0;
+        setThrusterSound(true, speedRatio, false);
+    } else if (isRetroBraking) {
+        const speedRatio = (STATE.shipSpeed || 0) / 28.0;
+        setThrusterSound(true, speedRatio, true);
     } else {
         setThrusterSound(false);
         // Passive steady bio-energy metabolism when cruising
