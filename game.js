@@ -31470,13 +31470,70 @@ function setThrusterSound(active) {
     thrusterFilter = null;
   }
 }
-var bgMusic = typeof Audio !== "undefined" ? new Audio("assets/The Ur-Quan Masters - Space.mp3") : null;
-if (bgMusic) {
+var QUANTUM_PLAYLIST = [
+  {
+    id: "void_theme",
+    title: "Pillars of the Void (Quantum Core)",
+    artist: "IBM Quantum & Qiskit OST",
+    src: "assets/music/najmafar_void_theme.wav",
+    description: "Atmosphärisches Quanten-Kernthema mit Bell-Zustand-Verschränkung"
+  },
+  {
+    id: "outer_rim",
+    title: "Outer Rim (Quantum Solitude)",
+    artist: "IBM Quantum & Qiskit OST",
+    src: "assets/music/outer_rim_solitude.wav",
+    description: "Meditative kosmische Weite und Quanten-Phasenshifts"
+  },
+  {
+    id: "psionic_resonance",
+    title: "Psionic Resonance (Entangled Worlds)",
+    artist: "IBM Quantum & Qiskit OST",
+    src: "assets/music/psionic_resonance.wav",
+    description: "Polyrhythmische Quanten-Harmonien fremder Zivilisationen"
+  },
+  {
+    id: "classic_space",
+    title: "Ur-Quan Space (Classic Nostalgia)",
+    artist: "The Ur-Quan Masters",
+    src: "assets/The Ur-Quan Masters - Space.mp3",
+    description: "Klassischer Synth-Space-Soundtrack"
+  }
+];
+var currentTrackIdx = 0;
+var bgMusic = null;
+function initAudioTrack(idx) {
+  if (typeof Audio === "undefined")
+    return;
+  const track = QUANTUM_PLAYLIST[idx % QUANTUM_PLAYLIST.length];
+  if (bgMusic) {
+    bgMusic.pause();
+    bgMusic.src = "";
+  }
+  bgMusic = new Audio(track.src);
   bgMusic.loop = true;
-  bgMusic.volume = 0.35;
+  bgMusic.volume = 0.4;
+}
+initAudioTrack(0);
+function getCurrentTrack() {
+  return QUANTUM_PLAYLIST[currentTrackIdx % QUANTUM_PLAYLIST.length];
+}
+function nextTrack() {
+  currentTrackIdx = (currentTrackIdx + 1) % QUANTUM_PLAYLIST.length;
+  const isPlaying = musicPlaying;
+  initAudioTrack(currentTrackIdx);
+  if (isPlaying && bgMusic) {
+    bgMusic.play().catch((err) => console.log("Next track play blocked", err));
+  }
+  updateMusicButtonsUI();
+  const track = getCurrentTrack();
+  return track;
 }
 function toggleMusic(explicitState = null) {
   const shouldPlay = explicitState !== null ? explicitState : !musicPlaying;
+  if (!bgMusic) {
+    initAudioTrack(currentTrackIdx);
+  }
   if (!bgMusic)
     return;
   if (shouldPlay) {
@@ -31503,20 +31560,23 @@ function isMusicUserMuted() {
 function updateMusicButtonsUI() {
   const musicBtn = document.getElementById("music-toggle-btn");
   const menuMusicBtn = document.getElementById("menu-music-toggle-btn");
+  const currentTrack = getCurrentTrack();
   if (musicBtn) {
     if (musicPlaying) {
       musicBtn.classList.add("playing");
-      musicBtn.innerText = "\uD83D\uDD0A Musik: An (Star Control 2)";
+      musicBtn.innerText = "\uD83C\uDFB5";
+      musicBtn.title = `Aktueller Track: ${currentTrack.title} (${currentTrack.artist}) — Klicken zum Umschalten/Stummschalten`;
     } else {
       musicBtn.classList.remove("playing");
-      musicBtn.innerText = "\uD83D\uDD07 Musik: Aus";
+      musicBtn.innerText = "\uD83D\uDD07";
+      musicBtn.title = `Musik stummgeschaltet — Klicken zum Abspielen`;
     }
   }
   if (menuMusicBtn) {
     if (musicPlaying) {
       menuMusicBtn.classList.add("music-active");
       menuMusicBtn.classList.remove("music-muted");
-      menuMusicBtn.innerText = "\uD83D\uDD0A Musik: An";
+      menuMusicBtn.innerText = `\uD83D\uDD0A QPU-Musik: ${currentTrack.title}`;
     } else {
       menuMusicBtn.classList.add("music-muted");
       menuMusicBtn.classList.remove("music-active");
@@ -35651,13 +35711,31 @@ function setupControls() {
   }
   const musicBtn = document.getElementById("music-toggle-btn");
   if (musicBtn) {
-    musicBtn.addEventListener("click", () => toggleMusic());
+    musicBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!isMusicPlaying()) {
+        toggleMusic(true);
+        const trk = getCurrentTrack();
+        addLogEntry("SYSTEM", `\uD83C\uDFB5 Quanten-Soundtrack gestartet: ${trk.title}`);
+      } else {
+        const trk = nextTrack();
+        addLogEntry("SYSTEM", `\uD83C\uDFB5 Nächster Quanten-Track: ${trk.title} (${trk.artist})`);
+      }
+    });
+    musicBtn.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      toggleMusic();
+    });
   }
   const menuMusicBtn = document.getElementById("menu-music-toggle-btn");
   if (menuMusicBtn) {
     menuMusicBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      toggleMusic();
+      if (!isMusicPlaying()) {
+        toggleMusic(true);
+      } else {
+        nextTrack();
+      }
     });
   }
   const startAudioOnInteraction = () => {

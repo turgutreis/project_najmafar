@@ -261,15 +261,88 @@ export function setThrusterSound(active: boolean) {
     }
 }
 
-const bgMusic = typeof Audio !== 'undefined' ? new Audio('assets/The Ur-Quan Masters - Space.mp3') : null;
-if (bgMusic) {
+export interface QuantumTrack {
+    id: string;
+    title: string;
+    artist: string;
+    src: string;
+    description: string;
+}
+
+export const QUANTUM_PLAYLIST: QuantumTrack[] = [
+    {
+        id: 'void_theme',
+        title: 'Pillars of the Void (Quantum Core)',
+        artist: 'IBM Quantum & Qiskit OST',
+        src: 'assets/music/najmafar_void_theme.wav',
+        description: 'Atmosphärisches Quanten-Kernthema mit Bell-Zustand-Verschränkung'
+    },
+    {
+        id: 'outer_rim',
+        title: 'Outer Rim (Quantum Solitude)',
+        artist: 'IBM Quantum & Qiskit OST',
+        src: 'assets/music/outer_rim_solitude.wav',
+        description: 'Meditative kosmische Weite und Quanten-Phasenshifts'
+    },
+    {
+        id: 'psionic_resonance',
+        title: 'Psionic Resonance (Entangled Worlds)',
+        artist: 'IBM Quantum & Qiskit OST',
+        src: 'assets/music/psionic_resonance.wav',
+        description: 'Polyrhythmische Quanten-Harmonien fremder Zivilisationen'
+    },
+    {
+        id: 'classic_space',
+        title: 'Ur-Quan Space (Classic Nostalgia)',
+        artist: 'The Ur-Quan Masters',
+        src: 'assets/The Ur-Quan Masters - Space.mp3',
+        description: 'Klassischer Synth-Space-Soundtrack'
+    }
+];
+
+let currentTrackIdx = 0;
+let bgMusic: HTMLAudioElement | null = null;
+
+function initAudioTrack(idx: number) {
+    if (typeof Audio === 'undefined') return;
+    const track = QUANTUM_PLAYLIST[idx % QUANTUM_PLAYLIST.length];
+    
+    if (bgMusic) {
+        bgMusic.pause();
+        bgMusic.src = '';
+    }
+    
+    bgMusic = new Audio(track.src);
     bgMusic.loop = true;
-    bgMusic.volume = 0.35;
+    bgMusic.volume = 0.40;
+}
+
+initAudioTrack(0);
+
+export function getCurrentTrack(): QuantumTrack {
+    return QUANTUM_PLAYLIST[currentTrackIdx % QUANTUM_PLAYLIST.length];
+}
+
+export function nextTrack() {
+    currentTrackIdx = (currentTrackIdx + 1) % QUANTUM_PLAYLIST.length;
+    const isPlaying = musicPlaying;
+    initAudioTrack(currentTrackIdx);
+    
+    if (isPlaying && bgMusic) {
+        bgMusic.play().catch(err => console.log("Next track play blocked", err));
+    }
+    updateMusicButtonsUI();
+    
+    const track = getCurrentTrack();
+    return track;
 }
 
 export function toggleMusic(explicitState: boolean | null = null) {
     const shouldPlay = explicitState !== null ? explicitState : !musicPlaying;
 
+    if (!bgMusic) {
+        initAudioTrack(currentTrackIdx);
+    }
     if (!bgMusic) return;
 
     if (shouldPlay) {
@@ -301,14 +374,17 @@ export function isMusicUserMuted(): boolean {
 export function updateMusicButtonsUI() {
     const musicBtn = document.getElementById('music-toggle-btn');
     const menuMusicBtn = document.getElementById('menu-music-toggle-btn');
+    const currentTrack = getCurrentTrack();
 
     if (musicBtn) {
         if (musicPlaying) {
             musicBtn.classList.add('playing');
-            musicBtn.innerText = "🔊 Musik: An (Star Control 2)";
+            musicBtn.innerText = "🎵";
+            musicBtn.title = `Aktueller Track: ${currentTrack.title} (${currentTrack.artist}) — Klicken zum Umschalten/Stummschalten`;
         } else {
             musicBtn.classList.remove('playing');
-            musicBtn.innerText = "🔇 Musik: Aus";
+            musicBtn.innerText = "🔇";
+            musicBtn.title = `Musik stummgeschaltet — Klicken zum Abspielen`;
         }
     }
 
@@ -316,7 +392,7 @@ export function updateMusicButtonsUI() {
         if (musicPlaying) {
             menuMusicBtn.classList.add('music-active');
             menuMusicBtn.classList.remove('music-muted');
-            menuMusicBtn.innerText = "🔊 Musik: An";
+            menuMusicBtn.innerText = `🔊 QPU-Musik: ${currentTrack.title}`;
         } else {
             menuMusicBtn.classList.add('music-muted');
             menuMusicBtn.classList.remove('music-active');

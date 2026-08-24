@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
 import { camera, renderer } from '../engine/scene';
-import { playLockOnSound, setThrusterSound, toggleMusic, isMusicPlaying, isMusicUserMuted } from '../engine/audio';
+import { playLockOnSound, setThrusterSound, toggleMusic, isMusicPlaying, isMusicUserMuted, nextTrack, getCurrentTrack } from '../engine/audio';
 import { toggleGalaxyMap, isMapOpen } from '../systems/galaxy-map';
 import { triggerScanStart } from '../systems/scanner';
 import { triggerHarvestStart } from '../systems/harvesting';
@@ -104,17 +104,35 @@ export function setupControls() {
         });
     }
 
-    // Music Toggle Buttons
+    // Music Toggle & Track Cycling Buttons
     const musicBtn = document.getElementById('music-toggle-btn');
     if (musicBtn) {
-        musicBtn.addEventListener('click', () => toggleMusic());
+        musicBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!isMusicPlaying()) {
+                toggleMusic(true);
+                const trk = getCurrentTrack();
+                addLogEntry("SYSTEM", `🎵 Quanten-Soundtrack gestartet: ${trk.title}`);
+            } else {
+                const trk = nextTrack();
+                addLogEntry("SYSTEM", `🎵 Nächster Quanten-Track: ${trk.title} (${trk.artist})`);
+            }
+        });
+        musicBtn.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            toggleMusic();
+        });
     }
 
     const menuMusicBtn = document.getElementById('menu-music-toggle-btn');
     if (menuMusicBtn) {
         menuMusicBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            toggleMusic();
+            if (!isMusicPlaying()) {
+                toggleMusic(true);
+            } else {
+                nextTrack();
+            }
         });
     }
 
