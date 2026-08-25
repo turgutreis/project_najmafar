@@ -32190,13 +32190,86 @@ function stopQuantumScanSound(wasCompleted = false) {
     scanCompleteSound.play();
   }
 }
+var AUDIO_SETTINGS = {
+  masterVolume: 0.8,
+  musicVolume: 0.5,
+  sfxVolume: 0.7,
+  thrusterVolume: 0.65,
+  spatialAudio: true
+};
+function loadAudioSettings() {
+  try {
+    const saved = localStorage.getItem("najmafar_audio_settings");
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (typeof parsed.masterVolume === "number")
+        AUDIO_SETTINGS.masterVolume = Math.max(0, Math.min(1, parsed.masterVolume));
+      if (typeof parsed.musicVolume === "number")
+        AUDIO_SETTINGS.musicVolume = Math.max(0, Math.min(1, parsed.musicVolume));
+      if (typeof parsed.sfxVolume === "number")
+        AUDIO_SETTINGS.sfxVolume = Math.max(0, Math.min(1, parsed.sfxVolume));
+      if (typeof parsed.thrusterVolume === "number")
+        AUDIO_SETTINGS.thrusterVolume = Math.max(0, Math.min(1, parsed.thrusterVolume));
+      if (typeof parsed.spatialAudio === "boolean")
+        AUDIO_SETTINGS.spatialAudio = parsed.spatialAudio;
+    }
+  } catch (e) {
+    console.warn("Could not load audio settings from localStorage", e);
+  }
+  applyAudioSettings();
+}
+function saveAudioSettings() {
+  try {
+    localStorage.setItem("najmafar_audio_settings", JSON.stringify(AUDIO_SETTINGS));
+  } catch (e) {
+    console.warn("Could not save audio settings to localStorage", e);
+  }
+}
+function applyAudioSettings() {
+  if (bgMusic) {
+    bgMusic.volume = AUDIO_SETTINGS.masterVolume * AUDIO_SETTINGS.musicVolume;
+  }
+}
+function setMasterVolume(val) {
+  AUDIO_SETTINGS.masterVolume = Math.max(0, Math.min(1, val));
+  applyAudioSettings();
+  saveAudioSettings();
+}
+function setMusicVolume(val) {
+  AUDIO_SETTINGS.musicVolume = Math.max(0, Math.min(1, val));
+  applyAudioSettings();
+  saveAudioSettings();
+}
+function setSfxVolume(val) {
+  AUDIO_SETTINGS.sfxVolume = Math.max(0, Math.min(1, val));
+  saveAudioSettings();
+}
+function setThrusterVolume(val) {
+  AUDIO_SETTINGS.thrusterVolume = Math.max(0, Math.min(1, val));
+  saveAudioSettings();
+}
+function setSpatialAudio(enabled) {
+  AUDIO_SETTINGS.spatialAudio = enabled;
+  saveAudioSettings();
+}
+function resetAudioSettings() {
+  AUDIO_SETTINGS.masterVolume = 0.8;
+  AUDIO_SETTINGS.musicVolume = 0.5;
+  AUDIO_SETTINGS.sfxVolume = 0.7;
+  AUDIO_SETTINGS.thrusterVolume = 0.65;
+  AUDIO_SETTINGS.spatialAudio = true;
+  applyAudioSettings();
+  saveAudioSettings();
+}
 function setThrusterSound(active, speedRatio = 0.5, isRetro = false) {
   const normSpeed = Math.max(0, Math.min(1, speedRatio));
-  if (active) {
+  const effectiveThrusterVol = AUDIO_SETTINGS.masterVolume * AUDIO_SETTINGS.sfxVolume * AUDIO_SETTINGS.thrusterVolume;
+  if (active && effectiveThrusterVol > 0.001) {
     if (!isRetro) {
       if (!isThrustingPrev) {
         isThrustingPrev = true;
         if (shipIgniteSound && shipIgniteSound.buffer) {
+          shipIgniteSound.setVolume(0.65 * AUDIO_SETTINGS.masterVolume * AUDIO_SETTINGS.sfxVolume);
           if (shipIgniteSound.isPlaying)
             shipIgniteSound.stop();
           shipIgniteSound.play();
@@ -32207,7 +32280,7 @@ function setThrusterSound(active, speedRatio = 0.5, isRetro = false) {
       }
       if (shipThrusterSound && shipThrusterSound.buffer) {
         const targetRate = 0.72 + normSpeed * 0.75;
-        const targetVol = 0.22 + normSpeed * 0.45;
+        const targetVol = (0.22 + normSpeed * 0.45) * effectiveThrusterVol;
         shipThrusterSound.setPlaybackRate(targetRate);
         shipThrusterSound.setVolume(targetVol);
         if (!shipThrusterSound.isPlaying)
@@ -32220,7 +32293,7 @@ function setThrusterSound(active, speedRatio = 0.5, isRetro = false) {
       }
       if (shipRetroSound && shipRetroSound.buffer) {
         const targetRate = 0.82 + normSpeed * 0.38;
-        const targetVol = 0.3 + normSpeed * 0.35;
+        const targetVol = (0.3 + normSpeed * 0.35) * effectiveThrusterVol;
         shipRetroSound.setPlaybackRate(targetRate);
         shipRetroSound.setVolume(targetVol);
         if (!shipRetroSound.isPlaying)
@@ -32279,22 +32352,28 @@ function initAudioTrack(idx) {
   }
   bgMusic = new Audio(track.src);
   bgMusic.loop = true;
-  bgMusic.volume = 0.4;
+  bgMusic.volume = AUDIO_SETTINGS.masterVolume * AUDIO_SETTINGS.musicVolume;
 }
 initAudioTrack(0);
+loadAudioSettings();
 function getCurrentTrack() {
   return QUANTUM_PLAYLIST[currentTrackIdx % QUANTUM_PLAYLIST.length];
 }
-function nextTrack() {
-  currentTrackIdx = (currentTrackIdx + 1) % QUANTUM_PLAYLIST.length;
+function selectTrackIndex(idx) {
+  currentTrackIdx = (idx + QUANTUM_PLAYLIST.length) % QUANTUM_PLAYLIST.length;
   const isPlaying = musicPlaying;
   initAudioTrack(currentTrackIdx);
   if (isPlaying && bgMusic) {
-    bgMusic.play().catch((err) => console.log("Next track play blocked", err));
+    bgMusic.play().catch((err) => console.log("Track play blocked", err));
   }
   updateMusicButtonsUI();
-  const track = getCurrentTrack();
-  return track;
+  return getCurrentTrack();
+}
+function nextTrack() {
+  return selectTrackIndex(currentTrackIdx + 1);
+}
+function prevTrack() {
+  return selectTrackIndex(currentTrackIdx - 1);
 }
 function toggleMusic(explicitState = null) {
   const shouldPlay = explicitState !== null ? explicitState : !musicPlaying;
@@ -32305,6 +32384,7 @@ function toggleMusic(explicitState = null) {
     return;
   if (shouldPlay) {
     musicUserMuted = false;
+    bgMusic.volume = AUDIO_SETTINGS.masterVolume * AUDIO_SETTINGS.musicVolume;
     bgMusic.play().then(() => {
       musicPlaying = true;
       updateMusicButtonsUI();
@@ -32332,7 +32412,7 @@ function updateMusicButtonsUI() {
     if (musicPlaying) {
       musicBtn.classList.add("playing");
       musicBtn.innerText = "\uD83C\uDFB5";
-      musicBtn.title = `Aktueller Track: ${currentTrack.title} (${currentTrack.artist}) — Klicken zum Umschalten/Stummschalten`;
+      musicBtn.title = `Aktueller Track: ${currentTrack.title} (${currentTrack.artist}) — Klicken zum Wechseln`;
     } else {
       musicBtn.classList.remove("playing");
       musicBtn.innerText = "\uD83D\uDD07";
@@ -36351,6 +36431,163 @@ function stopAbductSound() {
   }
 }
 
+// src/ui/options.ts
+var isOptionsOpen = false;
+function initOptionsUI() {
+  const modal = document.getElementById("options-modal");
+  const closeBtn = document.getElementById("options-close-btn");
+  const saveBtn = document.getElementById("opt-save-btn");
+  const resetBtn = document.getElementById("opt-reset-btn");
+  const menuOptionsBtn = document.getElementById("menu-options-btn");
+  const hudOptionsBtn = document.getElementById("hud-options-btn");
+  const masterSlider = document.getElementById("opt-master-slider");
+  const musicSlider = document.getElementById("opt-music-slider");
+  const sfxSlider = document.getElementById("opt-sfx-slider");
+  const thrusterSlider = document.getElementById("opt-thruster-slider");
+  const spatialChk = document.getElementById("opt-spatial-chk");
+  const prevTrackBtn = document.getElementById("opt-prev-track-btn");
+  const nextTrackBtn = document.getElementById("opt-next-track-btn");
+  if (menuOptionsBtn) {
+    menuOptionsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openOptionsModal();
+    });
+  }
+  if (hudOptionsBtn) {
+    hudOptionsBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openOptionsModal();
+    });
+  }
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => closeOptionsModal());
+  }
+  if (saveBtn) {
+    saveBtn.addEventListener("click", () => closeOptionsModal());
+  }
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      resetAudioSettings();
+      syncUIWithAudioSettings();
+    });
+  }
+  if (modal) {
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) {
+        closeOptionsModal();
+      }
+    });
+  }
+  if (masterSlider) {
+    masterSlider.addEventListener("input", (e) => {
+      const val = parseFloat(e.target.value) / 100;
+      setMasterVolume(val);
+      updateLabel("opt-master-val", `${Math.round(val * 100)}%`);
+    });
+  }
+  if (musicSlider) {
+    musicSlider.addEventListener("input", (e) => {
+      const val = parseFloat(e.target.value) / 100;
+      setMusicVolume(val);
+      updateLabel("opt-music-val", `${Math.round(val * 100)}%`);
+    });
+  }
+  if (sfxSlider) {
+    sfxSlider.addEventListener("input", (e) => {
+      const val = parseFloat(e.target.value) / 100;
+      setSfxVolume(val);
+      updateLabel("opt-sfx-val", `${Math.round(val * 100)}%`);
+    });
+  }
+  if (thrusterSlider) {
+    thrusterSlider.addEventListener("input", (e) => {
+      const val = parseFloat(e.target.value) / 100;
+      setThrusterVolume(val);
+      updateLabel("opt-thruster-val", `${Math.round(val * 100)}%`);
+    });
+  }
+  if (spatialChk) {
+    spatialChk.addEventListener("change", (e) => {
+      const checked = e.target.checked;
+      setSpatialAudio(checked);
+    });
+  }
+  if (prevTrackBtn) {
+    prevTrackBtn.addEventListener("click", () => {
+      const trk = prevTrack();
+      updateTrackDisplay(trk);
+    });
+  }
+  if (nextTrackBtn) {
+    nextTrackBtn.addEventListener("click", () => {
+      const trk = nextTrack();
+      updateTrackDisplay(trk);
+    });
+  }
+  syncUIWithAudioSettings();
+}
+function updateLabel(id, text) {
+  const el = document.getElementById(id);
+  if (el)
+    el.innerText = text;
+}
+function updateTrackDisplay(trk) {
+  const nameEl = document.getElementById("opt-current-track-name");
+  const artistEl = document.getElementById("opt-track-artist");
+  if (nameEl)
+    nameEl.innerText = trk.title;
+  if (artistEl)
+    artistEl.innerText = `${trk.artist} — ${trk.description}`;
+}
+function syncUIWithAudioSettings() {
+  const masterSlider = document.getElementById("opt-master-slider");
+  const musicSlider = document.getElementById("opt-music-slider");
+  const sfxSlider = document.getElementById("opt-sfx-slider");
+  const thrusterSlider = document.getElementById("opt-thruster-slider");
+  const spatialChk = document.getElementById("opt-spatial-chk");
+  if (masterSlider)
+    masterSlider.value = String(Math.round(AUDIO_SETTINGS.masterVolume * 100));
+  if (musicSlider)
+    musicSlider.value = String(Math.round(AUDIO_SETTINGS.musicVolume * 100));
+  if (sfxSlider)
+    sfxSlider.value = String(Math.round(AUDIO_SETTINGS.sfxVolume * 100));
+  if (thrusterSlider)
+    thrusterSlider.value = String(Math.round(AUDIO_SETTINGS.thrusterVolume * 100));
+  if (spatialChk)
+    spatialChk.checked = AUDIO_SETTINGS.spatialAudio;
+  updateLabel("opt-master-val", `${Math.round(AUDIO_SETTINGS.masterVolume * 100)}%`);
+  updateLabel("opt-music-val", `${Math.round(AUDIO_SETTINGS.musicVolume * 100)}%`);
+  updateLabel("opt-sfx-val", `${Math.round(AUDIO_SETTINGS.sfxVolume * 100)}%`);
+  updateLabel("opt-thruster-val", `${Math.round(AUDIO_SETTINGS.thrusterVolume * 100)}%`);
+  const curTrack = getCurrentTrack();
+  updateTrackDisplay(curTrack);
+}
+function openOptionsModal() {
+  const modal = document.getElementById("options-modal");
+  if (modal) {
+    syncUIWithAudioSettings();
+    modal.style.display = "flex";
+    isOptionsOpen = true;
+  }
+}
+function closeOptionsModal() {
+  const modal = document.getElementById("options-modal");
+  if (modal) {
+    modal.style.display = "none";
+    isOptionsOpen = false;
+  }
+}
+function isOptionsModalOpen() {
+  return isOptionsOpen;
+}
+function toggleOptionsModal() {
+  if (isOptionsOpen) {
+    closeOptionsModal();
+  } else {
+    openOptionsModal();
+  }
+}
+
 // src/input/controls.ts
 var raycaster = new Raycaster;
 var mouseVec = new Vector2;
@@ -36387,8 +36624,13 @@ function setupControls() {
         openDiplomacyComms(target);
       }
     }
+    if (key === "o") {
+      toggleOptionsModal();
+    }
     if (key === "escape") {
       closeDiplomacyComms();
+      if (isOptionsModalOpen())
+        closeOptionsModal();
       if (isMapOpen())
         toggleGalaxyMap();
       if (isDeckOpen())
@@ -37322,6 +37564,7 @@ function init() {
   setupControls();
   initHUD();
   initDeckUI();
+  initOptionsUI();
   initGameOverUI();
   renderCrewUI();
   updateMutationUI();

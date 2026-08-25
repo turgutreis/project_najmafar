@@ -39,6 +39,7 @@
                     style="background-color: rgba(244, 63, 94, 0.6)">Genetische Akten
                     (Wie wird gespielt)</button>
                 <button id="menu-music-toggle-btn" class="menu-btn secondary">🔊 Musik: An</button>
+                <button id="menu-options-btn" class="menu-btn secondary">⚙️ Audio & Optionen</button>
                 <button id="exit-btn" class="menu-btn secondary" style="display: none;">Verbindung trennen</button>
             </div>
 
@@ -372,6 +373,7 @@
             <span id="chronos-fragments-badge" class="chronos-badge" title="Psionische Chronos-Gedächtnisfragmente">⏳
                 <span id="chronos-count">0</span>/12</span>
             <button id="music-toggle-btn" class="mini-music-btn" title="Musik umschalten">🔇</button>
+            <button id="hud-options-btn" class="mini-music-btn" title="Audio- & Spieloptionen [O]">⚙️</button>
         </div>
 
         <!-- 3. Contextual Slide-In Sensor Hologram (Left side, only slides in on orbit / target / proximity) -->
@@ -683,6 +685,84 @@
                         </ul>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audio & Game Options Modal -->
+    <div id="options-modal" class="options-modal" style="display: none;">
+        <div class="options-card glass-panel">
+            <div class="options-header">
+                <div class="options-title">
+                    <span class="options-icon">⚙️</span>
+                    <span>Audio- & Spieloptionen</span>
+                </div>
+                <button id="options-close-btn" class="options-close-btn" title="Schließen [ESC]">✕</button>
+            </div>
+            
+            <div class="options-body">
+                <!-- 1. Master Volume -->
+                <div class="option-row">
+                    <div class="option-label-wrap">
+                        <span class="option-label-text">🔊 Gesamtlautstärke</span>
+                        <span id="opt-master-val" class="opt-val">80%</span>
+                    </div>
+                    <input type="range" id="opt-master-slider" min="0" max="100" value="80" class="opt-slider">
+                </div>
+
+                <!-- 2. Music Volume -->
+                <div class="option-row">
+                    <div class="option-label-wrap">
+                        <span class="option-label-text">🎵 Soundtrack & Musik</span>
+                        <span id="opt-music-val" class="opt-val">50%</span>
+                    </div>
+                    <input type="range" id="opt-music-slider" min="0" max="100" value="50" class="opt-slider">
+                </div>
+
+                <!-- 3. SFX Volume -->
+                <div class="option-row">
+                    <div class="option-label-wrap">
+                        <span class="option-label-text">💥 Soundeffekte (SFX)</span>
+                        <span id="opt-sfx-val" class="opt-val">70%</span>
+                    </div>
+                    <input type="range" id="opt-sfx-slider" min="0" max="100" value="70" class="opt-slider">
+                </div>
+
+                <!-- 4. Thruster Engine Volume -->
+                <div class="option-row">
+                    <div class="option-label-wrap">
+                        <span class="option-label-text">🛸 Triebwerks-Warpantrieb</span>
+                        <span id="opt-thruster-val" class="opt-val">65%</span>
+                    </div>
+                    <input type="range" id="opt-thruster-slider" min="0" max="100" value="65" class="opt-slider">
+                </div>
+
+                <!-- 5. Soundtrack Playlist Selector -->
+                <div class="option-row playlist-row">
+                    <div class="option-label-wrap">
+                        <span class="option-label-text">🎼 Aktueller Quanten-Track</span>
+                    </div>
+                    <div class="track-selector-box">
+                        <button id="opt-prev-track-btn" class="track-nav-btn" title="Vorheriger Track">◀</button>
+                        <div id="opt-current-track-name" class="current-track-display">Pillars of the Void (Quantum Core)</div>
+                        <button id="opt-next-track-btn" class="track-nav-btn" title="Nächster Track">▶</button>
+                    </div>
+                    <div id="opt-track-artist" class="track-artist-sub">IBM Quantum Platform OST</div>
+                </div>
+
+                <!-- 6. Spatial 3D Audio Toggle -->
+                <div class="option-row checkbox-row">
+                    <label class="toggle-switch-label">
+                        <input type="checkbox" id="opt-spatial-chk" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-text">🎧 3D Positional Audio (Three.js Raumklang)</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="options-footer">
+                <button id="opt-reset-btn" class="options-btn secondary">Standardwerte</button>
+                <button id="opt-save-btn" class="options-btn primary">Übernehmen & Schließen</button>
             </div>
         </div>
     </div>

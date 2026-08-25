@@ -10,8 +10,8 @@ import { triggerBioDischarge, salvageNearestWreck } from '../systems/fleet';
 import { triggerPsionicSonar, addLogEntry } from '../ui/hud';
 import { buyMutation } from '../ui/deck';
 import { openDiplomacyComms, closeDiplomacyComms } from '../systems/diplomacy';
-
 import { toggleDeckModal, isDeckOpen } from '../ui/deck';
+import { toggleOptionsModal, isOptionsModalOpen, closeOptionsModal } from '../ui/options';
 
 const raycaster = new THREE.Raycaster();
 const mouseVec = new THREE.Vector2();
@@ -50,8 +50,12 @@ export function setupControls() {
                 openDiplomacyComms(target);
             }
         }
+        if (key === 'o') {
+            toggleOptionsModal();
+        }
         if (key === 'escape') {
             closeDiplomacyComms();
+            if (isOptionsModalOpen()) closeOptionsModal();
             if (isMapOpen()) toggleGalaxyMap();
             if (isDeckOpen()) toggleDeckModal(false);
         }

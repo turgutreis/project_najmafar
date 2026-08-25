@@ -341,19 +341,109 @@ export function stopQuantumScanSound(wasCompleted: boolean = false) {
 }
 
 // ----------------------------------------------------------------------------
+// AUDIO SETTINGS & VOLUME CONTROLS (PERSISTED VIA LOCALSTORAGE)
+// ----------------------------------------------------------------------------
+
+export interface AudioSettings {
+    masterVolume: number;    // 0.0 to 1.0 (default: 0.8)
+    musicVolume: number;     // 0.0 to 1.0 (default: 0.5)
+    sfxVolume: number;       // 0.0 to 1.0 (default: 0.7)
+    thrusterVolume: number;  // 0.0 to 1.0 (default: 0.65)
+    spatialAudio: boolean;   // default: true
+}
+
+export const AUDIO_SETTINGS: AudioSettings = {
+    masterVolume: 0.80,
+    musicVolume: 0.50,
+    sfxVolume: 0.70,
+    thrusterVolume: 0.65,
+    spatialAudio: true
+};
+
+export function loadAudioSettings() {
+    try {
+        const saved = localStorage.getItem('najmafar_audio_settings');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (typeof parsed.masterVolume === 'number') AUDIO_SETTINGS.masterVolume = Math.max(0, Math.min(1, parsed.masterVolume));
+            if (typeof parsed.musicVolume === 'number') AUDIO_SETTINGS.musicVolume = Math.max(0, Math.min(1, parsed.musicVolume));
+            if (typeof parsed.sfxVolume === 'number') AUDIO_SETTINGS.sfxVolume = Math.max(0, Math.min(1, parsed.sfxVolume));
+            if (typeof parsed.thrusterVolume === 'number') AUDIO_SETTINGS.thrusterVolume = Math.max(0, Math.min(1, parsed.thrusterVolume));
+            if (typeof parsed.spatialAudio === 'boolean') AUDIO_SETTINGS.spatialAudio = parsed.spatialAudio;
+        }
+    } catch (e) {
+        console.warn("Could not load audio settings from localStorage", e);
+    }
+    applyAudioSettings();
+}
+
+export function saveAudioSettings() {
+    try {
+        localStorage.setItem('najmafar_audio_settings', JSON.stringify(AUDIO_SETTINGS));
+    } catch (e) {
+        console.warn("Could not save audio settings to localStorage", e);
+    }
+}
+
+export function applyAudioSettings() {
+    if (bgMusic) {
+        bgMusic.volume = AUDIO_SETTINGS.masterVolume * AUDIO_SETTINGS.musicVolume;
+    }
+}
+
+export function setMasterVolume(val: number) {
+    AUDIO_SETTINGS.masterVolume = Math.max(0, Math.min(1, val));
+    applyAudioSettings();
+    saveAudioSettings();
+}
+
+export function setMusicVolume(val: number) {
+    AUDIO_SETTINGS.musicVolume = Math.max(0, Math.min(1, val));
+    applyAudioSettings();
+    saveAudioSettings();
+}
+
+export function setSfxVolume(val: number) {
+    AUDIO_SETTINGS.sfxVolume = Math.max(0, Math.min(1, val));
+    saveAudioSettings();
+}
+
+export function setThrusterVolume(val: number) {
+    AUDIO_SETTINGS.thrusterVolume = Math.max(0, Math.min(1, val));
+    saveAudioSettings();
+}
+
+export function setSpatialAudio(enabled: boolean) {
+    AUDIO_SETTINGS.spatialAudio = enabled;
+    saveAudioSettings();
+}
+
+export function resetAudioSettings() {
+    AUDIO_SETTINGS.masterVolume = 0.80;
+    AUDIO_SETTINGS.musicVolume = 0.50;
+    AUDIO_SETTINGS.sfxVolume = 0.70;
+    AUDIO_SETTINGS.thrusterVolume = 0.65;
+    AUDIO_SETTINGS.spatialAudio = true;
+    applyAudioSettings();
+    saveAudioSettings();
+}
+
+// ----------------------------------------------------------------------------
 // THREE.JS POSITIONAL LOCOMOTION & WARP PROPULSION ENGINE
 // ----------------------------------------------------------------------------
 
 export function setThrusterSound(active: boolean, speedRatio: number = 0.5, isRetro: boolean = false) {
     const normSpeed = Math.max(0.0, Math.min(1.0, speedRatio));
+    const effectiveThrusterVol = AUDIO_SETTINGS.masterVolume * AUDIO_SETTINGS.sfxVolume * AUDIO_SETTINGS.thrusterVolume;
 
-    if (active) {
+    if (active && effectiveThrusterVol > 0.001) {
         if (!isRetro) {
             // Forward Main Thrust
             if (!isThrustingPrev) {
                 isThrustingPrev = true;
                 // Visceral Ignition Punch!
                 if (shipIgniteSound && shipIgniteSound.buffer) {
+                    shipIgniteSound.setVolume(0.65 * AUDIO_SETTINGS.masterVolume * AUDIO_SETTINGS.sfxVolume);
                     if (shipIgniteSound.isPlaying) shipIgniteSound.stop();
                     shipIgniteSound.play();
                 }
@@ -363,7 +453,7 @@ export function setThrusterSound(active: boolean, speedRatio: number = 0.5, isRe
             }
             if (shipThrusterSound && shipThrusterSound.buffer) {
                 const targetRate = 0.72 + normSpeed * 0.75;
-                const targetVol = 0.22 + normSpeed * 0.45;
+                const targetVol = (0.22 + normSpeed * 0.45) * effectiveThrusterVol;
                 shipThrusterSound.setPlaybackRate(targetRate);
                 shipThrusterSound.setVolume(targetVol);
                 if (!shipThrusterSound.isPlaying) shipThrusterSound.play();
@@ -376,7 +466,7 @@ export function setThrusterSound(active: boolean, speedRatio: number = 0.5, isRe
             }
             if (shipRetroSound && shipRetroSound.buffer) {
                 const targetRate = 0.82 + normSpeed * 0.38;
-                const targetVol = 0.30 + normSpeed * 0.35;
+                const targetVol = (0.30 + normSpeed * 0.35) * effectiveThrusterVol;
                 shipRetroSound.setPlaybackRate(targetRate);
                 shipRetroSound.setVolume(targetVol);
                 if (!shipRetroSound.isPlaying) shipRetroSound.play();
@@ -446,27 +536,38 @@ function initAudioTrack(idx: number) {
     
     bgMusic = new Audio(track.src);
     bgMusic.loop = true;
-    bgMusic.volume = 0.40;
+    bgMusic.volume = AUDIO_SETTINGS.masterVolume * AUDIO_SETTINGS.musicVolume;
 }
 
 initAudioTrack(0);
+loadAudioSettings();
 
 export function getCurrentTrack(): QuantumTrack {
     return QUANTUM_PLAYLIST[currentTrackIdx % QUANTUM_PLAYLIST.length];
 }
 
-export function nextTrack() {
-    currentTrackIdx = (currentTrackIdx + 1) % QUANTUM_PLAYLIST.length;
+export function getCurrentTrackIndex(): number {
+    return currentTrackIdx % QUANTUM_PLAYLIST.length;
+}
+
+export function selectTrackIndex(idx: number): QuantumTrack {
+    currentTrackIdx = (idx + QUANTUM_PLAYLIST.length) % QUANTUM_PLAYLIST.length;
     const isPlaying = musicPlaying;
     initAudioTrack(currentTrackIdx);
     
     if (isPlaying && bgMusic) {
-        bgMusic.play().catch(err => console.log("Next track play blocked", err));
+        bgMusic.play().catch(err => console.log("Track play blocked", err));
     }
     updateMusicButtonsUI();
-    
-    const track = getCurrentTrack();
-    return track;
+    return getCurrentTrack();
+}
+
+export function nextTrack(): QuantumTrack {
+    return selectTrackIndex(currentTrackIdx + 1);
+}
+
+export function prevTrack(): QuantumTrack {
+    return selectTrackIndex(currentTrackIdx - 1);
 }
 
 export function toggleMusic(explicitState: boolean | null = null) {
@@ -479,6 +580,7 @@ export function toggleMusic(explicitState: boolean | null = null) {
 
     if (shouldPlay) {
         musicUserMuted = false;
+        bgMusic.volume = AUDIO_SETTINGS.masterVolume * AUDIO_SETTINGS.musicVolume;
         bgMusic.play()
             .then(() => {
                 musicPlaying = true;
@@ -512,7 +614,7 @@ export function updateMusicButtonsUI() {
         if (musicPlaying) {
             musicBtn.classList.add('playing');
             musicBtn.innerText = "🎵";
-            musicBtn.title = `Aktueller Track: ${currentTrack.title} (${currentTrack.artist}) — Klicken zum Umschalten/Stummschalten`;
+            musicBtn.title = `Aktueller Track: ${currentTrack.title} (${currentTrack.artist}) — Klicken zum Wechseln`;
         } else {
             musicBtn.classList.remove('playing');
             musicBtn.innerText = "🔇";

@@ -14,6 +14,7 @@ import { updateFleet } from './systems/fleet';
 import { updateCrewSimulation, renderCrewUI } from './systems/crew';
 import { updateMinimap, updateSonarWave, initHUD, addLogEntry, updateHUDStats } from './ui/hud';
 import { initDeckUI, updateMutationUI } from './ui/deck';
+import { initOptionsUI } from './ui/options';
 import { toggleGalaxyMap, warpToSystem, isMapOpen } from './systems/galaxy-map';
 import { toggleMusic, isMusicPlaying, isMusicUserMuted, initThreeAudio, attachShipAudio } from './engine/audio';
 import { initGameOverUI, updateExplosionEffects } from './engine/game-over';
@@ -114,6 +115,7 @@ function init() {
     setupControls();
     initHUD();
     initDeckUI();
+    initOptionsUI();
     initGameOverUI();
     renderCrewUI();
     updateMutationUI();
