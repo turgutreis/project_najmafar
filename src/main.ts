@@ -15,7 +15,7 @@ import { updateCrewSimulation, renderCrewUI } from './systems/crew';
 import { updateMinimap, updateSonarWave, initHUD, addLogEntry, updateHUDStats } from './ui/hud';
 import { initDeckUI, updateMutationUI } from './ui/deck';
 import { toggleGalaxyMap, warpToSystem, isMapOpen } from './systems/galaxy-map';
-import { toggleMusic, isMusicPlaying, isMusicUserMuted } from './engine/audio';
+import { toggleMusic, isMusicPlaying, isMusicUserMuted, initThreeAudio, attachShipAudio } from './engine/audio';
 import { initGameOverUI, updateExplosionEffects } from './engine/game-over';
 
 let lastTime = 0;
@@ -107,6 +107,7 @@ function init() {
 
     // 2. Meshes & Trajectory
     createPlayerMesh();
+    initThreeAudio(camera, STATE.playerGroup);
     initTrajectory();
 
     // 3. UI & Controls

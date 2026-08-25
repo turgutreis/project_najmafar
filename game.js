@@ -12236,6 +12236,40 @@ class VectorKeyframeTrack extends KeyframeTrack {
   }
 }
 VectorKeyframeTrack.prototype.ValueTypeName = "vector";
+var Cache = {
+  enabled: false,
+  files: {},
+  add: function(key, file) {
+    if (this.enabled === false)
+      return;
+    if (isBlobURL(key))
+      return;
+    this.files[key] = file;
+  },
+  get: function(key) {
+    if (this.enabled === false)
+      return;
+    if (isBlobURL(key))
+      return;
+    return this.files[key];
+  },
+  remove: function(key) {
+    delete this.files[key];
+  },
+  clear: function() {
+    this.files = {};
+  }
+};
+function isBlobURL(key) {
+  try {
+    const urlString = key.slice(key.indexOf(":") + 1);
+    const url = new URL(urlString);
+    return url.protocol === "blob:";
+  } catch (e) {
+    return false;
+  }
+}
+
 class LoadingManager {
   constructor(onLoad, onProgress, onError) {
     const scope = this;
@@ -12369,6 +12403,166 @@ class Loader {
   }
 }
 Loader.DEFAULT_MATERIAL_NAME = "__DEFAULT";
+var loading = {};
+
+class HttpError extends Error {
+  constructor(message, response) {
+    super(message);
+    this.response = response;
+  }
+}
+
+class FileLoader extends Loader {
+  constructor(manager) {
+    super(manager);
+    this.mimeType = "";
+    this.responseType = "";
+    this._abortController = new AbortController;
+  }
+  load(url, onLoad, onProgress, onError) {
+    if (url === undefined)
+      url = "";
+    if (this.path !== undefined)
+      url = this.path + url;
+    url = this.manager.resolveURL(url);
+    const cached = Cache.get(`file:${url}`);
+    if (cached !== undefined) {
+      this.manager.itemStart(url);
+      setTimeout(() => {
+        if (onLoad)
+          onLoad(cached);
+        this.manager.itemEnd(url);
+      }, 0);
+      return;
+    }
+    if (loading[url] !== undefined) {
+      loading[url].push({
+        onLoad,
+        onProgress,
+        onError
+      });
+      return;
+    }
+    loading[url] = [];
+    loading[url].push({
+      onLoad,
+      onProgress,
+      onError
+    });
+    const req = new Request(url, {
+      headers: new Headers(this.requestHeader),
+      credentials: this.withCredentials ? "include" : "same-origin",
+      signal: typeof AbortSignal.any === "function" ? AbortSignal.any([this._abortController.signal, this.manager.abortController.signal]) : this._abortController.signal
+    });
+    const mimeType = this.mimeType;
+    const responseType = this.responseType;
+    fetch(req).then((response) => {
+      if (response.status === 200 || response.status === 0) {
+        if (response.status === 0) {
+          warn("FileLoader: HTTP Status 0 received.");
+        }
+        if (typeof ReadableStream === "undefined" || response.body === undefined || response.body.getReader === undefined) {
+          return response;
+        }
+        const callbacks = loading[url];
+        const reader = response.body.getReader();
+        const contentLength = response.headers.get("X-File-Size") || response.headers.get("Content-Length");
+        const total = contentLength ? parseInt(contentLength) : 0;
+        const lengthComputable = total !== 0;
+        let loaded = 0;
+        const stream = new ReadableStream({
+          start(controller) {
+            readData();
+            function readData() {
+              reader.read().then(({ done, value }) => {
+                if (done) {
+                  controller.close();
+                } else {
+                  loaded += value.byteLength;
+                  const event = new ProgressEvent("progress", { lengthComputable, loaded, total });
+                  for (let i = 0, il = callbacks.length;i < il; i++) {
+                    const callback = callbacks[i];
+                    if (callback.onProgress)
+                      callback.onProgress(event);
+                  }
+                  controller.enqueue(value);
+                  readData();
+                }
+              }, (e) => {
+                controller.error(e);
+              });
+            }
+          }
+        });
+        return new Response(stream);
+      } else {
+        throw new HttpError(`fetch for "${response.url}" responded with ${response.status}: ${response.statusText}`, response);
+      }
+    }).then((response) => {
+      switch (responseType) {
+        case "arraybuffer":
+          return response.arrayBuffer();
+        case "blob":
+          return response.blob();
+        case "document":
+          return response.text().then((text) => {
+            const parser = new DOMParser;
+            return parser.parseFromString(text, mimeType);
+          });
+        case "json":
+          return response.json();
+        default:
+          if (mimeType === "") {
+            return response.text();
+          } else {
+            const re = /charset="?([^;"\s]*)"?/i;
+            const exec = re.exec(mimeType);
+            const label = exec && exec[1] ? exec[1].toLowerCase() : undefined;
+            const decoder = new TextDecoder(label);
+            return response.arrayBuffer().then((ab) => decoder.decode(ab));
+          }
+      }
+    }).then((data) => {
+      Cache.add(`file:${url}`, data);
+      const callbacks = loading[url];
+      delete loading[url];
+      for (let i = 0, il = callbacks.length;i < il; i++) {
+        const callback = callbacks[i];
+        if (callback.onLoad)
+          callback.onLoad(data);
+      }
+    }).catch((err) => {
+      const callbacks = loading[url];
+      if (callbacks === undefined) {
+        this.manager.itemError(url);
+        throw err;
+      }
+      delete loading[url];
+      for (let i = 0, il = callbacks.length;i < il; i++) {
+        const callback = callbacks[i];
+        if (callback.onError)
+          callback.onError(err);
+      }
+      this.manager.itemError(url);
+    }).finally(() => {
+      this.manager.itemEnd(url);
+    });
+    this.manager.itemStart(url);
+  }
+  setResponseType(value) {
+    this.responseType = value;
+    return this;
+  }
+  setMimeType(value) {
+    this.mimeType = value;
+    return this;
+  }
+  abort() {
+    this._abortController.abort();
+    this._abortController = new AbortController;
+    return this;
+  }
+}
 var _loading = new WeakMap;
 class Light extends Object3D {
   constructor(color, intensity = 1) {
@@ -12804,6 +12998,58 @@ class AmbientLight extends Light {
   }
 }
 var _errorMap = new WeakMap;
+var _context;
+
+class AudioContext {
+  static getContext() {
+    if (_context === undefined) {
+      _context = new (window.AudioContext || window.webkitAudioContext);
+    }
+    return _context;
+  }
+  static setContext(value) {
+    _context = value;
+  }
+}
+
+class AudioLoader extends Loader {
+  constructor(manager) {
+    super(manager);
+  }
+  load(url, onLoad, onProgress, onError) {
+    const scope = this;
+    const loader = new FileLoader(this.manager);
+    loader.setResponseType("arraybuffer");
+    loader.setPath(this.path);
+    loader.setRequestHeader(this.requestHeader);
+    loader.setWithCredentials(this.withCredentials);
+    loader.load(url, function(buffer) {
+      try {
+        const bufferCopy = buffer.slice(0);
+        const context = AudioContext.getContext();
+        const decodeUrl = url + "#decode";
+        scope.manager.itemStart(decodeUrl);
+        context.decodeAudioData(bufferCopy, function(audioBuffer) {
+          onLoad(audioBuffer);
+          scope.manager.itemEnd(decodeUrl);
+        }).catch(function(e) {
+          handleError(e);
+          scope.manager.itemEnd(decodeUrl);
+        });
+      } catch (e) {
+        handleError(e);
+      }
+    }, onProgress, onError);
+    function handleError(e) {
+      if (onError) {
+        onError(e);
+      } else {
+        error(e);
+      }
+      scope.manager.itemError(url);
+    }
+  }
+}
 var fov = -90;
 var aspect = 1;
 
@@ -12995,6 +13241,407 @@ class Timer {
 function handleVisibilityChange() {
   if (this._document.hidden === false)
     this.reset();
+}
+var _position$1 = /* @__PURE__ */ new Vector3;
+var _quaternion$1 = /* @__PURE__ */ new Quaternion;
+var _scale$1 = /* @__PURE__ */ new Vector3;
+var _forward = /* @__PURE__ */ new Vector3;
+var _up = /* @__PURE__ */ new Vector3;
+
+class AudioListener extends Object3D {
+  constructor() {
+    super();
+    this.type = "AudioListener";
+    this.context = AudioContext.getContext();
+    this.gain = this.context.createGain();
+    this.gain.connect(this.context.destination);
+    this.filter = null;
+    this.timeDelta = 0;
+    this._timer = new Timer;
+  }
+  getInput() {
+    return this.gain;
+  }
+  removeFilter() {
+    if (this.filter !== null) {
+      this.gain.disconnect(this.filter);
+      this.filter.disconnect(this.context.destination);
+      this.gain.connect(this.context.destination);
+      this.filter = null;
+    }
+    return this;
+  }
+  getFilter() {
+    return this.filter;
+  }
+  setFilter(value) {
+    if (this.filter !== null) {
+      this.gain.disconnect(this.filter);
+      this.filter.disconnect(this.context.destination);
+    } else {
+      this.gain.disconnect(this.context.destination);
+    }
+    this.filter = value;
+    this.gain.connect(this.filter);
+    this.filter.connect(this.context.destination);
+    return this;
+  }
+  getMasterVolume() {
+    return this.gain.gain.value;
+  }
+  setMasterVolume(value) {
+    this.gain.gain.setTargetAtTime(value, this.context.currentTime, 0.01);
+    return this;
+  }
+  updateMatrixWorld(force) {
+    super.updateMatrixWorld(force);
+    this._timer.update();
+    const listener = this.context.listener;
+    this.timeDelta = this._timer.getDelta();
+    this.matrixWorld.decompose(_position$1, _quaternion$1, _scale$1);
+    _forward.set(0, 0, -1).applyQuaternion(_quaternion$1);
+    _up.set(0, 1, 0).applyQuaternion(_quaternion$1);
+    if (listener.positionX) {
+      const endTime = this.context.currentTime + this.timeDelta;
+      listener.positionX.linearRampToValueAtTime(_position$1.x, endTime);
+      listener.positionY.linearRampToValueAtTime(_position$1.y, endTime);
+      listener.positionZ.linearRampToValueAtTime(_position$1.z, endTime);
+      listener.forwardX.linearRampToValueAtTime(_forward.x, endTime);
+      listener.forwardY.linearRampToValueAtTime(_forward.y, endTime);
+      listener.forwardZ.linearRampToValueAtTime(_forward.z, endTime);
+      listener.upX.linearRampToValueAtTime(_up.x, endTime);
+      listener.upY.linearRampToValueAtTime(_up.y, endTime);
+      listener.upZ.linearRampToValueAtTime(_up.z, endTime);
+    } else {
+      listener.setPosition(_position$1.x, _position$1.y, _position$1.z);
+      listener.setOrientation(_forward.x, _forward.y, _forward.z, _up.x, _up.y, _up.z);
+    }
+  }
+}
+
+class Audio2 extends Object3D {
+  constructor(listener) {
+    super();
+    this.type = "Audio";
+    this.listener = listener;
+    this.context = listener.context;
+    this.gain = this.context.createGain();
+    this.gain.connect(listener.getInput());
+    this.autoplay = false;
+    this.buffer = null;
+    this.detune = 0;
+    this.loop = false;
+    this.loopStart = 0;
+    this.loopEnd = 0;
+    this.offset = 0;
+    this.duration = undefined;
+    this.playbackRate = 1;
+    this.isPlaying = false;
+    this.hasPlaybackControl = true;
+    this.source = null;
+    this.sourceType = "empty";
+    this._startedAt = 0;
+    this._progress = 0;
+    this._connected = false;
+    this.filters = [];
+  }
+  getOutput() {
+    return this.gain;
+  }
+  setNodeSource(audioNode) {
+    this.hasPlaybackControl = false;
+    this.sourceType = "audioNode";
+    this.source = audioNode;
+    this.connect();
+    return this;
+  }
+  setMediaElementSource(mediaElement) {
+    this.hasPlaybackControl = false;
+    this.sourceType = "mediaNode";
+    this.source = this.context.createMediaElementSource(mediaElement);
+    this.connect();
+    return this;
+  }
+  setMediaStreamSource(mediaStream) {
+    this.hasPlaybackControl = false;
+    this.sourceType = "mediaStreamNode";
+    this.source = this.context.createMediaStreamSource(mediaStream);
+    this.connect();
+    return this;
+  }
+  setBuffer(audioBuffer) {
+    this.buffer = audioBuffer;
+    this.sourceType = "buffer";
+    if (this.autoplay)
+      this.play();
+    return this;
+  }
+  play(delay = 0) {
+    if (this.isPlaying === true) {
+      warn("Audio: Audio is already playing.");
+      return;
+    }
+    if (this.hasPlaybackControl === false) {
+      warn("Audio: this Audio has no playback control.");
+      return;
+    }
+    this._startedAt = this.context.currentTime + delay;
+    const source = this.context.createBufferSource();
+    source.buffer = this.buffer;
+    source.loop = this.loop;
+    source.loopStart = this.loopStart;
+    source.loopEnd = this.loopEnd;
+    source.onended = this.onEnded.bind(this);
+    source.start(this._startedAt, this._progress + this.offset, this.duration);
+    this.isPlaying = true;
+    this.source = source;
+    this.setDetune(this.detune);
+    this.setPlaybackRate(this.playbackRate);
+    return this.connect();
+  }
+  pause() {
+    if (this.hasPlaybackControl === false) {
+      warn("Audio: this Audio has no playback control.");
+      return;
+    }
+    if (this.isPlaying === true) {
+      this._progress += Math.max(this.context.currentTime - this._startedAt, 0) * this.playbackRate;
+      if (this.loop === true) {
+        this._progress = this._progress % (this.duration || this.buffer.duration);
+      }
+      this.source.stop();
+      this.source.onended = null;
+      this.isPlaying = false;
+    }
+    return this;
+  }
+  stop(delay = 0) {
+    if (this.hasPlaybackControl === false) {
+      warn("Audio: this Audio has no playback control.");
+      return;
+    }
+    this._progress = 0;
+    if (this.source !== null) {
+      this.source.stop(this.context.currentTime + delay);
+      this.source.onended = null;
+    }
+    this.isPlaying = false;
+    return this;
+  }
+  connect() {
+    if (this.filters.length > 0) {
+      this.source.connect(this.filters[0]);
+      for (let i = 1, l = this.filters.length;i < l; i++) {
+        this.filters[i - 1].connect(this.filters[i]);
+      }
+      this.filters[this.filters.length - 1].connect(this.getOutput());
+    } else {
+      this.source.connect(this.getOutput());
+    }
+    this._connected = true;
+    return this;
+  }
+  disconnect() {
+    if (this._connected === false) {
+      return;
+    }
+    if (this.filters.length > 0) {
+      this.source.disconnect(this.filters[0]);
+      for (let i = 1, l = this.filters.length;i < l; i++) {
+        this.filters[i - 1].disconnect(this.filters[i]);
+      }
+      this.filters[this.filters.length - 1].disconnect(this.getOutput());
+    } else {
+      this.source.disconnect(this.getOutput());
+    }
+    this._connected = false;
+    return this;
+  }
+  getFilters() {
+    return this.filters;
+  }
+  setFilters(value) {
+    if (!value)
+      value = [];
+    if (this._connected === true) {
+      this.disconnect();
+      this.filters = value.slice();
+      this.connect();
+    } else {
+      this.filters = value.slice();
+    }
+    return this;
+  }
+  setDetune(value) {
+    this.detune = value;
+    if (this.isPlaying === true && this.source.detune !== undefined) {
+      this.source.detune.setTargetAtTime(this.detune, this.context.currentTime, 0.01);
+    }
+    return this;
+  }
+  getDetune() {
+    return this.detune;
+  }
+  getFilter() {
+    return this.getFilters()[0];
+  }
+  setFilter(filter) {
+    return this.setFilters(filter ? [filter] : []);
+  }
+  setPlaybackRate(value) {
+    if (this.hasPlaybackControl === false) {
+      warn("Audio: this Audio has no playback control.");
+      return;
+    }
+    this.playbackRate = value;
+    if (this.isPlaying === true) {
+      this.source.playbackRate.setTargetAtTime(this.playbackRate, this.context.currentTime, 0.01);
+    }
+    return this;
+  }
+  getPlaybackRate() {
+    return this.playbackRate;
+  }
+  onEnded() {
+    this.isPlaying = false;
+    this._progress = 0;
+  }
+  getLoop() {
+    if (this.hasPlaybackControl === false) {
+      warn("Audio: this Audio has no playback control.");
+      return false;
+    }
+    return this.loop;
+  }
+  setLoop(value) {
+    if (this.hasPlaybackControl === false) {
+      warn("Audio: this Audio has no playback control.");
+      return;
+    }
+    this.loop = value;
+    if (this.isPlaying === true) {
+      this.source.loop = this.loop;
+    }
+    return this;
+  }
+  setLoopStart(value) {
+    this.loopStart = value;
+    return this;
+  }
+  setLoopEnd(value) {
+    this.loopEnd = value;
+    return this;
+  }
+  getVolume() {
+    return this.gain.gain.value;
+  }
+  setVolume(value) {
+    this.gain.gain.setTargetAtTime(value, this.context.currentTime, 0.01);
+    return this;
+  }
+  copy(source, recursive) {
+    super.copy(source, recursive);
+    if (source.sourceType !== "buffer") {
+      warn("Audio: Audio source type cannot be copied.");
+      return this;
+    }
+    this.autoplay = source.autoplay;
+    this.buffer = source.buffer;
+    this.detune = source.detune;
+    this.loop = source.loop;
+    this.loopStart = source.loopStart;
+    this.loopEnd = source.loopEnd;
+    this.offset = source.offset;
+    this.duration = source.duration;
+    this.playbackRate = source.playbackRate;
+    this.hasPlaybackControl = source.hasPlaybackControl;
+    this.sourceType = source.sourceType;
+    this.filters = source.filters.slice();
+    return this;
+  }
+  clone(recursive) {
+    return new this.constructor(this.listener).copy(this, recursive);
+  }
+}
+var _position = /* @__PURE__ */ new Vector3;
+var _quaternion = /* @__PURE__ */ new Quaternion;
+var _scale = /* @__PURE__ */ new Vector3;
+var _orientation = /* @__PURE__ */ new Vector3;
+
+class PositionalAudio extends Audio2 {
+  constructor(listener) {
+    super(listener);
+    this.panner = this.context.createPanner();
+    this.panner.panningModel = "HRTF";
+    this.panner.connect(this.gain);
+  }
+  connect() {
+    super.connect();
+    this.panner.connect(this.gain);
+    return this;
+  }
+  disconnect() {
+    super.disconnect();
+    this.panner.disconnect(this.gain);
+    return this;
+  }
+  getOutput() {
+    return this.panner;
+  }
+  getRefDistance() {
+    return this.panner.refDistance;
+  }
+  setRefDistance(value) {
+    this.panner.refDistance = value;
+    return this;
+  }
+  getRolloffFactor() {
+    return this.panner.rolloffFactor;
+  }
+  setRolloffFactor(value) {
+    this.panner.rolloffFactor = value;
+    return this;
+  }
+  getDistanceModel() {
+    return this.panner.distanceModel;
+  }
+  setDistanceModel(value) {
+    this.panner.distanceModel = value;
+    return this;
+  }
+  getMaxDistance() {
+    return this.panner.maxDistance;
+  }
+  setMaxDistance(value) {
+    this.panner.maxDistance = value;
+    return this;
+  }
+  setDirectionalCone(coneInnerAngle, coneOuterAngle, coneOuterGain) {
+    this.panner.coneInnerAngle = coneInnerAngle;
+    this.panner.coneOuterAngle = coneOuterAngle;
+    this.panner.coneOuterGain = coneOuterGain;
+    return this;
+  }
+  updateMatrixWorld(force) {
+    super.updateMatrixWorld(force);
+    if (this.hasPlaybackControl === true && this.isPlaying === false)
+      return;
+    this.matrixWorld.decompose(_position, _quaternion, _scale);
+    _orientation.set(0, 0, 1).applyQuaternion(_quaternion);
+    const panner = this.panner;
+    if (panner.positionX) {
+      const endTime = this.context.currentTime + this.listener.timeDelta;
+      panner.positionX.linearRampToValueAtTime(_position.x, endTime);
+      panner.positionY.linearRampToValueAtTime(_position.y, endTime);
+      panner.positionZ.linearRampToValueAtTime(_position.z, endTime);
+      panner.orientationX.linearRampToValueAtTime(_orientation.x, endTime);
+      panner.orientationY.linearRampToValueAtTime(_orientation.y, endTime);
+      panner.orientationZ.linearRampToValueAtTime(_orientation.z, endTime);
+    } else {
+      panner.setPosition(_position.x, _position.y, _position.z);
+      panner.setOrientation(_orientation.x, _orientation.y, _orientation.z);
+    }
+  }
 }
 var _RESERVED_CHARS_RE = "\\[\\]\\.:\\/";
 var _reservedRe = new RegExp("[" + _RESERVED_CHARS_RE + "]", "g");
@@ -31247,14 +31894,93 @@ function createPlasmaVortexMesh(size, colorHex) {
 }
 
 // src/engine/audio.ts
+var audioListener = null;
+var audioLoader = new AudioLoader;
+var shipThrusterSound = null;
+var shipIgniteSound = null;
+var shipRetroSound = null;
+var scanStreamSound = null;
+var scanCompleteSound = null;
+var sonarSound = null;
+var isThrustingPrev = false;
+var loadedBuffers = {};
+function initThreeAudio(camera2, playerGroup) {
+  if (!audioListener) {
+    audioListener = new AudioListener;
+    camera2.add(audioListener);
+  }
+  const sfxList = [
+    { key: "thruster", url: "assets/sfx/ship_thruster_loop.wav" },
+    { key: "ignite", url: "assets/sfx/ship_thrust_ignite.wav" },
+    { key: "retro", url: "assets/sfx/ship_retro_brake.wav" },
+    { key: "scan_stream", url: "assets/sfx/quantum_scan_stream.wav" },
+    { key: "scan_complete", url: "assets/sfx/quantum_scan_complete.wav" },
+    { key: "sonar", url: "assets/sfx/sonar_ping.wav" }
+  ];
+  sfxList.forEach((sfx) => {
+    audioLoader.load(sfx.url, (buffer) => {
+      loadedBuffers[sfx.key] = buffer;
+      setupAudioNode(sfx.key, buffer, playerGroup);
+    }, undefined, (err) => {
+      console.warn(`AudioLoader failed to load ${sfx.url}:`, err);
+    });
+  });
+}
+function setupAudioNode(key, buffer, playerGroup) {
+  if (!audioListener)
+    return;
+  if (key === "thruster") {
+    shipThrusterSound = new PositionalAudio(audioListener);
+    shipThrusterSound.setBuffer(buffer);
+    shipThrusterSound.setLoop(true);
+    shipThrusterSound.setVolume(0);
+    shipThrusterSound.setRefDistance(18);
+    shipThrusterSound.setMaxDistance(450);
+    shipThrusterSound.setRolloffFactor(1.1);
+    if (playerGroup)
+      playerGroup.add(shipThrusterSound);
+  } else if (key === "ignite") {
+    shipIgniteSound = new PositionalAudio(audioListener);
+    shipIgniteSound.setBuffer(buffer);
+    shipIgniteSound.setVolume(0.65);
+    shipIgniteSound.setRefDistance(20);
+    if (playerGroup)
+      playerGroup.add(shipIgniteSound);
+  } else if (key === "retro") {
+    shipRetroSound = new PositionalAudio(audioListener);
+    shipRetroSound.setBuffer(buffer);
+    shipRetroSound.setLoop(true);
+    shipRetroSound.setVolume(0);
+    shipRetroSound.setRefDistance(18);
+    if (playerGroup)
+      playerGroup.add(shipRetroSound);
+  } else if (key === "scan_stream") {
+    scanStreamSound = new Audio2(audioListener);
+    scanStreamSound.setBuffer(buffer);
+    scanStreamSound.setLoop(true);
+    scanStreamSound.setVolume(0);
+  } else if (key === "scan_complete") {
+    scanCompleteSound = new Audio2(audioListener);
+    scanCompleteSound.setBuffer(buffer);
+    scanCompleteSound.setVolume(0.65);
+  } else if (key === "sonar") {
+    sonarSound = new Audio2(audioListener);
+    sonarSound.setBuffer(buffer);
+    sonarSound.setVolume(0.7);
+  }
+}
 var audioCtx = null;
 var musicUserMuted = false;
 var musicPlaying = false;
 function getAudioContext() {
   if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    if (AudioContextClass) {
-      audioCtx = new AudioContextClass;
+    if (audioListener && audioListener.context) {
+      audioCtx = audioListener.context;
+    } else {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        audioCtx = new AudioContextClass;
+      }
     }
   }
   if (audioCtx && audioCtx.state === "suspended") {
@@ -31378,6 +32104,12 @@ function playLockOnSound() {
   osc.stop(time + 0.2);
 }
 function playSonarChime() {
+  if (sonarSound && sonarSound.buffer) {
+    if (sonarSound.isPlaying)
+      sonarSound.stop();
+    sonarSound.play();
+    return;
+  }
   const ctx = getAudioContext();
   if (!ctx)
     return;
@@ -31433,174 +32165,76 @@ function playExplosionSound() {
   noise.stop(time + 1.5);
   subOsc.stop(time + 1.5);
 }
-var qScanCarrier1 = null;
-var qScanCarrier2 = null;
-var qScanModulator = null;
-var qScanModGain = null;
-var qScanGain = null;
-var qScanFilter = null;
-var isQuantumScanning = false;
 function startQuantumScanSound() {
-  const ctx = getAudioContext();
-  if (!ctx)
-    return;
-  if (isQuantumScanning)
-    return;
-  isQuantumScanning = true;
-  const t = ctx.currentTime;
-  qScanCarrier1 = ctx.createOscillator();
-  qScanCarrier2 = ctx.createOscillator();
-  qScanModulator = ctx.createOscillator();
-  qScanModGain = ctx.createGain();
-  qScanGain = ctx.createGain();
-  qScanFilter = ctx.createBiquadFilter();
-  qScanCarrier1.type = "sine";
-  qScanCarrier1.frequency.setValueAtTime(1320, t);
-  qScanCarrier2.type = "triangle";
-  qScanCarrier2.frequency.setValueAtTime(1760, t);
-  qScanModulator.type = "sine";
-  qScanModulator.frequency.setValueAtTime(38, t);
-  qScanModGain.gain.setValueAtTime(140, t);
-  qScanModulator.connect(qScanModGain);
-  qScanModGain.connect(qScanCarrier1.frequency);
-  qScanFilter.type = "bandpass";
-  qScanFilter.frequency.setValueAtTime(1500, t);
-  qScanFilter.Q.setValueAtTime(4, t);
-  qScanGain.gain.setValueAtTime(0, t);
-  qScanGain.gain.linearRampToValueAtTime(0.12, t + 0.1);
-  qScanCarrier1.connect(qScanFilter);
-  qScanCarrier2.connect(qScanFilter);
-  qScanFilter.connect(qScanGain);
-  qScanGain.connect(ctx.destination);
-  qScanModulator.start(t);
-  qScanCarrier1.start(t);
-  qScanCarrier2.start(t);
+  if (scanStreamSound && scanStreamSound.buffer) {
+    scanStreamSound.setPlaybackRate(0.95);
+    scanStreamSound.setVolume(0.48);
+    if (!scanStreamSound.isPlaying)
+      scanStreamSound.play();
+  }
 }
 function updateQuantumScanSound(progressPct) {
-  const ctx = getAudioContext();
-  if (!ctx || !isQuantumScanning)
-    return;
-  const t = ctx.currentTime;
-  const progress = Math.max(0, Math.min(1, progressPct / 100));
-  const f1 = 1320 + progress * 880;
-  const f2 = 1760 + progress * 1174;
-  const filterFreq = 1500 + progress * 1600;
-  if (qScanCarrier1)
-    qScanCarrier1.frequency.setTargetAtTime(f1, t, 0.05);
-  if (qScanCarrier2)
-    qScanCarrier2.frequency.setTargetAtTime(f2, t, 0.05);
-  if (qScanFilter)
-    qScanFilter.frequency.setTargetAtTime(filterFreq, t, 0.05);
-  if (qScanModGain)
-    qScanModGain.gain.setTargetAtTime(140 + progress * 200, t, 0.05);
+  if (scanStreamSound && scanStreamSound.isPlaying) {
+    const rate = 0.95 + progressPct / 100 * 0.65;
+    scanStreamSound.setPlaybackRate(rate);
+    scanStreamSound.setVolume(0.48 + progressPct / 100 * 0.15);
+  }
 }
 function stopQuantumScanSound(wasCompleted = false) {
-  if (!isQuantumScanning)
-    return;
-  isQuantumScanning = false;
-  const ctx = getAudioContext();
-  if (ctx && qScanGain) {
-    const t = ctx.currentTime;
-    qScanGain.gain.cancelScheduledValues(t);
-    qScanGain.gain.setValueAtTime(qScanGain.gain.value, t);
-    qScanGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-    if (qScanCarrier1)
-      qScanCarrier1.stop(t + 0.1);
-    if (qScanCarrier2)
-      qScanCarrier2.stop(t + 0.1);
-    if (qScanModulator)
-      qScanModulator.stop(t + 0.1);
+  if (scanStreamSound && scanStreamSound.isPlaying) {
+    scanStreamSound.stop();
   }
-  qScanCarrier1 = null;
-  qScanCarrier2 = null;
-  qScanModulator = null;
-  qScanModGain = null;
-  qScanFilter = null;
-  qScanGain = null;
-  if (wasCompleted) {
-    playScanCompleteChime();
+  if (wasCompleted && scanCompleteSound && scanCompleteSound.buffer) {
+    if (scanCompleteSound.isPlaying)
+      scanCompleteSound.stop();
+    scanCompleteSound.play();
   }
 }
-function playScanCompleteChime() {
-  const ctx = getAudioContext();
-  if (!ctx)
-    return;
-  const t = ctx.currentTime;
-  const notes = [1046.5, 1318.5, 1567.98, 2093];
-  notes.forEach((freq, idx) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(freq, t + idx * 0.06);
-    gain.gain.setValueAtTime(0, t + idx * 0.06);
-    gain.gain.linearRampToValueAtTime(0.18, t + idx * 0.06 + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.06 + 0.45);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(t + idx * 0.06);
-    osc.stop(t + idx * 0.06 + 0.48);
-  });
-}
-var thrusterSubOsc = null;
-var thrusterIonOsc = null;
-var thrusterGainNode = null;
-var thrusterFilterNode = null;
-var isThrusterActive = false;
 function setThrusterSound(active, speedRatio = 0.5, isRetro = false) {
-  const ctx = getAudioContext();
-  if (!ctx)
-    return;
-  const t = ctx.currentTime;
   const normSpeed = Math.max(0, Math.min(1, speedRatio));
   if (active) {
-    if (!isThrusterActive) {
-      isThrusterActive = true;
-      thrusterSubOsc = ctx.createOscillator();
-      thrusterIonOsc = ctx.createOscillator();
-      thrusterGainNode = ctx.createGain();
-      thrusterFilterNode = ctx.createBiquadFilter();
-      thrusterSubOsc.type = "sine";
-      thrusterSubOsc.frequency.setValueAtTime(isRetro ? 32 : 42, t);
-      thrusterIonOsc.type = isRetro ? "sawtooth" : "triangle";
-      thrusterIonOsc.frequency.setValueAtTime(isRetro ? 75 : 95, t);
-      thrusterFilterNode.type = "lowpass";
-      thrusterFilterNode.frequency.setValueAtTime(isRetro ? 140 : 180, t);
-      thrusterFilterNode.Q.setValueAtTime(2.5, t);
-      thrusterGainNode.gain.setValueAtTime(0.001, t);
-      thrusterGainNode.gain.linearRampToValueAtTime(isRetro ? 0.1 : 0.12, t + 0.08);
-      thrusterSubOsc.connect(thrusterFilterNode);
-      thrusterIonOsc.connect(thrusterFilterNode);
-      thrusterFilterNode.connect(thrusterGainNode);
-      thrusterGainNode.connect(ctx.destination);
-      thrusterSubOsc.start(t);
-      thrusterIonOsc.start(t);
+    if (!isRetro) {
+      if (!isThrustingPrev) {
+        isThrustingPrev = true;
+        if (shipIgniteSound && shipIgniteSound.buffer) {
+          if (shipIgniteSound.isPlaying)
+            shipIgniteSound.stop();
+          shipIgniteSound.play();
+        }
+      }
+      if (shipRetroSound && shipRetroSound.isPlaying) {
+        shipRetroSound.stop();
+      }
+      if (shipThrusterSound && shipThrusterSound.buffer) {
+        const targetRate = 0.72 + normSpeed * 0.75;
+        const targetVol = 0.22 + normSpeed * 0.45;
+        shipThrusterSound.setPlaybackRate(targetRate);
+        shipThrusterSound.setVolume(targetVol);
+        if (!shipThrusterSound.isPlaying)
+          shipThrusterSound.play();
+      }
     } else {
-      const targetSubFreq = isRetro ? 30 + normSpeed * 18 : 40 + normSpeed * 32;
-      const targetIonFreq = isRetro ? 70 + normSpeed * 40 : 90 + normSpeed * 95;
-      const targetFilterFreq = isRetro ? 130 + normSpeed * 80 : 160 + normSpeed * 220;
-      const targetVol = (isRetro ? 0.1 : 0.12) + normSpeed * 0.06;
-      if (thrusterSubOsc)
-        thrusterSubOsc.frequency.setTargetAtTime(targetSubFreq, t, 0.08);
-      if (thrusterIonOsc)
-        thrusterIonOsc.frequency.setTargetAtTime(targetIonFreq, t, 0.08);
-      if (thrusterFilterNode)
-        thrusterFilterNode.frequency.setTargetAtTime(targetFilterFreq, t, 0.08);
-      if (thrusterGainNode)
-        thrusterGainNode.gain.setTargetAtTime(targetVol, t, 0.08);
+      isThrustingPrev = false;
+      if (shipThrusterSound && shipThrusterSound.isPlaying) {
+        shipThrusterSound.stop();
+      }
+      if (shipRetroSound && shipRetroSound.buffer) {
+        const targetRate = 0.82 + normSpeed * 0.38;
+        const targetVol = 0.3 + normSpeed * 0.35;
+        shipRetroSound.setPlaybackRate(targetRate);
+        shipRetroSound.setVolume(targetVol);
+        if (!shipRetroSound.isPlaying)
+          shipRetroSound.play();
+      }
     }
-  } else if (!active && isThrusterActive) {
-    isThrusterActive = false;
-    if (thrusterGainNode && thrusterSubOsc && thrusterIonOsc) {
-      thrusterGainNode.gain.cancelScheduledValues(t);
-      thrusterGainNode.gain.setValueAtTime(thrusterGainNode.gain.value, t);
-      thrusterGainNode.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
-      thrusterSubOsc.stop(t + 0.18);
-      thrusterIonOsc.stop(t + 0.18);
+  } else {
+    isThrustingPrev = false;
+    if (shipThrusterSound && shipThrusterSound.isPlaying) {
+      shipThrusterSound.stop();
     }
-    thrusterSubOsc = null;
-    thrusterIonOsc = null;
-    thrusterGainNode = null;
-    thrusterFilterNode = null;
+    if (shipRetroSound && shipRetroSound.isPlaying) {
+      shipRetroSound.stop();
+    }
   }
 }
 var QUANTUM_PLAYLIST = [
@@ -36683,6 +37317,7 @@ function init() {
   initScene(container);
   initPostProcessing();
   createPlayerMesh();
+  initThreeAudio(camera, STATE.playerGroup);
   initTrajectory();
   setupControls();
   initHUD();

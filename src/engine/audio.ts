@@ -1,21 +1,106 @@
+import * as THREE from 'three';
+import { STATE } from '../core/state';
+
+export let audioListener: THREE.AudioListener | null = null;
+const audioLoader = new THREE.AudioLoader();
+
+// Positional and non-positional audio objects
+let shipThrusterSound: THREE.PositionalAudio | null = null;
+let shipIgniteSound: THREE.PositionalAudio | null = null;
+let shipRetroSound: THREE.PositionalAudio | null = null;
+let scanStreamSound: THREE.Audio | null = null;
+let scanCompleteSound: THREE.Audio | null = null;
+let sonarSound: THREE.Audio | null = null;
+
+let isThrustingPrev = false;
+let isRetroPrev = false;
+const loadedBuffers: { [key: string]: AudioBuffer } = {};
+
+export function initThreeAudio(camera: THREE.Camera, playerGroup?: THREE.Group) {
+    if (!audioListener) {
+        audioListener = new THREE.AudioListener();
+        camera.add(audioListener);
+    }
+
+    const sfxList = [
+        { key: 'thruster', url: 'assets/sfx/ship_thruster_loop.wav' },
+        { key: 'ignite', url: 'assets/sfx/ship_thrust_ignite.wav' },
+        { key: 'retro', url: 'assets/sfx/ship_retro_brake.wav' },
+        { key: 'scan_stream', url: 'assets/sfx/quantum_scan_stream.wav' },
+        { key: 'scan_complete', url: 'assets/sfx/quantum_scan_complete.wav' },
+        { key: 'sonar', url: 'assets/sfx/sonar_ping.wav' },
+    ];
+
+    sfxList.forEach(sfx => {
+        audioLoader.load(sfx.url, (buffer) => {
+            loadedBuffers[sfx.key] = buffer;
+            setupAudioNode(sfx.key, buffer, playerGroup);
+        }, undefined, (err) => {
+            console.warn(`AudioLoader failed to load ${sfx.url}:`, err);
+        });
+    });
+}
+
+function setupAudioNode(key: string, buffer: AudioBuffer, playerGroup?: THREE.Group) {
+    if (!audioListener) return;
+
+    if (key === 'thruster') {
+        shipThrusterSound = new THREE.PositionalAudio(audioListener);
+        shipThrusterSound.setBuffer(buffer);
+        shipThrusterSound.setLoop(true);
+        shipThrusterSound.setVolume(0.0);
+        shipThrusterSound.setRefDistance(18);
+        shipThrusterSound.setMaxDistance(450);
+        shipThrusterSound.setRolloffFactor(1.1);
+        if (playerGroup) playerGroup.add(shipThrusterSound);
+    } else if (key === 'ignite') {
+        shipIgniteSound = new THREE.PositionalAudio(audioListener);
+        shipIgniteSound.setBuffer(buffer);
+        shipIgniteSound.setVolume(0.65);
+        shipIgniteSound.setRefDistance(20);
+        if (playerGroup) playerGroup.add(shipIgniteSound);
+    } else if (key === 'retro') {
+        shipRetroSound = new THREE.PositionalAudio(audioListener);
+        shipRetroSound.setBuffer(buffer);
+        shipRetroSound.setLoop(true);
+        shipRetroSound.setVolume(0.0);
+        shipRetroSound.setRefDistance(18);
+        if (playerGroup) playerGroup.add(shipRetroSound);
+    } else if (key === 'scan_stream') {
+        scanStreamSound = new THREE.Audio(audioListener);
+        scanStreamSound.setBuffer(buffer);
+        scanStreamSound.setLoop(true);
+        scanStreamSound.setVolume(0.0);
+    } else if (key === 'scan_complete') {
+        scanCompleteSound = new THREE.Audio(audioListener);
+        scanCompleteSound.setBuffer(buffer);
+        scanCompleteSound.setVolume(0.65);
+    } else if (key === 'sonar') {
+        sonarSound = new THREE.Audio(audioListener);
+        sonarSound.setBuffer(buffer);
+        sonarSound.setVolume(0.70);
+    }
+}
+
+export function attachShipAudio(playerGroup: THREE.Group) {
+    if (shipThrusterSound && !shipThrusterSound.parent) playerGroup.add(shipThrusterSound);
+    if (shipIgniteSound && !shipIgniteSound.parent) playerGroup.add(shipIgniteSound);
+    if (shipRetroSound && !shipRetroSound.parent) playerGroup.add(shipRetroSound);
+}
+
 let audioCtx: AudioContext | null = null;
 let musicUserMuted = false;
 let musicPlaying = false;
-let musicOsc1: OscillatorNode | null = null;
-let musicOsc2: OscillatorNode | null = null;
-let musicGain: GainNode | null = null;
-let musicInterval: any = null;
-
-let thrusterOsc: OscillatorNode | null = null;
-let thrusterGain: GainNode | null = null;
-let thrusterFilter: BiquadFilterNode | null = null;
-let isThrusterPlaying = false;
 
 export function getAudioContext(): AudioContext | null {
     if (!audioCtx) {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-            audioCtx = new AudioContextClass();
+        if (audioListener && audioListener.context) {
+            audioCtx = audioListener.context;
+        } else {
+            const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioContextClass) {
+                audioCtx = new AudioContextClass();
+            }
         }
     }
     if (audioCtx && audioCtx.state === 'suspended') {
@@ -156,6 +241,11 @@ export function playLockOnSound() {
 }
 
 export function playSonarChime() {
+    if (sonarSound && sonarSound.buffer) {
+        if (sonarSound.isPlaying) sonarSound.stop();
+        sonarSound.play();
+        return;
+    }
     const ctx = getAudioContext();
     if (!ctx) return;
     const time = ctx.currentTime;
@@ -179,7 +269,6 @@ export function playExplosionSound() {
     if (!ctx) return;
     const time = ctx.currentTime;
 
-    // 1. White noise burst with lowpass filter sweep
     const bufferSize = Math.floor(ctx.sampleRate * 1.5);
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
@@ -203,7 +292,6 @@ export function playExplosionSound() {
     noiseFilter.connect(noiseGain);
     noiseGain.connect(ctx.destination);
 
-    // 2. Sub-bass rumble boom
     const subOsc = ctx.createOscillator();
     const subGain = ctx.createGain();
     subOsc.type = 'sawtooth';
@@ -222,202 +310,86 @@ export function playExplosionSound() {
     subOsc.stop(time + 1.5);
 }
 
-// Quantum Scan Telemetry Audio Nodes
-let qScanCarrier1: OscillatorNode | null = null;
-let qScanCarrier2: OscillatorNode | null = null;
-let qScanModulator: OscillatorNode | null = null;
-let qScanModGain: GainNode | null = null;
-let qScanGain: GainNode | null = null;
-let qScanFilter: BiquadFilterNode | null = null;
-let isQuantumScanning = false;
+// ----------------------------------------------------------------------------
+// QUANTUM SCAN AUDIO (Three.js Audio & Real-Time Telemetry)
+// ----------------------------------------------------------------------------
 
 export function startQuantumScanSound() {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-
-    if (isQuantumScanning) return;
-    isQuantumScanning = true;
-
-    const t = ctx.currentTime;
-    qScanCarrier1 = ctx.createOscillator();
-    qScanCarrier2 = ctx.createOscillator();
-    qScanModulator = ctx.createOscillator();
-    qScanModGain = ctx.createGain();
-    qScanGain = ctx.createGain();
-    qScanFilter = ctx.createBiquadFilter();
-
-    // Dual quantum carriers with microtonal frequency shift
-    qScanCarrier1.type = 'sine';
-    qScanCarrier1.frequency.setValueAtTime(1320, t); // E6
-
-    qScanCarrier2.type = 'triangle';
-    qScanCarrier2.frequency.setValueAtTime(1760, t); // A6
-
-    // Quantum probability wave FM modulation (38 Hz quantum jitter)
-    qScanModulator.type = 'sine';
-    qScanModulator.frequency.setValueAtTime(38, t);
-    qScanModGain.gain.setValueAtTime(140, t);
-    qScanModulator.connect(qScanModGain);
-    qScanModGain.connect(qScanCarrier1.frequency);
-
-    // Resonant bandpass filter
-    qScanFilter.type = 'bandpass';
-    qScanFilter.frequency.setValueAtTime(1500, t);
-    qScanFilter.Q.setValueAtTime(4.0, t);
-
-    qScanGain.gain.setValueAtTime(0.0, t);
-    qScanGain.gain.linearRampToValueAtTime(0.12, t + 0.1);
-
-    qScanCarrier1.connect(qScanFilter);
-    qScanCarrier2.connect(qScanFilter);
-    qScanFilter.connect(qScanGain);
-    qScanGain.connect(ctx.destination);
-
-    qScanModulator.start(t);
-    qScanCarrier1.start(t);
-    qScanCarrier2.start(t);
+    if (scanStreamSound && scanStreamSound.buffer) {
+        scanStreamSound.setPlaybackRate(0.95);
+        scanStreamSound.setVolume(0.48);
+        if (!scanStreamSound.isPlaying) scanStreamSound.play();
+    }
 }
 
 export function updateQuantumScanSound(progressPct: number) {
-    const ctx = getAudioContext();
-    if (!ctx || !isQuantumScanning) return;
-
-    const t = ctx.currentTime;
-    const progress = Math.max(0.0, Math.min(1.0, progressPct / 100.0));
-
-    // Pitch ascends as quantum entanglement telemetry resolves
-    const f1 = 1320 + progress * 880; // 1320 -> 2200 Hz
-    const f2 = 1760 + progress * 1174; // 1760 -> 2934 Hz
-    const filterFreq = 1500 + progress * 1600;
-
-    if (qScanCarrier1) qScanCarrier1.frequency.setTargetAtTime(f1, t, 0.05);
-    if (qScanCarrier2) qScanCarrier2.frequency.setTargetAtTime(f2, t, 0.05);
-    if (qScanFilter) qScanFilter.frequency.setTargetAtTime(filterFreq, t, 0.05);
-    if (qScanModGain) qScanModGain.gain.setTargetAtTime(140 + progress * 200, t, 0.05);
+    if (scanStreamSound && scanStreamSound.isPlaying) {
+        const rate = 0.95 + (progressPct / 100.0) * 0.65;
+        scanStreamSound.setPlaybackRate(rate);
+        scanStreamSound.setVolume(0.48 + (progressPct / 100.0) * 0.15);
+    }
 }
 
 export function stopQuantumScanSound(wasCompleted: boolean = false) {
-    if (!isQuantumScanning) return;
-    isQuantumScanning = false;
-
-    const ctx = getAudioContext();
-    if (ctx && qScanGain) {
-        const t = ctx.currentTime;
-        qScanGain.gain.cancelScheduledValues(t);
-        qScanGain.gain.setValueAtTime(qScanGain.gain.value, t);
-        qScanGain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-
-        if (qScanCarrier1) qScanCarrier1.stop(t + 0.1);
-        if (qScanCarrier2) qScanCarrier2.stop(t + 0.1);
-        if (qScanModulator) qScanModulator.stop(t + 0.1);
+    if (scanStreamSound && scanStreamSound.isPlaying) {
+        scanStreamSound.stop();
     }
-
-    qScanCarrier1 = null;
-    qScanCarrier2 = null;
-    qScanModulator = null;
-    qScanModGain = null;
-    qScanFilter = null;
-    qScanGain = null;
-
-    if (wasCompleted) {
-        playScanCompleteChime();
+    if (wasCompleted && scanCompleteSound && scanCompleteSound.buffer) {
+        if (scanCompleteSound.isPlaying) scanCompleteSound.stop();
+        scanCompleteSound.play();
     }
 }
 
-export function playScanCompleteChime() {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-
-    const t = ctx.currentTime;
-    // Ascending Quantum Data Decode Chime (C6 -> E6 -> G6 -> C7)
-    const notes = [1046.5, 1318.5, 1567.98, 2093.0];
-    notes.forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, t + idx * 0.06);
-
-        gain.gain.setValueAtTime(0.0, t + idx * 0.06);
-        gain.gain.linearRampToValueAtTime(0.18, t + idx * 0.06 + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + idx * 0.06 + 0.45);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc.start(t + idx * 0.06);
-        osc.stop(t + idx * 0.06 + 0.48);
-    });
-}
-
-// Biomechanical Locomotion Propulsion Engine
-let thrusterSubOsc: OscillatorNode | null = null;
-let thrusterIonOsc: OscillatorNode | null = null;
-let thrusterGainNode: GainNode | null = null;
-let thrusterFilterNode: BiquadFilterNode | null = null;
-let isThrusterActive = false;
+// ----------------------------------------------------------------------------
+// THREE.JS POSITIONAL LOCOMOTION & WARP PROPULSION ENGINE
+// ----------------------------------------------------------------------------
 
 export function setThrusterSound(active: boolean, speedRatio: number = 0.5, isRetro: boolean = false) {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-
-    const t = ctx.currentTime;
     const normSpeed = Math.max(0.0, Math.min(1.0, speedRatio));
 
     if (active) {
-        if (!isThrusterActive) {
-            isThrusterActive = true;
-            thrusterSubOsc = ctx.createOscillator();
-            thrusterIonOsc = ctx.createOscillator();
-            thrusterGainNode = ctx.createGain();
-            thrusterFilterNode = ctx.createBiquadFilter();
-
-            // Layer 1: Sub-Bass Reactor Core (Sine drone)
-            thrusterSubOsc.type = 'sine';
-            thrusterSubOsc.frequency.setValueAtTime(isRetro ? 32 : 42, t);
-
-            // Layer 2: Plasma Ion-Nozzle (Warm Triangle/Saw blend)
-            thrusterIonOsc.type = isRetro ? 'sawtooth' : 'triangle';
-            thrusterIonOsc.frequency.setValueAtTime(isRetro ? 75 : 95, t);
-
-            thrusterFilterNode.type = 'lowpass';
-            thrusterFilterNode.frequency.setValueAtTime(isRetro ? 140 : 180, t);
-            thrusterFilterNode.Q.setValueAtTime(2.5, t);
-
-            thrusterGainNode.gain.setValueAtTime(0.001, t);
-            thrusterGainNode.gain.linearRampToValueAtTime(isRetro ? 0.10 : 0.12, t + 0.08);
-
-            thrusterSubOsc.connect(thrusterFilterNode);
-            thrusterIonOsc.connect(thrusterFilterNode);
-            thrusterFilterNode.connect(thrusterGainNode);
-            thrusterGainNode.connect(ctx.destination);
-
-            thrusterSubOsc.start(t);
-            thrusterIonOsc.start(t);
+        if (!isRetro) {
+            // Forward Main Thrust
+            if (!isThrustingPrev) {
+                isThrustingPrev = true;
+                // Visceral Ignition Punch!
+                if (shipIgniteSound && shipIgniteSound.buffer) {
+                    if (shipIgniteSound.isPlaying) shipIgniteSound.stop();
+                    shipIgniteSound.play();
+                }
+            }
+            if (shipRetroSound && shipRetroSound.isPlaying) {
+                shipRetroSound.stop();
+            }
+            if (shipThrusterSound && shipThrusterSound.buffer) {
+                const targetRate = 0.72 + normSpeed * 0.75;
+                const targetVol = 0.22 + normSpeed * 0.45;
+                shipThrusterSound.setPlaybackRate(targetRate);
+                shipThrusterSound.setVolume(targetVol);
+                if (!shipThrusterSound.isPlaying) shipThrusterSound.play();
+            }
         } else {
-            // Real-time speed & acceleration pitch scaling
-            const targetSubFreq = isRetro ? (30 + normSpeed * 18) : (40 + normSpeed * 32);
-            const targetIonFreq = isRetro ? (70 + normSpeed * 40) : (90 + normSpeed * 95);
-            const targetFilterFreq = isRetro ? (130 + normSpeed * 80) : (160 + normSpeed * 220);
-            const targetVol = (isRetro ? 0.10 : 0.12) + normSpeed * 0.06;
-
-            if (thrusterSubOsc) thrusterSubOsc.frequency.setTargetAtTime(targetSubFreq, t, 0.08);
-            if (thrusterIonOsc) thrusterIonOsc.frequency.setTargetAtTime(targetIonFreq, t, 0.08);
-            if (thrusterFilterNode) thrusterFilterNode.frequency.setTargetAtTime(targetFilterFreq, t, 0.08);
-            if (thrusterGainNode) thrusterGainNode.gain.setTargetAtTime(targetVol, t, 0.08);
+            // Retro-Braking Counter-Thrust
+            isThrustingPrev = false;
+            if (shipThrusterSound && shipThrusterSound.isPlaying) {
+                shipThrusterSound.stop();
+            }
+            if (shipRetroSound && shipRetroSound.buffer) {
+                const targetRate = 0.82 + normSpeed * 0.38;
+                const targetVol = 0.30 + normSpeed * 0.35;
+                shipRetroSound.setPlaybackRate(targetRate);
+                shipRetroSound.setVolume(targetVol);
+                if (!shipRetroSound.isPlaying) shipRetroSound.play();
+            }
         }
-    } else if (!active && isThrusterActive) {
-        isThrusterActive = false;
-        if (thrusterGainNode && thrusterSubOsc && thrusterIonOsc) {
-            thrusterGainNode.gain.cancelScheduledValues(t);
-            thrusterGainNode.gain.setValueAtTime(thrusterGainNode.gain.value, t);
-            thrusterGainNode.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
-            thrusterSubOsc.stop(t + 0.18);
-            thrusterIonOsc.stop(t + 0.18);
+    } else {
+        isThrustingPrev = false;
+        if (shipThrusterSound && shipThrusterSound.isPlaying) {
+            shipThrusterSound.stop();
         }
-        thrusterSubOsc = null;
-        thrusterIonOsc = null;
-        thrusterGainNode = null;
-        thrusterFilterNode = null;
+        if (shipRetroSound && shipRetroSound.isPlaying) {
+            shipRetroSound.stop();
+        }
     }
 }
 
