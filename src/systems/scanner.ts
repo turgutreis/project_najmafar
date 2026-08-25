@@ -300,8 +300,9 @@ export function updateScannerUI(planet: any, dist: number) {
                 orbitBadgeTitle.innerText = `🪐 ORBIT: ${STATE.orbitPlanet.name.toUpperCase()}`;
             }
             if (orbitBadgeSub) {
-                const alt = Math.max(0.5, dist - (STATE.orbitPlanet.size || 2.5)).toFixed(1);
-                orbitBadgeSub.innerText = `Orbit-Höhe: ${alt} LJ • Nahbereich aktiv`;
+                const curRadius = STATE.orbitPlanet.source ? STATE.orbitPlanet.source.radius : (STATE.orbitPlanet.size || 2.5);
+                const alt = Math.max(0.2, dist - curRadius).toFixed(1);
+                orbitBadgeSub.innerText = `Orbit-Höhe: ${alt} LJ • Sub-System Nahbereich`;
             }
         } else {
             orbitBadge.style.display = 'none';

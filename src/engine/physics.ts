@@ -14,7 +14,7 @@ const _bounceDir = new THREE.Vector3();
 const _inputDir = new THREE.Vector3();
 
 export function updatePhysics(dt: number) {
-    // 0. Detect nearest planetary sub-system
+    // 0. Detect nearest planetary sub-system with dynamic size-proportional SOI
     let nearestPlanet: any = null;
     let nearestPlanetDist = Infinity;
 
@@ -30,13 +30,21 @@ export function updatePhysics(dt: number) {
         }
     });
 
-    const orbitTriggerDist = 55.0;
+    let orbitTriggerDist = 55.0;
+    if (nearestPlanet) {
+        const planetSize = nearestPlanet.size || 2.5;
+        const moons = activePlanets.filter(m => m.isMoon && m.parentPlanet === nearestPlanet);
+        const maxMoonBaseDist = moons.reduce((max, m) => Math.max(max, m.baseDistance || m.distance || 6.0), 0);
+        // Dynamic Sphere of Influence (SOI) based on planet size and moon system span
+        orbitTriggerDist = Math.max(40.0, planetSize * 9.5 + maxMoonBaseDist * 2.2);
+    }
+
     if (nearestPlanet && nearestPlanetDist < orbitTriggerDist) {
         STATE.isInPlanetOrbit = true;
         STATE.orbitPlanet = nearestPlanet;
         const rawProximity = Math.max(0, Math.min(1.0, 1.0 - (nearestPlanetDist / orbitTriggerDist)));
         const easedProximity = Math.sin(rawProximity * Math.PI / 2);
-        STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1.0, dt * 4.0));
+        STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1.0, dt * 3.8));
     } else {
         STATE.isInPlanetOrbit = false;
         STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1.0, dt * 3.0));
@@ -57,12 +65,14 @@ export function updatePhysics(dt: number) {
                 p.ringMesh.position.set(px, 0, pz);
             }
 
-            // Dynamic Planetary Scale: Planet expands smoothly into a colossal world in orbit mode
+            // Dynamic Planetary Scale: Proportional to inherent planet size
             const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
-            const targetScale = isFocus ? (1.0 + 1.8 * zoomFactor) : 1.0;
+            const planetSize = p.size || 2.5;
+            const sizeMultiplier = 0.55 * planetSize;
+            const targetScale = isFocus ? (1.0 + sizeMultiplier * zoomFactor) : 1.0;
             const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 4.0));
             p.mesh.scale.set(curScale, curScale, curScale);
-            p.source.radius = p.size * curScale;
+            p.source.radius = planetSize * curScale;
 
             if (p.bodyMesh) {
                 p.bodyMesh.rotation.y += (p.type === 'Gas Giant' ? 0.22 : 0.16) * dt;
@@ -79,13 +89,21 @@ export function updatePhysics(dt: number) {
 
     activePlanets.forEach(m => {
         if (m.isMoon && m.parentPlanet) {
-            // Dynamic Sub-System Moon Expansion
+            // Dynamic Sub-System Moon Expansion: Non-colliding Keplerian tracks
             const isParentFocus = STATE.isInPlanetOrbit && (STATE.orbitPlanet === m.parentPlanet || STATE.orbitPlanet === m);
+            const parentSize = m.parentPlanet.size || 2.5;
             const baseDist = m.baseDistance || m.distance || 6.0;
-            const targetMoonDist = isParentFocus ? (baseDist + 24.0 * zoomFactor) : baseDist;
+
+            const siblingMoons = activePlanets.filter(s => s.isMoon && s.parentPlanet === m.parentPlanet);
+            const moonIdx = siblingMoons.indexOf(m);
+            const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 7.5;
+
+            const targetMoonDist = isParentFocus
+                ? (baseDist + (parentSize * 3.8 + staggerOffset) * zoomFactor)
+                : baseDist;
             m.distance = THREE.MathUtils.lerp(m.distance, targetMoonDist, Math.min(1.0, dt * 4.0));
 
-            const targetMoonScale = isParentFocus ? (1.0 + 0.9 * zoomFactor) : 1.0;
+            const targetMoonScale = isParentFocus ? (1.0 + (m.size || 0.8) * 0.7 * zoomFactor) : 1.0;
             const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 4.0));
             m.mesh.scale.set(curMScale, curMScale, curMScale);
             m.source.radius = m.size * curMScale;
@@ -231,21 +249,31 @@ export function updatePhysics(dt: number) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
     }
 
-    // 6.5 Dynamic Framing
+    // 6.5 Dynamic Framing Proportional to Sub-System Scale
     let targetCamX = STATE.playerPosition.x;
     let targetCamZ = STATE.playerPosition.z;
+    let targetCamHeight = 65.0;
 
     if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
-        const framingWeight = 0.18 * zoomFactor;
+        const pSize = STATE.orbitPlanet.size || 2.5;
+        const moons = activePlanets.filter(m => m.isMoon && m.parentPlanet === STATE.orbitPlanet);
+
+        // Size-proportional camera height in near orbit
+        // Small rocky worlds drop to ~42 for intimate focus; large gas giants with multiple moons maintain ~64 for panoramic overview
+        const systemOrbitHeight = Math.max(42.0, Math.min(66.0, 34.0 + pSize * 4.2 + moons.length * 3.2));
+        targetCamHeight = THREE.MathUtils.lerp(65.0, systemOrbitHeight, zoomFactor);
+
+        // Smooth framing towards center of gravity in sub-system
+        const framingWeight = (0.16 + pSize * 0.02) * zoomFactor;
         targetCamX = THREE.MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, framingWeight);
         targetCamZ = THREE.MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, framingWeight);
     }
 
-    // Camera follow (Stable Height, Ship stays sleek & proportional)
+    // Camera follow (Smooth & organic)
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, Math.min(1.0, dt * 5.5));
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1.0, dt * 5.5));
-    STATE.cameraHeight = 65.0;
-    camera.position.y = 65.0;
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamHeight, Math.min(1.0, dt * 4.5));
+    STATE.cameraHeight = camera.position.y;
 
     if (camera.fov !== 60.0) {
         camera.fov = 60.0;
