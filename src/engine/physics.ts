@@ -266,33 +266,43 @@ export function updatePhysics(dt: number) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
     }
 
-    // 6.5 Dynamic Framing Proportional to Sub-System Scale & Low-Orbit Surface Proximity
+    // 6.5 Dynamic Planetary Annihilation Style 3D Orbital Camera Dive & LookAt Tracking
     let targetCamX = STATE.playerPosition.x;
     let targetCamZ = STATE.playerPosition.z;
-    let targetCamHeight = 65.0;
+    let targetCamHeight = 90.0;
+    let targetLookAtX = STATE.playerPosition.x;
+    let targetLookAtZ = STATE.playerPosition.z;
 
     if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
         const pSize = STATE.orbitPlanet.size || 2.5;
         const moons = activePlanets.filter(m => m.isMoon && m.parentPlanet === STATE.orbitPlanet);
 
-        // Stage 1 orbit height + Stage 2 low orbit skim height (drops down to 24 - 32 when skimming the planet surface!)
-        const systemOrbitHeight = Math.max(38.0, Math.min(62.0, 30.0 + pSize * 3.8 + moons.length * 3.0));
-        const lowOrbitSkimHeight = Math.max(24.0, Math.min(32.0, 16.0 + pSize * 2.4));
+        // Stage 1 orbit height + Stage 2 low orbit skim height (seamless dive from Solar 90 down to Orbital 36 -> 24)
+        const systemOrbitHeight = Math.max(34.0, Math.min(52.0, 26.0 + pSize * 3.0 + moons.length * 2.6));
+        const lowOrbitSkimHeight = Math.max(22.0, Math.min(28.0, 14.0 + pSize * 2.0));
 
-        const intermediateHeight = THREE.MathUtils.lerp(65.0, systemOrbitHeight, zoomFactor);
+        const intermediateHeight = THREE.MathUtils.lerp(90.0, systemOrbitHeight, zoomFactor);
         targetCamHeight = THREE.MathUtils.lerp(intermediateHeight, lowOrbitSkimHeight, lowOrbitFactor);
 
-        // Smooth framing towards center of gravity in sub-system
-        const framingWeight = ((0.16 + pSize * 0.02) * zoomFactor) * (1.0 - lowOrbitFactor * 0.45);
+        // Dynamic 3D Orbit framing towards sub-system
+        const framingWeight = (0.22 + pSize * 0.02) * zoomFactor;
         targetCamX = THREE.MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, framingWeight);
         targetCamZ = THREE.MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, framingWeight);
+
+        // Focal LookAt center: smoothly bridges between player ship and the planetary globe
+        const lookAtWeight = 0.35 * zoomFactor;
+        targetLookAtX = THREE.MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, lookAtWeight);
+        targetLookAtZ = THREE.MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, lookAtWeight);
     }
 
-    // Camera follow (Smooth & organic journey transition)
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, Math.min(1.0, dt * 4.8));
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1.0, dt * 4.8));
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamHeight, Math.min(1.0, dt * 2.5));
+    // Camera follow (Smooth, continuous 3D dive)
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, Math.min(1.0, dt * 5.0));
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1.0, dt * 5.0));
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamHeight, Math.min(1.0, dt * 3.2));
     STATE.cameraHeight = camera.position.y;
+
+    // Orient camera continuously to the 3D focal center
+    camera.lookAt(targetLookAtX, 0, targetLookAtZ);
 
     if (camera.fov !== 60.0) {
         camera.fov = 60.0;

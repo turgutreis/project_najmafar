@@ -438,9 +438,13 @@ export function spawnPlanetsAndAsteroids() {
         };
         activePlanets.push(planetEntry);
 
-        // Spawn Moons
+        // Spawn Moons with proper orbital clearance
         const moonsList = p.moons || [];
         moonsList.forEach((m: any, m_idx: number) => {
+            const calculatedDist = (p.size * 6.5) + (m_idx * 20.0) + 18.0;
+            m.distance = calculatedDist;
+            m.baseDistance = calculatedDist;
+
             const moonAngle = (m_idx * 2.2) + (idx * 0.7) + 0.5;
             const mx = px + m.distance * Math.cos(moonAngle);
             const mz = pz + m.distance * Math.sin(moonAngle);

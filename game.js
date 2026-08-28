@@ -35202,6 +35202,9 @@ function spawnPlanetsAndAsteroids() {
     activePlanets.push(planetEntry);
     const moonsList = p.moons || [];
     moonsList.forEach((m, m_idx) => {
+      const calculatedDist = p.size * 6.5 + m_idx * 20 + 18;
+      m.distance = calculatedDist;
+      m.baseDistance = calculatedDist;
       const moonAngle = m_idx * 2.2 + idx * 0.7 + 0.5;
       const mx = px2 + m.distance * Math.cos(moonAngle);
       const mz = pz2 + m.distance * Math.sin(moonAngle);
@@ -37439,22 +37442,28 @@ function updatePhysics(dt) {
   }
   let targetCamX = STATE.playerPosition.x;
   let targetCamZ = STATE.playerPosition.z;
-  let targetCamHeight = 65;
+  let targetCamHeight = 90;
+  let targetLookAtX = STATE.playerPosition.x;
+  let targetLookAtZ = STATE.playerPosition.z;
   if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
     const pSize = STATE.orbitPlanet.size || 2.5;
     const moons = activePlanets.filter((m) => m.isMoon && m.parentPlanet === STATE.orbitPlanet);
-    const systemOrbitHeight = Math.max(38, Math.min(62, 30 + pSize * 3.8 + moons.length * 3));
-    const lowOrbitSkimHeight = Math.max(24, Math.min(32, 16 + pSize * 2.4));
-    const intermediateHeight = MathUtils.lerp(65, systemOrbitHeight, zoomFactor);
+    const systemOrbitHeight = Math.max(34, Math.min(52, 26 + pSize * 3 + moons.length * 2.6));
+    const lowOrbitSkimHeight = Math.max(22, Math.min(28, 14 + pSize * 2));
+    const intermediateHeight = MathUtils.lerp(90, systemOrbitHeight, zoomFactor);
     targetCamHeight = MathUtils.lerp(intermediateHeight, lowOrbitSkimHeight, lowOrbitFactor);
-    const framingWeight = (0.16 + pSize * 0.02) * zoomFactor * (1 - lowOrbitFactor * 0.45);
+    const framingWeight = (0.22 + pSize * 0.02) * zoomFactor;
     targetCamX = MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, framingWeight);
     targetCamZ = MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, framingWeight);
+    const lookAtWeight = 0.35 * zoomFactor;
+    targetLookAtX = MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, lookAtWeight);
+    targetLookAtZ = MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, lookAtWeight);
   }
-  camera.position.x = MathUtils.lerp(camera.position.x, targetCamX, Math.min(1, dt * 4.8));
-  camera.position.z = MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1, dt * 4.8));
-  camera.position.y = MathUtils.lerp(camera.position.y, targetCamHeight, Math.min(1, dt * 2.5));
+  camera.position.x = MathUtils.lerp(camera.position.x, targetCamX, Math.min(1, dt * 5));
+  camera.position.z = MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1, dt * 5));
+  camera.position.y = MathUtils.lerp(camera.position.y, targetCamHeight, Math.min(1, dt * 3.2));
   STATE.cameraHeight = camera.position.y;
+  camera.lookAt(targetLookAtX, 0, targetLookAtZ);
   if (camera.fov !== 60) {
     camera.fov = 60;
     camera.updateProjectionMatrix();
