@@ -31,12 +31,14 @@ export function updatePhysics(dt: number) {
     });
 
     let orbitTriggerDist = 55.0;
+    let lowOrbitTriggerDist = 24.0;
     if (nearestPlanet) {
         const planetSize = nearestPlanet.size || 2.5;
         const moons = activePlanets.filter(m => m.isMoon && m.parentPlanet === nearestPlanet);
         const maxMoonBaseDist = moons.reduce((max, m) => Math.max(max, m.baseDistance || m.distance || 6.0), 0);
         // Dynamic Sphere of Influence (SOI) based on planet size and moon system span
-        orbitTriggerDist = Math.max(40.0, planetSize * 9.5 + maxMoonBaseDist * 2.2);
+        orbitTriggerDist = Math.max(48.0, planetSize * 11.5 + maxMoonBaseDist * 2.4);
+        lowOrbitTriggerDist = Math.max(18.0, planetSize * 5.8);
     }
 
     if (nearestPlanet && nearestPlanetDist < orbitTriggerDist) {
@@ -45,12 +47,21 @@ export function updatePhysics(dt: number) {
         const rawProximity = Math.max(0, Math.min(1.0, 1.0 - (nearestPlanetDist / orbitTriggerDist)));
         const easedProximity = Math.sin(rawProximity * Math.PI / 2);
         STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1.0, dt * 3.8));
+
+        // Stage 2: Low Planetary Orbit (LPO) Super-Zoom as you approach the upper atmosphere
+        const currentPlanetRadius = (nearestPlanet.size || 2.5) * (nearestPlanet.mesh ? nearestPlanet.mesh.scale.x : 1.0);
+        const distAboveSurface = Math.max(0, nearestPlanetDist - currentPlanetRadius);
+        const rawLowOrbit = Math.max(0, Math.min(1.0, 1.0 - (distAboveSurface / lowOrbitTriggerDist)));
+        const easedLowOrbit = rawLowOrbit * rawLowOrbit * (3.0 - 2.0 * rawLowOrbit); // Smoothstep curve
+        (STATE as any).lowOrbitFactor = THREE.MathUtils.lerp((STATE as any).lowOrbitFactor || 0, easedLowOrbit, Math.min(1.0, dt * 4.0));
     } else {
         STATE.isInPlanetOrbit = false;
         STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1.0, dt * 3.0));
+        (STATE as any).lowOrbitFactor = THREE.MathUtils.lerp((STATE as any).lowOrbitFactor || 0, 0, Math.min(1.0, dt * 3.0));
     }
 
     const zoomFactor = STATE.orbitZoomFactor || 0;
+    const lowOrbitFactor = (STATE as any).lowOrbitFactor || 0;
 
     // 1. Update celestial orbits (Planets around star, Moons around parent planet)
     activePlanets.forEach(p => {
@@ -65,12 +76,13 @@ export function updatePhysics(dt: number) {
                 p.ringMesh.position.set(px, 0, pz);
             }
 
-            // Dynamic Planetary Scale: Proportional to inherent planet size
+            // Dynamic Planetary Scale: Multi-tier Low Orbit Super-Zoom
             const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
             const planetSize = p.size || 2.5;
-            const sizeMultiplier = 0.55 * planetSize;
-            const targetScale = isFocus ? (1.0 + sizeMultiplier * zoomFactor) : 1.0;
-            const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 4.0));
+            const baseMultiplier = 0.75 * planetSize;
+            const lowOrbitMultiplier = 1.10 * planetSize;
+            const targetScale = isFocus ? (1.0 + baseMultiplier * zoomFactor + lowOrbitMultiplier * lowOrbitFactor) : 1.0;
+            const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 4.2));
             p.mesh.scale.set(curScale, curScale, curScale);
             p.source.radius = planetSize * curScale;
 
@@ -96,14 +108,14 @@ export function updatePhysics(dt: number) {
 
             const siblingMoons = activePlanets.filter(s => s.isMoon && s.parentPlanet === m.parentPlanet);
             const moonIdx = siblingMoons.indexOf(m);
-            const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 7.5;
+            const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 8.5;
 
             const targetMoonDist = isParentFocus
-                ? (baseDist + (parentSize * 3.8 + staggerOffset) * zoomFactor)
+                ? (baseDist + (parentSize * 4.8 + staggerOffset) * zoomFactor + (parentSize * 3.2) * lowOrbitFactor)
                 : baseDist;
             m.distance = THREE.MathUtils.lerp(m.distance, targetMoonDist, Math.min(1.0, dt * 4.0));
 
-            const targetMoonScale = isParentFocus ? (1.0 + (m.size || 0.8) * 0.7 * zoomFactor) : 1.0;
+            const targetMoonScale = isParentFocus ? (1.0 + (m.size || 0.8) * 0.85 * zoomFactor) : 1.0;
             const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 4.0));
             m.mesh.scale.set(curMScale, curMScale, curMScale);
             m.source.radius = m.size * curMScale;
@@ -249,7 +261,7 @@ export function updatePhysics(dt: number) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
     }
 
-    // 6.5 Dynamic Framing Proportional to Sub-System Scale
+    // 6.5 Dynamic Framing Proportional to Sub-System Scale & Low-Orbit Surface Proximity
     let targetCamX = STATE.playerPosition.x;
     let targetCamZ = STATE.playerPosition.z;
     let targetCamHeight = 65.0;
@@ -258,13 +270,15 @@ export function updatePhysics(dt: number) {
         const pSize = STATE.orbitPlanet.size || 2.5;
         const moons = activePlanets.filter(m => m.isMoon && m.parentPlanet === STATE.orbitPlanet);
 
-        // Size-proportional camera height in near orbit
-        // Small rocky worlds drop to ~42 for intimate focus; large gas giants with multiple moons maintain ~64 for panoramic overview
-        const systemOrbitHeight = Math.max(42.0, Math.min(66.0, 34.0 + pSize * 4.2 + moons.length * 3.2));
-        targetCamHeight = THREE.MathUtils.lerp(65.0, systemOrbitHeight, zoomFactor);
+        // Stage 1 orbit height + Stage 2 low orbit skim height (drops down to 24 - 32 when skimming the planet surface!)
+        const systemOrbitHeight = Math.max(38.0, Math.min(62.0, 30.0 + pSize * 3.8 + moons.length * 3.0));
+        const lowOrbitSkimHeight = Math.max(24.0, Math.min(32.0, 16.0 + pSize * 2.4));
+
+        const intermediateHeight = THREE.MathUtils.lerp(65.0, systemOrbitHeight, zoomFactor);
+        targetCamHeight = THREE.MathUtils.lerp(intermediateHeight, lowOrbitSkimHeight, lowOrbitFactor);
 
         // Smooth framing towards center of gravity in sub-system
-        const framingWeight = (0.16 + pSize * 0.02) * zoomFactor;
+        const framingWeight = ((0.16 + pSize * 0.02) * zoomFactor) * (1.0 - lowOrbitFactor * 0.45);
         targetCamX = THREE.MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, framingWeight);
         targetCamZ = THREE.MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, framingWeight);
     }

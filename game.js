@@ -37247,11 +37247,13 @@ function updatePhysics(dt) {
     }
   });
   let orbitTriggerDist = 55;
+  let lowOrbitTriggerDist = 24;
   if (nearestPlanet) {
     const planetSize = nearestPlanet.size || 2.5;
     const moons = activePlanets.filter((m) => m.isMoon && m.parentPlanet === nearestPlanet);
     const maxMoonBaseDist = moons.reduce((max, m) => Math.max(max, m.baseDistance || m.distance || 6), 0);
-    orbitTriggerDist = Math.max(40, planetSize * 9.5 + maxMoonBaseDist * 2.2);
+    orbitTriggerDist = Math.max(48, planetSize * 11.5 + maxMoonBaseDist * 2.4);
+    lowOrbitTriggerDist = Math.max(18, planetSize * 5.8);
   }
   if (nearestPlanet && nearestPlanetDist < orbitTriggerDist) {
     STATE.isInPlanetOrbit = true;
@@ -37259,11 +37261,18 @@ function updatePhysics(dt) {
     const rawProximity = Math.max(0, Math.min(1, 1 - nearestPlanetDist / orbitTriggerDist));
     const easedProximity = Math.sin(rawProximity * Math.PI / 2);
     STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1, dt * 3.8));
+    const currentPlanetRadius = (nearestPlanet.size || 2.5) * (nearestPlanet.mesh ? nearestPlanet.mesh.scale.x : 1);
+    const distAboveSurface = Math.max(0, nearestPlanetDist - currentPlanetRadius);
+    const rawLowOrbit = Math.max(0, Math.min(1, 1 - distAboveSurface / lowOrbitTriggerDist));
+    const easedLowOrbit = rawLowOrbit * rawLowOrbit * (3 - 2 * rawLowOrbit);
+    STATE.lowOrbitFactor = MathUtils.lerp(STATE.lowOrbitFactor || 0, easedLowOrbit, Math.min(1, dt * 4));
   } else {
     STATE.isInPlanetOrbit = false;
     STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1, dt * 3));
+    STATE.lowOrbitFactor = MathUtils.lerp(STATE.lowOrbitFactor || 0, 0, Math.min(1, dt * 3));
   }
   const zoomFactor = STATE.orbitZoomFactor || 0;
+  const lowOrbitFactor = STATE.lowOrbitFactor || 0;
   activePlanets.forEach((p) => {
     if (!p.isMoon) {
       p.angle += dt * p.speed;
@@ -37276,9 +37285,10 @@ function updatePhysics(dt) {
       }
       const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
       const planetSize = p.size || 2.5;
-      const sizeMultiplier = 0.55 * planetSize;
-      const targetScale = isFocus ? 1 + sizeMultiplier * zoomFactor : 1;
-      const curScale = MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1, dt * 4));
+      const baseMultiplier = 0.75 * planetSize;
+      const lowOrbitMultiplier = 1.1 * planetSize;
+      const targetScale = isFocus ? 1 + baseMultiplier * zoomFactor + lowOrbitMultiplier * lowOrbitFactor : 1;
+      const curScale = MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1, dt * 4.2));
       p.mesh.scale.set(curScale, curScale, curScale);
       p.source.radius = planetSize * curScale;
       if (p.bodyMesh) {
@@ -37300,10 +37310,10 @@ function updatePhysics(dt) {
       const baseDist = m.baseDistance || m.distance || 6;
       const siblingMoons = activePlanets.filter((s) => s.isMoon && s.parentPlanet === m.parentPlanet);
       const moonIdx = siblingMoons.indexOf(m);
-      const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 7.5;
-      const targetMoonDist = isParentFocus ? baseDist + (parentSize * 3.8 + staggerOffset) * zoomFactor : baseDist;
+      const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 8.5;
+      const targetMoonDist = isParentFocus ? baseDist + (parentSize * 4.8 + staggerOffset) * zoomFactor + parentSize * 3.2 * lowOrbitFactor : baseDist;
       m.distance = MathUtils.lerp(m.distance, targetMoonDist, Math.min(1, dt * 4));
-      const targetMoonScale = isParentFocus ? 1 + (m.size || 0.8) * 0.7 * zoomFactor : 1;
+      const targetMoonScale = isParentFocus ? 1 + (m.size || 0.8) * 0.85 * zoomFactor : 1;
       const curMScale = MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1, dt * 4));
       m.mesh.scale.set(curMScale, curMScale, curMScale);
       m.source.radius = m.size * curMScale;
@@ -37430,9 +37440,11 @@ function updatePhysics(dt) {
   if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
     const pSize = STATE.orbitPlanet.size || 2.5;
     const moons = activePlanets.filter((m) => m.isMoon && m.parentPlanet === STATE.orbitPlanet);
-    const systemOrbitHeight = Math.max(42, Math.min(66, 34 + pSize * 4.2 + moons.length * 3.2));
-    targetCamHeight = MathUtils.lerp(65, systemOrbitHeight, zoomFactor);
-    const framingWeight = (0.16 + pSize * 0.02) * zoomFactor;
+    const systemOrbitHeight = Math.max(38, Math.min(62, 30 + pSize * 3.8 + moons.length * 3));
+    const lowOrbitSkimHeight = Math.max(24, Math.min(32, 16 + pSize * 2.4));
+    const intermediateHeight = MathUtils.lerp(65, systemOrbitHeight, zoomFactor);
+    targetCamHeight = MathUtils.lerp(intermediateHeight, lowOrbitSkimHeight, lowOrbitFactor);
+    const framingWeight = (0.16 + pSize * 0.02) * zoomFactor * (1 - lowOrbitFactor * 0.45);
     targetCamX = MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, framingWeight);
     targetCamZ = MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, framingWeight);
   }
