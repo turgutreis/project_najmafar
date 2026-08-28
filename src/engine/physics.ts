@@ -295,14 +295,15 @@ export function updatePhysics(dt: number) {
         targetLookAtZ = THREE.MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, lookAtWeight);
     }
 
-    // Camera follow (Smooth, continuous 3D dive)
+    // Camera follow (Smooth positional tracking & altitude zoom)
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, Math.min(1.0, dt * 5.0));
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1.0, dt * 5.0));
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamHeight, Math.min(1.0, dt * 3.2));
     STATE.cameraHeight = camera.position.y;
 
-    // Orient camera continuously to the 3D focal center
-    camera.lookAt(targetLookAtX, 0, targetLookAtZ);
+    // Rock-solid fixed orientation: strictly prevent any camera rotation when ship moves or turns
+    camera.rotation.set(-Math.PI / 2, 0, 0);
+    camera.up.set(0, 0, -1);
 
     if (camera.fov !== 60.0) {
         camera.fov = 60.0;

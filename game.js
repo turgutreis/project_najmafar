@@ -37463,7 +37463,8 @@ function updatePhysics(dt) {
   camera.position.z = MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1, dt * 5));
   camera.position.y = MathUtils.lerp(camera.position.y, targetCamHeight, Math.min(1, dt * 3.2));
   STATE.cameraHeight = camera.position.y;
-  camera.lookAt(targetLookAtX, 0, targetLookAtZ);
+  camera.rotation.set(-Math.PI / 2, 0, 0);
+  camera.up.set(0, 0, -1);
   if (camera.fov !== 60) {
     camera.fov = 60;
     camera.updateProjectionMatrix();
