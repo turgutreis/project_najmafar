@@ -30,34 +30,35 @@ export function updatePhysics(dt: number) {
         }
     });
 
-    let orbitTriggerDist = 55.0;
-    let lowOrbitTriggerDist = 24.0;
+    let orbitTriggerDist = 90.0;
+    let lowOrbitTriggerDist = 32.0;
     if (nearestPlanet) {
         const planetSize = nearestPlanet.size || 2.5;
         const moons = activePlanets.filter(m => m.isMoon && m.parentPlanet === nearestPlanet);
         const maxMoonBaseDist = moons.reduce((max, m) => Math.max(max, m.baseDistance || m.distance || 6.0), 0);
-        // Dynamic Sphere of Influence (SOI) based on planet size and moon system span
-        orbitTriggerDist = Math.max(48.0, planetSize * 11.5 + maxMoonBaseDist * 2.4);
-        lowOrbitTriggerDist = Math.max(18.0, planetSize * 5.8);
+        // Extended long-distance approach horizon (Journey feeling over 90 - 150 LJ)
+        orbitTriggerDist = Math.max(85.0, planetSize * 18.0 + maxMoonBaseDist * 4.0);
+        lowOrbitTriggerDist = Math.max(30.0, planetSize * 9.0);
     }
 
     if (nearestPlanet && nearestPlanetDist < orbitTriggerDist) {
         STATE.isInPlanetOrbit = true;
         STATE.orbitPlanet = nearestPlanet;
         const rawProximity = Math.max(0, Math.min(1.0, 1.0 - (nearestPlanetDist / orbitTriggerDist)));
+        // Gradual, cinematic approach curve (smooth cosine travel swell)
         const easedProximity = Math.sin(rawProximity * Math.PI / 2);
-        STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1.0, dt * 3.8));
+        STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1.0, dt * 1.6));
 
         // Stage 2: Low Planetary Orbit (LPO) Super-Zoom as you approach the upper atmosphere
         const currentPlanetRadius = (nearestPlanet.size || 2.5) * (nearestPlanet.mesh ? nearestPlanet.mesh.scale.x : 1.0);
         const distAboveSurface = Math.max(0, nearestPlanetDist - currentPlanetRadius);
         const rawLowOrbit = Math.max(0, Math.min(1.0, 1.0 - (distAboveSurface / lowOrbitTriggerDist)));
         const easedLowOrbit = rawLowOrbit * rawLowOrbit * (3.0 - 2.0 * rawLowOrbit); // Smoothstep curve
-        (STATE as any).lowOrbitFactor = THREE.MathUtils.lerp((STATE as any).lowOrbitFactor || 0, easedLowOrbit, Math.min(1.0, dt * 4.0));
+        (STATE as any).lowOrbitFactor = THREE.MathUtils.lerp((STATE as any).lowOrbitFactor || 0, easedLowOrbit, Math.min(1.0, dt * 1.8));
     } else {
         STATE.isInPlanetOrbit = false;
-        STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1.0, dt * 3.0));
-        (STATE as any).lowOrbitFactor = THREE.MathUtils.lerp((STATE as any).lowOrbitFactor || 0, 0, Math.min(1.0, dt * 3.0));
+        STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1.0, dt * 2.2));
+        (STATE as any).lowOrbitFactor = THREE.MathUtils.lerp((STATE as any).lowOrbitFactor || 0, 0, Math.min(1.0, dt * 2.2));
     }
 
     const zoomFactor = STATE.orbitZoomFactor || 0;
@@ -76,13 +77,13 @@ export function updatePhysics(dt: number) {
                 p.ringMesh.position.set(px, 0, pz);
             }
 
-            // Dynamic Planetary Scale: Multi-tier Low Orbit Super-Zoom
+            // Dynamic Planetary Scale: Multi-tier Low Orbit Super-Zoom with smooth travel growth
             const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
             const planetSize = p.size || 2.5;
-            const baseMultiplier = 0.75 * planetSize;
-            const lowOrbitMultiplier = 1.10 * planetSize;
+            const baseMultiplier = 0.80 * planetSize;
+            const lowOrbitMultiplier = 1.15 * planetSize;
             const targetScale = isFocus ? (1.0 + baseMultiplier * zoomFactor + lowOrbitMultiplier * lowOrbitFactor) : 1.0;
-            const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 4.2));
+            const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 2.4));
             p.mesh.scale.set(curScale, curScale, curScale);
             p.source.radius = planetSize * curScale;
 
@@ -108,15 +109,15 @@ export function updatePhysics(dt: number) {
 
             const siblingMoons = activePlanets.filter(s => s.isMoon && s.parentPlanet === m.parentPlanet);
             const moonIdx = siblingMoons.indexOf(m);
-            const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 8.5;
+            const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 9.5;
 
             const targetMoonDist = isParentFocus
-                ? (baseDist + (parentSize * 4.8 + staggerOffset) * zoomFactor + (parentSize * 3.2) * lowOrbitFactor)
+                ? (baseDist + (parentSize * 5.2 + staggerOffset) * zoomFactor + (parentSize * 3.5) * lowOrbitFactor)
                 : baseDist;
-            m.distance = THREE.MathUtils.lerp(m.distance, targetMoonDist, Math.min(1.0, dt * 4.0));
+            m.distance = THREE.MathUtils.lerp(m.distance, targetMoonDist, Math.min(1.0, dt * 2.4));
 
             const targetMoonScale = isParentFocus ? (1.0 + (m.size || 0.8) * 0.85 * zoomFactor) : 1.0;
-            const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 4.0));
+            const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 2.4));
             m.mesh.scale.set(curMScale, curMScale, curMScale);
             m.source.radius = m.size * curMScale;
 
@@ -231,8 +232,12 @@ export function updatePhysics(dt: number) {
     STATE.playerVelocity.x += netGx * dt;
     STATE.playerVelocity.z += netGz * dt;
 
-    // 5. Apply Natural Vacuum Drag / Momentum preservation
-    const effectiveDrag = STATE.currentDrag;
+    // 5. Apply Natural Vacuum Drag & Gravitational Orbit Capture
+    let effectiveDrag = STATE.currentDrag;
+    if (lowOrbitFactor > 0.05) {
+        // Gravitational capture gently tempers high interplanetary cruise speed into a majestic orbital flight (~14-16 km/s)
+        effectiveDrag += 0.85 * lowOrbitFactor;
+    }
     STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
 
     // Top Speed Clamp (Harmonized cosmic cruise speed)
@@ -251,7 +256,7 @@ export function updatePhysics(dt: number) {
     STATE.playerPosition.z += STATE.playerVelocity.z * dt;
 
     // Boundary wrapping (Vast Solar System Scale)
-    const maxBound = 850;
+    const maxBound = 1450;
     if (STATE.playerPosition.x > maxBound) { STATE.playerPosition.x = -maxBound; }
     if (STATE.playerPosition.x < -maxBound) { STATE.playerPosition.x = maxBound; }
     if (STATE.playerPosition.z > maxBound) { STATE.playerPosition.z = -maxBound; }
@@ -283,10 +288,10 @@ export function updatePhysics(dt: number) {
         targetCamZ = THREE.MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, framingWeight);
     }
 
-    // Camera follow (Smooth & organic)
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, Math.min(1.0, dt * 5.5));
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1.0, dt * 5.5));
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamHeight, Math.min(1.0, dt * 4.5));
+    // Camera follow (Smooth & organic journey transition)
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, Math.min(1.0, dt * 4.8));
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1.0, dt * 4.8));
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamHeight, Math.min(1.0, dt * 2.5));
     STATE.cameraHeight = camera.position.y;
 
     if (camera.fov !== 60.0) {
