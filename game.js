@@ -30792,7 +30792,7 @@ function hexToRgb(hex) {
   };
 }
 function createHabitableTextures(colorHex, seed = 42) {
-  const w = 256, h = 128;
+  const w = 1024, h = 512;
   const colCanvas = document.createElement("canvas");
   colCanvas.width = w;
   colCanvas.height = h;
@@ -30810,43 +30810,45 @@ function createHabitableTextures(colorHex, seed = 42) {
     const lat = Math.abs(y - h / 2) / (h / 2);
     for (let x = 0;x < w; x++) {
       const idx = (y * w + x) * 4;
-      const nx = x / w * 5;
-      const ny = y / h * 3;
-      const n = fbm(nx, ny, 4, seed);
+      const nx = x / w * 6;
+      const ny = y / h * 3.5;
+      const n = fbm(nx, ny, 5, seed);
+      const detailNoise = smoothNoise(nx * 18, ny * 18, seed + 101);
       let r, g, b, bumpVal;
-      if (lat > 0.82 + n * 0.12) {
+      if (lat > 0.82 + n * 0.1) {
         r = 230 + Math.floor(n * 25);
         g = 245 + Math.floor(n * 10);
         b = 255;
-        bumpVal = 40;
+        bumpVal = 40 + Math.floor(detailNoise * 20);
       } else if (n < 0.47) {
         const oceanDepth = n / 0.47;
         if (oceanDepth < 0.8) {
-          r = 8;
-          g = 50 + Math.floor(oceanDepth * 40);
-          b = 140 + Math.floor(oceanDepth * 80);
+          r = 6;
+          g = 45 + Math.floor(oceanDepth * 45);
+          b = 135 + Math.floor(oceanDepth * 85);
         } else {
-          r = 10;
-          g = 160 + Math.floor((oceanDepth - 0.8) * 300);
-          b = 210;
+          const shallowT = (oceanDepth - 0.8) / 0.2;
+          r = 8 + Math.floor(shallowT * 20);
+          g = 150 + Math.floor(shallowT * 70);
+          b = 200 + Math.floor(shallowT * 35);
         }
         bumpVal = 0;
       } else if (n < 0.51) {
-        r = 210;
-        g = 180;
-        b = 110;
-        bumpVal = 15;
+        r = 215 + Math.floor(detailNoise * 20);
+        g = 185 + Math.floor(detailNoise * 20);
+        b = 115;
+        bumpVal = 18;
       } else if (n < 0.72) {
         const vegT = (n - 0.51) / 0.21;
-        r = Math.floor(rgb.r * 0.3 + (1 - vegT) * 20);
-        g = Math.floor(rgb.g * 0.9 + vegT * 40);
-        b = Math.floor(rgb.b * 0.4 + vegT * 20);
-        bumpVal = 60 + Math.floor(vegT * 60);
+        r = Math.floor(rgb.r * 0.32 + (1 - vegT) * 25 + detailNoise * 15);
+        g = Math.floor(rgb.g * 0.92 + vegT * 45 + detailNoise * 20);
+        b = Math.floor(rgb.b * 0.42 + vegT * 25);
+        bumpVal = 55 + Math.floor(vegT * 65 + detailNoise * 25);
       } else {
         const mountainT = (n - 0.72) / 0.28;
-        r = 140 + Math.floor(mountainT * 100);
-        g = 145 + Math.floor(mountainT * 95);
-        b = 160 + Math.floor(mountainT * 95);
+        r = 145 + Math.floor(mountainT * 95 + detailNoise * 15);
+        g = 150 + Math.floor(mountainT * 90 + detailNoise * 15);
+        b = 165 + Math.floor(mountainT * 90);
         bumpVal = 140 + Math.floor(mountainT * 115);
       }
       colData[idx] = Math.min(255, r);
@@ -30866,7 +30868,7 @@ function createHabitableTextures(colorHex, seed = 42) {
   return { map, bumpMap };
 }
 function createCityLightsTexture(seed = 42, techLevel = "Spacefaring") {
-  const w = 256, h = 128;
+  const w = 1024, h = 512;
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -30880,15 +30882,15 @@ function createCityLightsTexture(seed = 42, techLevel = "Spacefaring") {
     const lat = Math.abs(y - h / 2) / (h / 2);
     for (let x = 0;x < w; x++) {
       const idx = (y * w + x) * 4;
-      const nx = x / w * 5;
-      const ny = y / h * 3;
-      const n = fbm(nx, ny, 4, seed);
+      const nx = x / w * 6;
+      const ny = y / h * 3.5;
+      const n = fbm(nx, ny, 5, seed);
       const isLand = lat <= 0.8 && n >= 0.52 && n <= 0.74;
       if (isLand) {
-        const cityNoise = smoothNoise(nx * 14, ny * 14, seed + 777);
-        const roadNoise = smoothNoise(nx * 28, ny * 28, seed + 999);
-        if (cityNoise > 0.68) {
-          const intensity = (cityNoise - 0.68) / 0.32;
+        const cityNoise = smoothNoise(nx * 16, ny * 16, seed + 777);
+        const roadNoise = smoothNoise(nx * 32, ny * 32, seed + 999);
+        if (cityNoise > 0.66) {
+          const intensity = (cityNoise - 0.66) / 0.34;
           if (isPrimitive) {
             data[idx] = Math.floor(180 * intensity);
             data[idx + 1] = Math.floor(90 * intensity);
@@ -30907,7 +30909,7 @@ function createCityLightsTexture(seed = 42, techLevel = "Spacefaring") {
             data[idx + 2] = Math.floor(140 * intensity);
           }
           data[idx + 3] = 255;
-        } else if (!isPrimitive && roadNoise > 0.82) {
+        } else if (!isPrimitive && roadNoise > 0.84) {
           data[idx] = 240;
           data[idx + 1] = 160;
           data[idx + 2] = 80;
@@ -30917,11 +30919,10 @@ function createCityLightsTexture(seed = 42, techLevel = "Spacefaring") {
     }
   }
   ctx.putImageData(img, 0, 0);
-  const texture = new CanvasTexture(canvas);
-  return texture;
+  return new CanvasTexture(canvas);
 }
 function createGasGiantTextures(colorHex, seed = 77) {
-  const w = 256, h = 128;
+  const w = 1024, h = 512;
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -30934,22 +30935,23 @@ function createGasGiantTextures(colorHex, seed = 77) {
   for (let y = 0;y < h; y++) {
     for (let x = 0;x < w; x++) {
       const idx = (y * w + x) * 4;
-      const nx = x / w * 6;
-      const ny = y / h * 8;
-      const turb = fbm(nx, ny * 0.5, 3, seed);
-      const band = Math.sin(y * 0.35 + turb * 4);
-      const sDist = Math.hypot((x - stormX) / 1.8, y - stormY);
+      const nx = x / w * 8;
+      const ny = y / h * 10;
+      const turb = fbm(nx, ny * 0.5, 4, seed);
+      const microTurb = smoothNoise(nx * 14, ny * 14, seed + 42) * 0.15;
+      const band = Math.sin(y * 0.18 + (turb + microTurb) * 5);
+      const sDist = Math.hypot((x - stormX) / 2, y - stormY);
       let r, g, b;
-      if (sDist < 12) {
-        const swirl = Math.sin(sDist * 0.6 + Math.atan2(y - stormY, x - stormX) * 3);
-        r = Math.min(255, base.r * 1.6 + swirl * 40);
-        g = Math.min(255, base.g * 0.8 + swirl * 20);
-        b = Math.min(255, base.b * 1.5 + swirl * 30);
+      if (sDist < 35) {
+        const swirl = Math.sin(sDist * 0.25 + Math.atan2(y - stormY, x - stormX) * 3);
+        r = Math.min(255, base.r * 1.6 + swirl * 45);
+        g = Math.min(255, base.g * 0.8 + swirl * 25);
+        b = Math.min(255, base.b * 1.5 + swirl * 35);
       } else {
         const bandWeight = (band + 1) * 0.5;
-        r = Math.floor(base.r * (0.4 + bandWeight * 0.7) + turb * 35);
-        g = Math.floor(base.g * (0.4 + bandWeight * 0.7) + turb * 35);
-        b = Math.floor(base.b * (0.4 + bandWeight * 0.7) + turb * 35);
+        r = Math.floor(base.r * (0.38 + bandWeight * 0.72) + turb * 40);
+        g = Math.floor(base.g * (0.38 + bandWeight * 0.72) + turb * 40);
+        b = Math.floor(base.b * (0.38 + bandWeight * 0.72) + turb * 40);
       }
       data[idx] = Math.min(255, Math.max(0, r));
       data[idx + 1] = Math.min(255, Math.max(0, g));
@@ -30962,7 +30964,7 @@ function createGasGiantTextures(colorHex, seed = 77) {
   return { map, bumpMap: null };
 }
 function createRockyTextures(colorHex, seed = 99) {
-  const w = 256, h = 128;
+  const w = 1024, h = 512;
   const colCanvas = document.createElement("canvas");
   colCanvas.width = w;
   colCanvas.height = h;
@@ -30977,36 +30979,39 @@ function createRockyTextures(colorHex, seed = 99) {
   const bumpData = bumpImg.data;
   const base = hexToRgb(colorHex);
   const craters = [];
-  for (let c = 0;c < 12; c++) {
+  for (let c = 0;c < 24; c++) {
     craters.push({
-      x: Math.abs(seed) * (c + 1) * 37 % w,
-      y: Math.abs(seed) * (c + 1) * 61 % h,
-      radius: 4 + c % 5 * 3
+      x: Math.abs(seed) * (c + 1) * 73 % w,
+      y: Math.abs(seed) * (c + 1) * 107 % h,
+      radius: 10 + c % 7 * 8
     });
   }
   for (let y = 0;y < h; y++) {
     for (let x = 0;x < w; x++) {
       const idx = (y * w + x) * 4;
-      const n = fbm(x / w * 6, y / h * 4, 4, seed);
-      let bumpVal = Math.floor(n * 160);
-      let r = Math.floor(base.r * (0.6 + n * 0.5));
-      let g = Math.floor(base.g * (0.6 + n * 0.5));
-      let b = Math.floor(base.b * (0.6 + n * 0.5));
+      const nx = x / w * 8;
+      const ny = y / h * 5;
+      const n = fbm(nx, ny, 5, seed);
+      const microN = smoothNoise(nx * 22, ny * 22, seed + 33);
+      let bumpVal = Math.floor(n * 160 + microN * 30);
+      let r = Math.floor(base.r * (0.55 + n * 0.5 + microN * 0.15));
+      let g = Math.floor(base.g * (0.55 + n * 0.5 + microN * 0.15));
+      let b = Math.floor(base.b * (0.55 + n * 0.5 + microN * 0.15));
       for (let c = 0;c < craters.length; c++) {
         const cr = craters[c];
         const d = Math.hypot(x - cr.x, y - cr.y);
         if (d < cr.radius) {
           const ratio = d / cr.radius;
-          if (ratio < 0.7) {
-            r = Math.floor(r * 0.6);
-            g = Math.floor(g * 0.6);
-            b = Math.floor(b * 0.6);
-            bumpVal = Math.max(0, bumpVal - 60);
+          if (ratio < 0.72) {
+            r = Math.floor(r * 0.55);
+            g = Math.floor(g * 0.55);
+            b = Math.floor(b * 0.55);
+            bumpVal = Math.max(0, bumpVal - 70);
           } else {
-            r = Math.min(255, r + 40);
-            g = Math.min(255, g + 40);
-            b = Math.min(255, b + 40);
-            bumpVal = Math.min(255, bumpVal + 70);
+            r = Math.min(255, r + 45);
+            g = Math.min(255, g + 45);
+            b = Math.min(255, b + 45);
+            bumpVal = Math.min(255, bumpVal + 80);
           }
         }
       }
@@ -31028,7 +31033,7 @@ function createRockyTextures(colorHex, seed = 99) {
   };
 }
 function createIceMoonTextures(colorHex, seed = 123) {
-  const w = 256, h = 128;
+  const w = 512, h = 256;
   const colCanvas = document.createElement("canvas");
   colCanvas.width = w;
   colCanvas.height = h;
@@ -31044,10 +31049,10 @@ function createIceMoonTextures(colorHex, seed = 123) {
   for (let y = 0;y < h; y++) {
     for (let x = 0;x < w; x++) {
       const idx = (y * w + x) * 4;
-      const n = fbm(x / w * 8, y / h * 6, 3, seed);
-      const crack1 = Math.abs(Math.sin(x * 0.15 + n * 3 + y * 0.08));
-      const crack2 = Math.abs(Math.sin(y * 0.2 - x * 0.1 + n * 2.5));
-      const isCrack = crack1 < 0.1 || crack2 < 0.08;
+      const n = fbm(x / w * 8, y / h * 6, 4, seed);
+      const crack1 = Math.abs(Math.sin(x * 0.08 + n * 3.5 + y * 0.04));
+      const crack2 = Math.abs(Math.sin(y * 0.1 - x * 0.05 + n * 2.8));
+      const isCrack = crack1 < 0.09 || crack2 < 0.07;
       let r, g, b, bumpVal;
       if (isCrack) {
         r = 180 + Math.floor(n * 30);
@@ -31078,7 +31083,7 @@ function createIceMoonTextures(colorHex, seed = 123) {
   };
 }
 function createVolcanicMoonTextures(colorHex, seed = 321) {
-  const w = 256, h = 128;
+  const w = 512, h = 256;
   const colCanvas = document.createElement("canvas");
   colCanvas.width = w;
   colCanvas.height = h;
@@ -31100,9 +31105,9 @@ function createVolcanicMoonTextures(colorHex, seed = 321) {
   for (let y = 0;y < h; y++) {
     for (let x = 0;x < w; x++) {
       const idx = (y * w + x) * 4;
-      const n = fbm(x / w * 6, y / h * 4, 4, seed);
-      const magma = Math.abs(Math.sin(x * 0.12 + y * 0.15 + n * 4));
-      const isMagma = magma < 0.12;
+      const n = fbm(x / w * 7, y / h * 5, 4, seed);
+      const magma = Math.abs(Math.sin(x * 0.08 + y * 0.1 + n * 4));
+      const isMagma = magma < 0.1;
       let r, g, b, emR, emG, emB, bumpVal;
       if (isMagma) {
         r = 255;
@@ -35111,7 +35116,7 @@ function spawnPlanetsAndAsteroids() {
       } else {
         texData = createRockyTextures(p.color, seed);
       }
-      const geo = new SphereGeometry(p.size, 32, 32);
+      const geo = new SphereGeometry(p.size, 64, 64);
       const mat = new MeshStandardMaterial({
         map: texData.map,
         bumpMap: texData.bumpMap || null,
@@ -35137,7 +35142,7 @@ function spawnPlanetsAndAsteroids() {
         planetGroup.add(atmoMesh);
       }
       if (cloudTexture && isHab) {
-        const cloudGeo = new SphereGeometry(p.size * 1.018, 32, 32);
+        const cloudGeo = new SphereGeometry(p.size * 1.018, 64, 64);
         const cloudMat = new MeshStandardMaterial({
           map: cloudTexture,
           transparent: true,
@@ -35217,7 +35222,7 @@ function spawnPlanetsAndAsteroids() {
       } else {
         mTex = createRockyTextures(m.color, mSeed);
       }
-      const mGeo = new SphereGeometry(m.size, 24, 24);
+      const mGeo = new SphereGeometry(m.size, 48, 48);
       const mMat = new MeshStandardMaterial({
         map: mTex.map,
         bumpMap: mTex.bumpMap || null,
@@ -37287,13 +37292,10 @@ function updatePhysics(dt) {
         p.ringMesh.position.set(px2, 0, pz2);
       }
       const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
-      const planetSize = p.size || 2.5;
-      const baseMultiplier = 0.8 * planetSize;
-      const lowOrbitMultiplier = 1.15 * planetSize;
-      const targetScale = isFocus ? 1 + baseMultiplier * zoomFactor + lowOrbitMultiplier * lowOrbitFactor : 1;
+      const targetScale = isFocus ? 1 + 0.18 * zoomFactor + 0.08 * lowOrbitFactor : 1;
       const curScale = MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1, dt * 2.4));
       p.mesh.scale.set(curScale, curScale, curScale);
-      p.source.radius = planetSize * curScale;
+      p.source.radius = p.size * curScale;
       if (p.bodyMesh) {
         p.bodyMesh.rotation.y += (p.type === "Gas Giant" ? 0.22 : 0.16) * dt;
       }
@@ -37309,14 +37311,13 @@ function updatePhysics(dt) {
   activePlanets.forEach((m) => {
     if (m.isMoon && m.parentPlanet) {
       const isParentFocus = STATE.isInPlanetOrbit && (STATE.orbitPlanet === m.parentPlanet || STATE.orbitPlanet === m);
-      const parentSize = m.parentPlanet.size || 2.5;
-      const baseDist = m.baseDistance || m.distance || 6;
+      const baseDist = m.baseDistance || m.distance || 30;
       const siblingMoons = activePlanets.filter((s) => s.isMoon && s.parentPlanet === m.parentPlanet);
       const moonIdx = siblingMoons.indexOf(m);
-      const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 9.5;
-      const targetMoonDist = isParentFocus ? baseDist + (parentSize * 5.2 + staggerOffset) * zoomFactor + parentSize * 3.5 * lowOrbitFactor : baseDist;
+      const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 8;
+      const targetMoonDist = isParentFocus ? baseDist + (12 + staggerOffset) * zoomFactor : baseDist;
       m.distance = MathUtils.lerp(m.distance, targetMoonDist, Math.min(1, dt * 2.4));
-      const targetMoonScale = isParentFocus ? 1 + (m.size || 0.8) * 0.85 * zoomFactor : 1;
+      const targetMoonScale = isParentFocus ? 1 + 0.15 * zoomFactor : 1;
       const curMScale = MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1, dt * 2.4));
       m.mesh.scale.set(curMScale, curMScale, curMScale);
       m.source.radius = m.size * curMScale;
@@ -37442,22 +37443,12 @@ function updatePhysics(dt) {
   }
   let targetCamX = STATE.playerPosition.x;
   let targetCamZ = STATE.playerPosition.z;
-  let targetCamHeight = 90;
-  let targetLookAtX = STATE.playerPosition.x;
-  let targetLookAtZ = STATE.playerPosition.z;
+  let targetCamHeight = 68;
   if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
-    const pSize = STATE.orbitPlanet.size || 2.5;
-    const moons = activePlanets.filter((m) => m.isMoon && m.parentPlanet === STATE.orbitPlanet);
-    const systemOrbitHeight = Math.max(34, Math.min(52, 26 + pSize * 3 + moons.length * 2.6));
-    const lowOrbitSkimHeight = Math.max(22, Math.min(28, 14 + pSize * 2));
-    const intermediateHeight = MathUtils.lerp(90, systemOrbitHeight, zoomFactor);
-    targetCamHeight = MathUtils.lerp(intermediateHeight, lowOrbitSkimHeight, lowOrbitFactor);
-    const framingWeight = (0.22 + pSize * 0.02) * zoomFactor;
+    const framingWeight = 0.16 * zoomFactor;
     targetCamX = MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, framingWeight);
     targetCamZ = MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, framingWeight);
-    const lookAtWeight = 0.35 * zoomFactor;
-    targetLookAtX = MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, lookAtWeight);
-    targetLookAtZ = MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, lookAtWeight);
+    targetCamHeight = MathUtils.lerp(68, 64, zoomFactor);
   }
   camera.position.x = MathUtils.lerp(camera.position.x, targetCamX, Math.min(1, dt * 5));
   camera.position.z = MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1, dt * 5));

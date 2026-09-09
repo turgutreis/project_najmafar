@@ -338,7 +338,7 @@ export function spawnPlanetsAndAsteroids() {
                 texData = createRockyTextures(p.color, seed);
             }
 
-            const geo = new THREE.SphereGeometry(p.size, 32, 32);
+            const geo = new THREE.SphereGeometry(p.size, 64, 64);
             const mat = new THREE.MeshStandardMaterial({
                 map: texData.map,
                 bumpMap: texData.bumpMap || null,
@@ -367,7 +367,7 @@ export function spawnPlanetsAndAsteroids() {
             }
 
             if (cloudTexture && isHab) {
-                const cloudGeo = new THREE.SphereGeometry(p.size * 1.018, 32, 32);
+                const cloudGeo = new THREE.SphereGeometry(p.size * 1.018, 64, 64);
                 const cloudMat = new THREE.MeshStandardMaterial({
                     map: cloudTexture,
                     transparent: true,
@@ -459,7 +459,7 @@ export function spawnPlanetsAndAsteroids() {
                 mTex = createRockyTextures(m.color, mSeed);
             }
 
-            const mGeo = new THREE.SphereGeometry(m.size, 24, 24);
+            const mGeo = new THREE.SphereGeometry(m.size, 48, 48);
             const mMat = new THREE.MeshStandardMaterial({
                 map: mTex.map,
                 bumpMap: mTex.bumpMap || null,

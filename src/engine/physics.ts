@@ -77,15 +77,12 @@ export function updatePhysics(dt: number) {
                 p.ringMesh.position.set(px, 0, pz);
             }
 
-            // Dynamic Planetary Scale: Multi-tier Low Orbit Super-Zoom with smooth travel growth
+            // Dynamic Planetary Scale: Natural, subtle perspective swell (1.0 -> 1.20x max)
             const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
-            const planetSize = p.size || 2.5;
-            const baseMultiplier = 0.80 * planetSize;
-            const lowOrbitMultiplier = 1.15 * planetSize;
-            const targetScale = isFocus ? (1.0 + baseMultiplier * zoomFactor + lowOrbitMultiplier * lowOrbitFactor) : 1.0;
+            const targetScale = isFocus ? (1.0 + 0.18 * zoomFactor + 0.08 * lowOrbitFactor) : 1.0;
             const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 2.4));
             p.mesh.scale.set(curScale, curScale, curScale);
-            p.source.radius = planetSize * curScale;
+            p.source.radius = p.size * curScale;
 
             if (p.bodyMesh) {
                 p.bodyMesh.rotation.y += (p.type === 'Gas Giant' ? 0.22 : 0.16) * dt;
@@ -102,21 +99,20 @@ export function updatePhysics(dt: number) {
 
     activePlanets.forEach(m => {
         if (m.isMoon && m.parentPlanet) {
-            // Dynamic Sub-System Moon Expansion: Non-colliding Keplerian tracks
+            // Moons maintain expansive, clear orbital tracks
             const isParentFocus = STATE.isInPlanetOrbit && (STATE.orbitPlanet === m.parentPlanet || STATE.orbitPlanet === m);
-            const parentSize = m.parentPlanet.size || 2.5;
-            const baseDist = m.baseDistance || m.distance || 6.0;
+            const baseDist = m.baseDistance || m.distance || 30.0;
 
             const siblingMoons = activePlanets.filter(s => s.isMoon && s.parentPlanet === m.parentPlanet);
             const moonIdx = siblingMoons.indexOf(m);
-            const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 9.5;
+            const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 8.0;
 
             const targetMoonDist = isParentFocus
-                ? (baseDist + (parentSize * 5.2 + staggerOffset) * zoomFactor + (parentSize * 3.5) * lowOrbitFactor)
+                ? (baseDist + (12.0 + staggerOffset) * zoomFactor)
                 : baseDist;
             m.distance = THREE.MathUtils.lerp(m.distance, targetMoonDist, Math.min(1.0, dt * 2.4));
 
-            const targetMoonScale = isParentFocus ? (1.0 + (m.size || 0.8) * 0.85 * zoomFactor) : 1.0;
+            const targetMoonScale = isParentFocus ? (1.0 + 0.15 * zoomFactor) : 1.0;
             const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 2.4));
             m.mesh.scale.set(curMScale, curMScale, curMScale);
             m.source.radius = m.size * curMScale;
@@ -266,36 +262,22 @@ export function updatePhysics(dt: number) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
     }
 
-    // 6.5 Dynamic Planetary Annihilation Style 3D Orbital Camera Dive & LookAt Tracking
+    // 6.5 Dynamic Framing with Stable, Sleek Spacecraft Proportions
     let targetCamX = STATE.playerPosition.x;
     let targetCamZ = STATE.playerPosition.z;
-    let targetCamHeight = 90.0;
-    let targetLookAtX = STATE.playerPosition.x;
-    let targetLookAtZ = STATE.playerPosition.z;
+    let targetCamHeight = 68.0;
 
     if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
-        const pSize = STATE.orbitPlanet.size || 2.5;
-        const moons = activePlanets.filter(m => m.isMoon && m.parentPlanet === STATE.orbitPlanet);
-
-        // Stage 1 orbit height + Stage 2 low orbit skim height (seamless dive from Solar 90 down to Orbital 36 -> 24)
-        const systemOrbitHeight = Math.max(34.0, Math.min(52.0, 26.0 + pSize * 3.0 + moons.length * 2.6));
-        const lowOrbitSkimHeight = Math.max(22.0, Math.min(28.0, 14.0 + pSize * 2.0));
-
-        const intermediateHeight = THREE.MathUtils.lerp(90.0, systemOrbitHeight, zoomFactor);
-        targetCamHeight = THREE.MathUtils.lerp(intermediateHeight, lowOrbitSkimHeight, lowOrbitFactor);
-
-        // Dynamic 3D Orbit framing towards sub-system
-        const framingWeight = (0.22 + pSize * 0.02) * zoomFactor;
+        // Subtle, elegant framing shift towards planet center without zooming in onto the ship
+        const framingWeight = 0.16 * zoomFactor;
         targetCamX = THREE.MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, framingWeight);
         targetCamZ = THREE.MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, framingWeight);
 
-        // Focal LookAt center: smoothly bridges between player ship and the planetary globe
-        const lookAtWeight = 0.35 * zoomFactor;
-        targetLookAtX = THREE.MathUtils.lerp(STATE.playerPosition.x, STATE.orbitPlanet.mesh.position.x, lookAtWeight);
-        targetLookAtZ = THREE.MathUtils.lerp(STATE.playerPosition.z, STATE.orbitPlanet.mesh.position.z, lookAtWeight);
+        // Camera height stays at a majestic ~64 - 68 (ship remains sleek, razor-sharp & proportional!)
+        targetCamHeight = THREE.MathUtils.lerp(68.0, 64.0, zoomFactor);
     }
 
-    // Camera follow (Smooth positional tracking & altitude zoom)
+    // Camera follow (Smooth positional tracking & altitude stability)
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, targetCamX, Math.min(1.0, dt * 5.0));
     camera.position.z = THREE.MathUtils.lerp(camera.position.z, targetCamZ, Math.min(1.0, dt * 5.0));
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetCamHeight, Math.min(1.0, dt * 3.2));
