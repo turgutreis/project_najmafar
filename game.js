@@ -31553,7 +31553,7 @@ function createPlayerMesh() {
   empLight = new PointLight(14239471, 0, 180, 1);
   ship.group.add(empLight);
   ship.group.position.copy(STATE.playerPosition);
-  ship.group.scale.set(0.65, 0.65, 0.65);
+  ship.group.scale.set(0.42, 0.42, 0.42);
   scene.add(ship.group);
   STATE.playerGroup = ship.group;
   return ship.group;
@@ -37334,7 +37334,7 @@ function updatePhysics(dt) {
       const distToPlanet = Math.sqrt(dx * dx + dz * dz);
       const thisRawApproach = MathUtils.clamp((planetApproachMax - distToPlanet) / (planetApproachMax - planetApproachMin), 0, 1);
       const thisApproachFactor = thisRawApproach * thisRawApproach * (3 - 2 * thisRawApproach);
-      const targetScale = 1 + 0.85 * thisApproachFactor;
+      const targetScale = 1 + 1.85 * thisApproachFactor;
       const curScale = MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1, dt * 5));
       p.mesh.scale.set(curScale, curScale, curScale);
       p.source.radius = p.size * curScale;
@@ -37352,6 +37352,12 @@ function updatePhysics(dt) {
   });
   activePlanets.forEach((m) => {
     if (m.isMoon && m.parentPlanet) {
+      const baseDist = m.baseDistance || 8;
+      const siblingMoons = activePlanets.filter((s) => s.isMoon && s.parentPlanet === m.parentPlanet);
+      const moonIdx = siblingMoons.indexOf(m);
+      const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 5;
+      const targetDist2 = baseDist + (14 + staggerOffset) * planetApproachFactor;
+      m.distance = MathUtils.lerp(m.distance, targetDist2, Math.min(1, dt * 4));
       m.angle += dt * m.speed;
       const parentPos = m.parentPlanet.mesh.position;
       const mx = parentPos.x + m.distance * Math.cos(m.angle);
@@ -37360,13 +37366,15 @@ function updatePhysics(dt) {
       m.source.position.set(mx, 0, mz);
       if (m.ringMesh) {
         m.ringMesh.position.set(parentPos.x, 0, parentPos.z);
+        const ringScale = m.distance / baseDist;
+        m.ringMesh.scale.set(ringScale, 1, ringScale);
       }
       const dx = STATE.playerPosition.x - mx;
       const dz = STATE.playerPosition.z - mz;
       const distToMoon = Math.sqrt(dx * dx + dz * dz);
       const thisMoonRaw = MathUtils.clamp((moonApproachMax - distToMoon) / (moonApproachMax - moonApproachMin), 0, 1);
       const thisMoonApproach = thisMoonRaw * thisMoonRaw * (3 - 2 * thisMoonRaw);
-      const targetMoonScale = 1 + 0.55 * thisMoonApproach;
+      const targetMoonScale = 1 + 0.65 * thisMoonApproach;
       const curMScale = MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1, dt * 5));
       m.mesh.scale.set(curMScale, curMScale, curMScale);
       m.source.radius = m.size * curMScale;
@@ -37485,10 +37493,13 @@ function updatePhysics(dt) {
   }
   if (STATE.playerGroup) {
     STATE.playerGroup.position.copy(STATE.playerPosition);
+    const targetShipScale = 0.42 - 0.22 * combinedApproach;
+    const curShipScale = MathUtils.lerp(STATE.playerGroup.scale.x, targetShipScale, Math.min(1, dt * 5));
+    STATE.playerGroup.scale.set(curShipScale, curShipScale, curShipScale);
   }
-  const planetAltitudeOffset = 24 * planetApproachFactor;
-  const moonAltitudeOffset = 10 * moonApproachFactor;
-  const targetHeight = Math.max(46, 82 - planetAltitudeOffset - moonAltitudeOffset);
+  const planetAltitudeOffset = 18 * planetApproachFactor;
+  const moonAltitudeOffset = 16 * moonApproachFactor;
+  const targetHeight = Math.max(48, 82 - planetAltitudeOffset - moonAltitudeOffset);
   STATE.targetCameraHeight = targetHeight;
   camera.position.y = MathUtils.lerp(camera.position.y, targetHeight, Math.min(1, dt * 4));
   STATE.cameraHeight = camera.position.y;

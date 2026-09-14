@@ -108,8 +108,8 @@ export function updatePhysics(dt: number) {
             const thisRawApproach = THREE.MathUtils.clamp((planetApproachMax - distToPlanet) / (planetApproachMax - planetApproachMin), 0.0, 1.0);
             const thisApproachFactor = thisRawApproach * thisRawApproach * (3.0 - 2.0 * thisRawApproach);
 
-            // Continuously scales from 1.0x up to 1.85x smoothly with distance
-            const targetScale = 1.0 + 0.85 * thisApproachFactor;
+            // Continuously scales from 1.0x up to 2.85x smoothly with distance!
+            const targetScale = 1.0 + 1.85 * thisApproachFactor;
             const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 5.0));
             p.mesh.scale.set(curScale, curScale, curScale);
             p.source.radius = p.size * curScale;
@@ -129,6 +129,16 @@ export function updatePhysics(dt: number) {
 
     activePlanets.forEach(m => {
         if (m.isMoon && m.parentPlanet) {
+            // Dynamic Moon Distance: As the parent planet expands, the moons dynamically expand outward!
+            const baseDist = m.baseDistance || 8.0;
+            const siblingMoons = activePlanets.filter(s => s.isMoon && s.parentPlanet === m.parentPlanet);
+            const moonIdx = siblingMoons.indexOf(m);
+            const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 5.0;
+
+            // As player approaches the parent planet, moons smoothly expand outward from baseDist
+            const targetDist = baseDist + (14.0 + staggerOffset) * planetApproachFactor;
+            m.distance = THREE.MathUtils.lerp(m.distance, targetDist, Math.min(1.0, dt * 4.0));
+
             m.angle += dt * m.speed;
             const parentPos = m.parentPlanet.mesh.position;
             const mx = parentPos.x + m.distance * Math.cos(m.angle);
@@ -137,9 +147,11 @@ export function updatePhysics(dt: number) {
             m.mesh.position.set(mx, 0, mz);
             m.source.position.set(mx, 0, mz);
 
-            // Orbit ring remains centered on parent planet
+            // Orbit ring remains centered on parent planet and scales with moon distance!
             if (m.ringMesh) {
                 m.ringMesh.position.set(parentPos.x, 0, parentPos.z);
+                const ringScale = m.distance / baseDist;
+                m.ringMesh.scale.set(ringScale, 1, ringScale);
             }
 
             // Continuous Distance-Based Moon Scale:
@@ -149,8 +161,8 @@ export function updatePhysics(dt: number) {
             const thisMoonRaw = THREE.MathUtils.clamp((moonApproachMax - distToMoon) / (moonApproachMax - moonApproachMin), 0.0, 1.0);
             const thisMoonApproach = thisMoonRaw * thisMoonRaw * (3.0 - 2.0 * thisMoonRaw);
 
-            // Moon swells from 1.0x up to 1.55x smoothly as you approach it
-            const targetMoonScale = 1.0 + 0.55 * thisMoonApproach;
+            // Moon swells smoothly from 1.0x up to 1.65x as you approach it
+            const targetMoonScale = 1.0 + 0.65 * thisMoonApproach;
             const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 5.0));
             m.mesh.scale.set(curMScale, curMScale, curMScale);
             m.source.radius = m.size * curMScale;
@@ -291,13 +303,18 @@ export function updatePhysics(dt: number) {
 
     if (STATE.playerGroup) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
+
+        // Dynamic Ship Scaling: Ship gracefully scales down from 0.42 to 0.20 as you approach colossal worlds
+        const targetShipScale = 0.42 - 0.22 * combinedApproach;
+        const curShipScale = THREE.MathUtils.lerp(STATE.playerGroup.scale.x, targetShipScale, Math.min(1.0, dt * 5.0));
+        STATE.playerGroup.scale.set(curShipScale, curShipScale, curShipScale);
     }
 
     // 6.5 Continuous Distance-Based Camera Altitude & Responsive Following
-    // Seamlessly descends from 82.0 down to 58.0 as you approach a planet, and down to 48.0 near a moon
-    const planetAltitudeOffset = 24.0 * planetApproachFactor;
-    const moonAltitudeOffset = 10.0 * moonApproachFactor;
-    const targetHeight = Math.max(46.0, 82.0 - planetAltitudeOffset - moonAltitudeOffset);
+    // Seamlessly descends from 82.0 down to 64.0 as you approach a colossal planet, and down to 48.0 near a moon
+    const planetAltitudeOffset = 18.0 * planetApproachFactor;
+    const moonAltitudeOffset = 16.0 * moonApproachFactor;
+    const targetHeight = Math.max(48.0, 82.0 - planetAltitudeOffset - moonAltitudeOffset);
 
     STATE.targetCameraHeight = targetHeight;
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetHeight, Math.min(1.0, dt * 4.0));
