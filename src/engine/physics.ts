@@ -53,12 +53,12 @@ export function updatePhysics(dt: number) {
     const currentLevel = STATE.orbitLevel || 'solar';
 
     if (currentLevel === 'moon') {
-        if (nearestMoon && nearestMoonDist < 22.0) {
+        if (nearestMoon && nearestMoonDist < 12.0) {
             STATE.orbitLevel = 'moon';
             STATE.activeMoonOrbit = nearestMoon;
             STATE.isInPlanetOrbit = true;
             STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
-        } else if (nearestPlanet && nearestPlanetDist < 60.0) {
+        } else if (nearestPlanet && nearestPlanetDist < 34.0) {
             STATE.orbitLevel = 'planet';
             STATE.activeMoonOrbit = null;
             STATE.isInPlanetOrbit = true;
@@ -70,12 +70,12 @@ export function updatePhysics(dt: number) {
             STATE.orbitPlanet = null;
         }
     } else if (currentLevel === 'planet') {
-        if (nearestMoon && nearestMoonDist < 18.0) {
+        if (nearestMoon && nearestMoonDist < 9.0) {
             STATE.orbitLevel = 'moon';
             STATE.activeMoonOrbit = nearestMoon;
             STATE.isInPlanetOrbit = true;
             STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
-        } else if (nearestPlanet && nearestPlanetDist < 62.0) {
+        } else if (nearestPlanet && nearestPlanetDist < 34.0) {
             STATE.orbitLevel = 'planet';
             STATE.activeMoonOrbit = null;
             STATE.isInPlanetOrbit = true;
@@ -88,12 +88,12 @@ export function updatePhysics(dt: number) {
         }
     } else {
         // Solar level
-        if (nearestMoon && nearestMoonDist < 18.0) {
+        if (nearestMoon && nearestMoonDist < 9.0) {
             STATE.orbitLevel = 'moon';
             STATE.activeMoonOrbit = nearestMoon;
             STATE.isInPlanetOrbit = true;
             STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
-        } else if (nearestPlanet && nearestPlanetDist < 50.0) {
+        } else if (nearestPlanet && nearestPlanetDist < 28.0) {
             STATE.orbitLevel = 'planet';
             STATE.activeMoonOrbit = null;
             STATE.isInPlanetOrbit = true;
@@ -129,7 +129,7 @@ export function updatePhysics(dt: number) {
 
             // Dynamic Planetary Scale: Planet swells subtly and harmoniously
             const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
-            const targetScale = isFocus ? (1.0 + 0.45 * zoomFactor) : 1.0;
+            const targetScale = isFocus ? (1.0 + 0.25 * zoomFactor) : 1.0;
             const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 3.5));
             p.mesh.scale.set(curScale, curScale, curScale);
             p.source.radius = p.size * curScale;
@@ -149,20 +149,8 @@ export function updatePhysics(dt: number) {
 
     activePlanets.forEach(m => {
         if (m.isMoon && m.parentPlanet) {
-            const isParentFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === m.parentPlanet;
             const isThisMoonFocus = STATE.orbitLevel === 'moon' && STATE.activeMoonOrbit === m;
-            const baseDist = m.baseDistance || m.distance || 30.0;
-
-            const siblingMoons = activePlanets.filter(s => s.isMoon && s.parentPlanet === m.parentPlanet);
-            const moonIdx = siblingMoons.indexOf(m);
-            const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 8.0;
-
-            const targetMoonDist = isParentFocus
-                ? (baseDist + (12.0 + staggerOffset) * zoomFactor)
-                : baseDist;
-            m.distance = THREE.MathUtils.lerp(m.distance, targetMoonDist, Math.min(1.0, dt * 3.5));
-
-            const targetMoonScale = isThisMoonFocus ? 1.45 : (isParentFocus ? 1.15 : 1.0);
+            const targetMoonScale = isThisMoonFocus ? 1.35 : 1.0;
             const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 3.5));
             m.mesh.scale.set(curMScale, curMScale, curMScale);
             m.source.radius = m.size * curMScale;
@@ -174,8 +162,10 @@ export function updatePhysics(dt: number) {
 
             m.mesh.position.set(mx, 0, mz);
             m.source.position.set(mx, 0, mz);
+
+            // Orbit ring remains centered on parent planet
             if (m.ringMesh) {
-                m.ringMesh.position.set(mx, 0, mz);
+                m.ringMesh.position.set(parentPos.x, 0, parentPos.z);
             }
 
             if (m.bodyMesh) {
@@ -317,7 +307,7 @@ export function updatePhysics(dt: number) {
     }
 
     // 6.5 Star Control 2 Hierarchical Camera Altitude & Responsive Following
-    const targetHeight = STATE.orbitLevel === 'moon' ? 48.0 : (STATE.orbitLevel === 'planet' ? 58.0 : 85.0);
+    const targetHeight = STATE.orbitLevel === 'moon' ? 46.0 : (STATE.orbitLevel === 'planet' ? 62.0 : 82.0);
     STATE.targetCameraHeight = targetHeight;
     camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetHeight, Math.min(1.0, dt * 3.5));
     STATE.cameraHeight = camera.position.y;

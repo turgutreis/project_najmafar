@@ -176,8 +176,8 @@ export function updateMinimap() {
     const cy = height / 2;
 
     // Star Control 2 Style Dynamic Hierarchical Radar Range
-    // Solar: 220 LJ, Planet Sub-System: 65 LJ, Moon Orbit: 28 LJ
-    const targetRange = STATE.orbitLevel === 'moon' ? 28 : (STATE.orbitLevel === 'planet' ? 65 : 220);
+    // Solar: 220 LJ, Planet Sub-System: 45 LJ, Moon Orbit: 24 LJ
+    const targetRange = STATE.orbitLevel === 'moon' ? 24 : (STATE.orbitLevel === 'planet' ? 45 : 220);
     currentRadarRange = THREE.MathUtils.lerp(currentRadarRange, targetRange, 0.08);
     const range = currentRadarRange;
 

@@ -407,7 +407,6 @@ export function spawnPlanetsAndAsteroids() {
         };
         STATE.gravitySources.push(sourceObj);
 
-        const ring = createGravityRing(px, pz, pRange, parseInt(p.color), 0.08);
         const orbitSpeed = 0.055 / Math.sqrt(scaledDist);
         const pColorCss = p.color.replace("0x", "#");
 
@@ -417,7 +416,7 @@ export function spawnPlanetsAndAsteroids() {
             cloudMesh: cloudMesh,
             psioAuraMesh: psioAuraMesh,
             source: sourceObj,
-            ringMesh: ring,
+            ringMesh: null,
             angle: angle,
             speed: orbitSpeed,
             distance: scaledDist,
@@ -438,12 +437,12 @@ export function spawnPlanetsAndAsteroids() {
         };
         activePlanets.push(planetEntry);
 
-        // Spawn Moons with proper orbital clearance
+        // Spawn Moons with natural, aesthetically pleasing orbital clearance around parent planet
         const moonsList = p.moons || [];
         moonsList.forEach((m: any, m_idx: number) => {
-            const calculatedDist = (p.size * 6.5) + (m_idx * 20.0) + 18.0;
-            m.distance = calculatedDist;
-            m.baseDistance = calculatedDist;
+            const naturalDist = (p.size * 1.8) + 4.5 + (m_idx * 3.8);
+            m.distance = naturalDist;
+            m.baseDistance = naturalDist;
 
             const moonAngle = (m_idx * 2.2) + (idx * 0.7) + 0.5;
             const mx = px + m.distance * Math.cos(moonAngle);
@@ -487,7 +486,7 @@ export function spawnPlanetsAndAsteroids() {
             };
             STATE.gravitySources.push(mSource);
 
-            const mRing = createGravityRing(px, pz, m.distance, parseInt(m.color), 0.04);
+            const mRing = createGravityRing(px, pz, m.distance, parseInt(m.color), 0.035);
             const moonOrbitSpeed = 0.12 + 0.06 / Math.sqrt(m.distance);
 
             const moonEntry: any = {
