@@ -46,73 +46,46 @@ export function updatePhysics(dt: number) {
         }
     });
 
-    // Star Control 2 Style 3-Level Hierarchical Orbit System
-    // Level 1: 'solar' (Interplanetary flight, broad overview)
-    // Level 2: 'planet' (Planetary sub-system, parent planet & moons)
-    // Level 3: 'moon' (Lunar orbit, high-res surface details)
-    const currentLevel = STATE.orbitLevel || 'solar';
+    // Continuous Distance-Based Cosmic Approach Calculation
+    // As the player travels towards a planet across space (from 100 LJ down to 7 LJ),
+    // the planet smoothly and continuously swells in size, and the camera descends in tandem.
+    const planetApproachMax = 100.0;
+    const planetApproachMin = 7.0;
+    const rawPlanetApproach = nearestPlanet
+        ? THREE.MathUtils.clamp((planetApproachMax - nearestPlanetDist) / (planetApproachMax - planetApproachMin), 0.0, 1.0)
+        : 0.0;
+    const planetApproachFactor = rawPlanetApproach * rawPlanetApproach * (3.0 - 2.0 * rawPlanetApproach);
 
-    if (currentLevel === 'moon') {
-        if (nearestMoon && nearestMoonDist < 12.0) {
-            STATE.orbitLevel = 'moon';
-            STATE.activeMoonOrbit = nearestMoon;
-            STATE.isInPlanetOrbit = true;
-            STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
-        } else if (nearestPlanet && nearestPlanetDist < 34.0) {
-            STATE.orbitLevel = 'planet';
-            STATE.activeMoonOrbit = null;
-            STATE.isInPlanetOrbit = true;
-            STATE.orbitPlanet = nearestPlanet;
-        } else {
-            STATE.orbitLevel = 'solar';
-            STATE.activeMoonOrbit = null;
-            STATE.isInPlanetOrbit = false;
-            STATE.orbitPlanet = null;
-        }
-    } else if (currentLevel === 'planet') {
-        if (nearestMoon && nearestMoonDist < 9.0) {
-            STATE.orbitLevel = 'moon';
-            STATE.activeMoonOrbit = nearestMoon;
-            STATE.isInPlanetOrbit = true;
-            STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
-        } else if (nearestPlanet && nearestPlanetDist < 34.0) {
-            STATE.orbitLevel = 'planet';
-            STATE.activeMoonOrbit = null;
-            STATE.isInPlanetOrbit = true;
-            STATE.orbitPlanet = nearestPlanet;
-        } else {
-            STATE.orbitLevel = 'solar';
-            STATE.activeMoonOrbit = null;
-            STATE.isInPlanetOrbit = false;
-            STATE.orbitPlanet = null;
-        }
+    // Continuous Lunar Approach Calculation (from 20 LJ down to 3.5 LJ)
+    const moonApproachMax = 20.0;
+    const moonApproachMin = 3.5;
+    const rawMoonApproach = nearestMoon
+        ? THREE.MathUtils.clamp((moonApproachMax - nearestMoonDist) / (moonApproachMax - moonApproachMin), 0.0, 1.0)
+        : 0.0;
+    const moonApproachFactor = rawMoonApproach * rawMoonApproach * (3.0 - 2.0 * rawMoonApproach);
+
+    // Continuous Orbit Transition Progress (0.0 in deep space -> 1.0 in close orbit)
+    const combinedApproach = Math.max(planetApproachFactor, moonApproachFactor);
+    STATE.orbitTransitionProgress = THREE.MathUtils.lerp(STATE.orbitTransitionProgress || 0, combinedApproach, Math.min(1.0, dt * 5.0));
+    STATE.orbitZoomFactor = STATE.orbitTransitionProgress;
+
+    // Contextual Orbit Status for HUD & Scanner
+    if (moonApproachFactor > 0.45 && nearestMoon) {
+        STATE.orbitLevel = 'moon';
+        STATE.activeMoonOrbit = nearestMoon;
+        STATE.isInPlanetOrbit = true;
+        STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
+    } else if (planetApproachFactor > 0.35 && nearestPlanet) {
+        STATE.orbitLevel = 'planet';
+        STATE.activeMoonOrbit = null;
+        STATE.isInPlanetOrbit = true;
+        STATE.orbitPlanet = nearestPlanet;
     } else {
-        // Solar level
-        if (nearestMoon && nearestMoonDist < 9.0) {
-            STATE.orbitLevel = 'moon';
-            STATE.activeMoonOrbit = nearestMoon;
-            STATE.isInPlanetOrbit = true;
-            STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
-        } else if (nearestPlanet && nearestPlanetDist < 28.0) {
-            STATE.orbitLevel = 'planet';
-            STATE.activeMoonOrbit = null;
-            STATE.isInPlanetOrbit = true;
-            STATE.orbitPlanet = nearestPlanet;
-        } else {
-            STATE.orbitLevel = 'solar';
-            STATE.activeMoonOrbit = null;
-            STATE.isInPlanetOrbit = false;
-            STATE.orbitPlanet = null;
-        }
+        STATE.orbitLevel = 'solar';
+        STATE.activeMoonOrbit = null;
+        STATE.isInPlanetOrbit = false;
+        STATE.orbitPlanet = null;
     }
-
-    // Smooth Orbit Zoom Factor & Transition Progress
-    const targetZoomFactor = STATE.orbitLevel === 'moon' ? 1.0 : (STATE.orbitLevel === 'planet' ? 0.85 : 0.0);
-    STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, targetZoomFactor, Math.min(1.0, dt * 3.5));
-    const zoomFactor = STATE.orbitZoomFactor;
-
-    const targetTransition = STATE.orbitLevel === 'moon' ? 1.0 : (STATE.orbitLevel === 'planet' ? 0.5 : 0.0);
-    STATE.orbitTransitionProgress = THREE.MathUtils.lerp(STATE.orbitTransitionProgress || 0, targetTransition, Math.min(1.0, dt * 3.5));
 
     // 1. Update celestial orbits (Planets around star, Moons around parent planet)
     activePlanets.forEach(p => {
@@ -127,10 +100,17 @@ export function updatePhysics(dt: number) {
                 p.ringMesh.position.set(px, 0, pz);
             }
 
-            // Dynamic Planetary Scale: Planet swells subtly and harmoniously
-            const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
-            const targetScale = isFocus ? (1.0 + 0.25 * zoomFactor) : 1.0;
-            const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 3.5));
+            // Continuous Distance-Based Planetary Scale:
+            // As you fly towards this planet, it smoothly and majestically swells in your field of view!
+            const dx = STATE.playerPosition.x - px;
+            const dz = STATE.playerPosition.z - pz;
+            const distToPlanet = Math.sqrt(dx * dx + dz * dz);
+            const thisRawApproach = THREE.MathUtils.clamp((planetApproachMax - distToPlanet) / (planetApproachMax - planetApproachMin), 0.0, 1.0);
+            const thisApproachFactor = thisRawApproach * thisRawApproach * (3.0 - 2.0 * thisRawApproach);
+
+            // Continuously scales from 1.0x up to 1.85x smoothly with distance
+            const targetScale = 1.0 + 0.85 * thisApproachFactor;
+            const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 5.0));
             p.mesh.scale.set(curScale, curScale, curScale);
             p.source.radius = p.size * curScale;
 
@@ -149,12 +129,6 @@ export function updatePhysics(dt: number) {
 
     activePlanets.forEach(m => {
         if (m.isMoon && m.parentPlanet) {
-            const isThisMoonFocus = STATE.orbitLevel === 'moon' && STATE.activeMoonOrbit === m;
-            const targetMoonScale = isThisMoonFocus ? 1.35 : 1.0;
-            const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 3.5));
-            m.mesh.scale.set(curMScale, curMScale, curMScale);
-            m.source.radius = m.size * curMScale;
-
             m.angle += dt * m.speed;
             const parentPos = m.parentPlanet.mesh.position;
             const mx = parentPos.x + m.distance * Math.cos(m.angle);
@@ -167,6 +141,19 @@ export function updatePhysics(dt: number) {
             if (m.ringMesh) {
                 m.ringMesh.position.set(parentPos.x, 0, parentPos.z);
             }
+
+            // Continuous Distance-Based Moon Scale:
+            const dx = STATE.playerPosition.x - mx;
+            const dz = STATE.playerPosition.z - mz;
+            const distToMoon = Math.sqrt(dx * dx + dz * dz);
+            const thisMoonRaw = THREE.MathUtils.clamp((moonApproachMax - distToMoon) / (moonApproachMax - moonApproachMin), 0.0, 1.0);
+            const thisMoonApproach = thisMoonRaw * thisMoonRaw * (3.0 - 2.0 * thisMoonRaw);
+
+            // Moon swells from 1.0x up to 1.55x smoothly as you approach it
+            const targetMoonScale = 1.0 + 0.55 * thisMoonApproach;
+            const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 5.0));
+            m.mesh.scale.set(curMScale, curMScale, curMScale);
+            m.source.radius = m.size * curMScale;
 
             if (m.bodyMesh) {
                 m.bodyMesh.rotation.y += 0.20 * dt;
@@ -306,10 +293,14 @@ export function updatePhysics(dt: number) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
     }
 
-    // 6.5 Star Control 2 Hierarchical Camera Altitude & Responsive Following
-    const targetHeight = STATE.orbitLevel === 'moon' ? 46.0 : (STATE.orbitLevel === 'planet' ? 62.0 : 82.0);
+    // 6.5 Continuous Distance-Based Camera Altitude & Responsive Following
+    // Seamlessly descends from 82.0 down to 58.0 as you approach a planet, and down to 48.0 near a moon
+    const planetAltitudeOffset = 24.0 * planetApproachFactor;
+    const moonAltitudeOffset = 10.0 * moonApproachFactor;
+    const targetHeight = Math.max(46.0, 82.0 - planetAltitudeOffset - moonAltitudeOffset);
+
     STATE.targetCameraHeight = targetHeight;
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetHeight, Math.min(1.0, dt * 3.5));
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetHeight, Math.min(1.0, dt * 4.0));
     STATE.cameraHeight = camera.position.y;
 
     camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, Math.min(1.0, dt * 7.5));

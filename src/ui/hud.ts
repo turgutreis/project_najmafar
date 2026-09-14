@@ -175,10 +175,11 @@ export function updateMinimap() {
     const cx = width / 2;
     const cy = height / 2;
 
-    // Star Control 2 Style Dynamic Hierarchical Radar Range
-    // Solar: 220 LJ, Planet Sub-System: 45 LJ, Moon Orbit: 24 LJ
-    const targetRange = STATE.orbitLevel === 'moon' ? 24 : (STATE.orbitLevel === 'planet' ? 45 : 220);
-    currentRadarRange = THREE.MathUtils.lerp(currentRadarRange, targetRange, 0.08);
+    // Continuous Dynamic Radar Range: smoothly zooms in as you travel towards a world
+    const approach = STATE.orbitTransitionProgress || 0;
+    const isMoon = STATE.orbitLevel === 'moon';
+    const baseTargetRange = isMoon ? 24.0 : (220.0 - 175.0 * approach);
+    currentRadarRange = THREE.MathUtils.lerp(currentRadarRange, Math.max(24.0, baseTargetRange), 0.08);
     const range = currentRadarRange;
 
     minimapCtx.fillStyle = 'rgba(3, 7, 18, 0.85)';

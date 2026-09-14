@@ -33263,8 +33263,10 @@ function updateMinimap() {
   const height = minimapCanvas.height;
   const cx = width / 2;
   const cy = height / 2;
-  const targetRange = STATE.orbitLevel === "moon" ? 24 : STATE.orbitLevel === "planet" ? 45 : 220;
-  currentRadarRange = MathUtils.lerp(currentRadarRange, targetRange, 0.08);
+  const approach = STATE.orbitTransitionProgress || 0;
+  const isMoon = STATE.orbitLevel === "moon";
+  const baseTargetRange = isMoon ? 24 : 220 - 175 * approach;
+  currentRadarRange = MathUtils.lerp(currentRadarRange, Math.max(24, baseTargetRange), 0.08);
   const range = currentRadarRange;
   minimapCtx.fillStyle = "rgba(3, 7, 18, 0.85)";
   minimapCtx.fillRect(0, 0, width, height);
@@ -37290,64 +37292,33 @@ function updatePhysics(dt) {
       }
     }
   });
-  const currentLevel = STATE.orbitLevel || "solar";
-  if (currentLevel === "moon") {
-    if (nearestMoon && nearestMoonDist < 12) {
-      STATE.orbitLevel = "moon";
-      STATE.activeMoonOrbit = nearestMoon;
-      STATE.isInPlanetOrbit = true;
-      STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
-    } else if (nearestPlanet && nearestPlanetDist < 34) {
-      STATE.orbitLevel = "planet";
-      STATE.activeMoonOrbit = null;
-      STATE.isInPlanetOrbit = true;
-      STATE.orbitPlanet = nearestPlanet;
-    } else {
-      STATE.orbitLevel = "solar";
-      STATE.activeMoonOrbit = null;
-      STATE.isInPlanetOrbit = false;
-      STATE.orbitPlanet = null;
-    }
-  } else if (currentLevel === "planet") {
-    if (nearestMoon && nearestMoonDist < 9) {
-      STATE.orbitLevel = "moon";
-      STATE.activeMoonOrbit = nearestMoon;
-      STATE.isInPlanetOrbit = true;
-      STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
-    } else if (nearestPlanet && nearestPlanetDist < 34) {
-      STATE.orbitLevel = "planet";
-      STATE.activeMoonOrbit = null;
-      STATE.isInPlanetOrbit = true;
-      STATE.orbitPlanet = nearestPlanet;
-    } else {
-      STATE.orbitLevel = "solar";
-      STATE.activeMoonOrbit = null;
-      STATE.isInPlanetOrbit = false;
-      STATE.orbitPlanet = null;
-    }
+  const planetApproachMax = 100;
+  const planetApproachMin = 7;
+  const rawPlanetApproach = nearestPlanet ? MathUtils.clamp((planetApproachMax - nearestPlanetDist) / (planetApproachMax - planetApproachMin), 0, 1) : 0;
+  const planetApproachFactor = rawPlanetApproach * rawPlanetApproach * (3 - 2 * rawPlanetApproach);
+  const moonApproachMax = 20;
+  const moonApproachMin = 3.5;
+  const rawMoonApproach = nearestMoon ? MathUtils.clamp((moonApproachMax - nearestMoonDist) / (moonApproachMax - moonApproachMin), 0, 1) : 0;
+  const moonApproachFactor = rawMoonApproach * rawMoonApproach * (3 - 2 * rawMoonApproach);
+  const combinedApproach = Math.max(planetApproachFactor, moonApproachFactor);
+  STATE.orbitTransitionProgress = MathUtils.lerp(STATE.orbitTransitionProgress || 0, combinedApproach, Math.min(1, dt * 5));
+  STATE.orbitZoomFactor = STATE.orbitTransitionProgress;
+  if (moonApproachFactor > 0.45 && nearestMoon) {
+    STATE.orbitLevel = "moon";
+    STATE.activeMoonOrbit = nearestMoon;
+    STATE.isInPlanetOrbit = true;
+    STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
+  } else if (planetApproachFactor > 0.35 && nearestPlanet) {
+    STATE.orbitLevel = "planet";
+    STATE.activeMoonOrbit = null;
+    STATE.isInPlanetOrbit = true;
+    STATE.orbitPlanet = nearestPlanet;
   } else {
-    if (nearestMoon && nearestMoonDist < 9) {
-      STATE.orbitLevel = "moon";
-      STATE.activeMoonOrbit = nearestMoon;
-      STATE.isInPlanetOrbit = true;
-      STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
-    } else if (nearestPlanet && nearestPlanetDist < 28) {
-      STATE.orbitLevel = "planet";
-      STATE.activeMoonOrbit = null;
-      STATE.isInPlanetOrbit = true;
-      STATE.orbitPlanet = nearestPlanet;
-    } else {
-      STATE.orbitLevel = "solar";
-      STATE.activeMoonOrbit = null;
-      STATE.isInPlanetOrbit = false;
-      STATE.orbitPlanet = null;
-    }
+    STATE.orbitLevel = "solar";
+    STATE.activeMoonOrbit = null;
+    STATE.isInPlanetOrbit = false;
+    STATE.orbitPlanet = null;
   }
-  const targetZoomFactor = STATE.orbitLevel === "moon" ? 1 : STATE.orbitLevel === "planet" ? 0.85 : 0;
-  STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, targetZoomFactor, Math.min(1, dt * 3.5));
-  const zoomFactor = STATE.orbitZoomFactor;
-  const targetTransition = STATE.orbitLevel === "moon" ? 1 : STATE.orbitLevel === "planet" ? 0.5 : 0;
-  STATE.orbitTransitionProgress = MathUtils.lerp(STATE.orbitTransitionProgress || 0, targetTransition, Math.min(1, dt * 3.5));
   activePlanets.forEach((p) => {
     if (!p.isMoon) {
       p.angle += dt * p.speed;
@@ -37358,9 +37329,13 @@ function updatePhysics(dt) {
       if (p.ringMesh) {
         p.ringMesh.position.set(px2, 0, pz2);
       }
-      const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
-      const targetScale = isFocus ? 1 + 0.25 * zoomFactor : 1;
-      const curScale = MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1, dt * 3.5));
+      const dx = STATE.playerPosition.x - px2;
+      const dz = STATE.playerPosition.z - pz2;
+      const distToPlanet = Math.sqrt(dx * dx + dz * dz);
+      const thisRawApproach = MathUtils.clamp((planetApproachMax - distToPlanet) / (planetApproachMax - planetApproachMin), 0, 1);
+      const thisApproachFactor = thisRawApproach * thisRawApproach * (3 - 2 * thisRawApproach);
+      const targetScale = 1 + 0.85 * thisApproachFactor;
+      const curScale = MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1, dt * 5));
       p.mesh.scale.set(curScale, curScale, curScale);
       p.source.radius = p.size * curScale;
       if (p.bodyMesh) {
@@ -37377,11 +37352,6 @@ function updatePhysics(dt) {
   });
   activePlanets.forEach((m) => {
     if (m.isMoon && m.parentPlanet) {
-      const isThisMoonFocus = STATE.orbitLevel === "moon" && STATE.activeMoonOrbit === m;
-      const targetMoonScale = isThisMoonFocus ? 1.35 : 1;
-      const curMScale = MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1, dt * 3.5));
-      m.mesh.scale.set(curMScale, curMScale, curMScale);
-      m.source.radius = m.size * curMScale;
       m.angle += dt * m.speed;
       const parentPos = m.parentPlanet.mesh.position;
       const mx = parentPos.x + m.distance * Math.cos(m.angle);
@@ -37391,6 +37361,15 @@ function updatePhysics(dt) {
       if (m.ringMesh) {
         m.ringMesh.position.set(parentPos.x, 0, parentPos.z);
       }
+      const dx = STATE.playerPosition.x - mx;
+      const dz = STATE.playerPosition.z - mz;
+      const distToMoon = Math.sqrt(dx * dx + dz * dz);
+      const thisMoonRaw = MathUtils.clamp((moonApproachMax - distToMoon) / (moonApproachMax - moonApproachMin), 0, 1);
+      const thisMoonApproach = thisMoonRaw * thisMoonRaw * (3 - 2 * thisMoonRaw);
+      const targetMoonScale = 1 + 0.55 * thisMoonApproach;
+      const curMScale = MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1, dt * 5));
+      m.mesh.scale.set(curMScale, curMScale, curMScale);
+      m.source.radius = m.size * curMScale;
       if (m.bodyMesh) {
         m.bodyMesh.rotation.y += 0.2 * dt;
       }
@@ -37507,9 +37486,11 @@ function updatePhysics(dt) {
   if (STATE.playerGroup) {
     STATE.playerGroup.position.copy(STATE.playerPosition);
   }
-  const targetHeight = STATE.orbitLevel === "moon" ? 46 : STATE.orbitLevel === "planet" ? 62 : 82;
+  const planetAltitudeOffset = 24 * planetApproachFactor;
+  const moonAltitudeOffset = 10 * moonApproachFactor;
+  const targetHeight = Math.max(46, 82 - planetAltitudeOffset - moonAltitudeOffset);
   STATE.targetCameraHeight = targetHeight;
-  camera.position.y = MathUtils.lerp(camera.position.y, targetHeight, Math.min(1, dt * 3.5));
+  camera.position.y = MathUtils.lerp(camera.position.y, targetHeight, Math.min(1, dt * 4));
   STATE.cameraHeight = camera.position.y;
   camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, Math.min(1, dt * 7.5));
   camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, Math.min(1, dt * 7.5));
