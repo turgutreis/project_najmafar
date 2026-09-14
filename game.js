@@ -29452,7 +29452,10 @@ var STATE = {
   cameraLookTarget: new Vector3(0, 0, 0),
   isInPlanetOrbit: false,
   orbitPlanet: null,
-  orbitZoomFactor: 0
+  orbitZoomFactor: 0,
+  orbitLevel: "solar",
+  activeMoonOrbit: null,
+  orbitTransitionProgress: 0
 };
 var activePlanets = [];
 
@@ -33113,6 +33116,7 @@ function updateMutationUI() {
 // src/ui/hud.ts
 var minimapCanvas = null;
 var minimapCtx = null;
+var currentRadarRange = 220;
 var sonarWaveMesh = null;
 var sonarTimer = 0;
 function initHUD() {
@@ -33259,7 +33263,9 @@ function updateMinimap() {
   const height = minimapCanvas.height;
   const cx = width / 2;
   const cy = height / 2;
-  const range = 450;
+  const targetRange = STATE.orbitLevel === "moon" ? 28 : STATE.orbitLevel === "planet" ? 65 : 220;
+  currentRadarRange = MathUtils.lerp(currentRadarRange, targetRange, 0.08);
+  const range = currentRadarRange;
   minimapCtx.fillStyle = "rgba(3, 7, 18, 0.85)";
   minimapCtx.fillRect(0, 0, width, height);
   const radius = width / 2 - 4;
@@ -33387,6 +33393,11 @@ function updateMinimap() {
   minimapCtx.closePath();
   minimapCtx.fill();
   minimapCtx.restore();
+  minimapCtx.fillStyle = "rgba(56, 189, 248, 0.85)";
+  minimapCtx.font = "9px monospace";
+  minimapCtx.textAlign = "center";
+  const modeLabel = STATE.orbitLevel === "moon" ? `\uD83C\uDF15 MOND: ${STATE.activeMoonOrbit?.name || "Orbit"}` : STATE.orbitLevel === "planet" ? `\uD83E\uDE90 SUB-SYS: ${STATE.orbitPlanet?.name || "Orbit"}` : `RADAR: ${Math.round(range)} LJ`;
+  minimapCtx.fillText(modeLabel, cx, height - 6);
 }
 function triggerPsionicSonar() {
   if (!STATE.gameStarted)
@@ -33927,12 +33938,13 @@ function generatePlanetAttributes(p) {
   return { atmos, temp, bio, res, species };
 }
 function triggerScanStart() {
-  if (!STATE.gameStarted || STATE.scanningPlanet || STATE.extractingPlanet || !STATE.nearestPlanet)
+  const target = STATE.orbitLevel === "moon" && STATE.activeMoonOrbit ? STATE.activeMoonOrbit : STATE.nearestPlanet;
+  if (!STATE.gameStarted || STATE.scanningPlanet || STATE.extractingPlanet || !target)
     return;
-  const planet = STATE.nearestPlanet;
+  const planet = target;
   const isAlreadyScanned = planet.scanned || STATE.scannedPlanets && STATE.scannedPlanets[planet.name];
   if (isAlreadyScanned) {
-    addLogEntry("SYSTEM", `Planet ${planet.name} ist bereits vollständig kartografiert & gescannt.`);
+    addLogEntry("SYSTEM", `${planet.isMoon ? "Mond" : "Planet"} ${planet.name} ist bereits vollständig kartografiert & gescannt.`);
     return;
   }
   const meshScale = planet.mesh ? planet.mesh.scale.x : 1;
@@ -34056,15 +34068,27 @@ function updateScannerUI(planet, dist) {
   const orbitBadgeTitle = document.getElementById("orbit-badge-title");
   const orbitBadgeSub = document.getElementById("orbit-badge-sub");
   if (orbitBadge) {
-    if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
+    if (STATE.orbitLevel === "moon" && STATE.activeMoonOrbit) {
       orbitBadge.style.display = "flex";
       if (orbitBadgeTitle) {
-        orbitBadgeTitle.innerText = `\uD83E\uDE90 ORBIT: ${STATE.orbitPlanet.name.toUpperCase()}`;
+        orbitBadgeTitle.innerText = `\uD83C\uDF15 MOND-ORBIT: ${STATE.activeMoonOrbit.name.toUpperCase()}`;
       }
       if (orbitBadgeSub) {
+        const parentName = STATE.activeMoonOrbit.parentPlanet ? STATE.activeMoonOrbit.parentPlanet.name : STATE.orbitPlanet ? STATE.orbitPlanet.name : "Zentralkörper";
+        const curRadius = STATE.activeMoonOrbit.source ? STATE.activeMoonOrbit.source.radius : STATE.activeMoonOrbit.size || 1;
+        const alt = Math.max(0.1, dist - curRadius).toFixed(1);
+        orbitBadgeSub.innerText = `Mutterplanet: ${parentName} • Höhe: ${alt} LJ`;
+      }
+    } else if (STATE.orbitLevel === "planet" && STATE.orbitPlanet) {
+      orbitBadge.style.display = "flex";
+      if (orbitBadgeTitle) {
+        orbitBadgeTitle.innerText = `\uD83E\uDE90 SUB-SYSTEM: ${STATE.orbitPlanet.name.toUpperCase()}`;
+      }
+      if (orbitBadgeSub) {
+        const moons = activePlanets.filter((m) => m.isMoon && m.parentPlanet === STATE.orbitPlanet);
         const curRadius = STATE.orbitPlanet.source ? STATE.orbitPlanet.source.radius : STATE.orbitPlanet.size || 2.5;
         const alt = Math.max(0.2, dist - curRadius).toFixed(1);
-        orbitBadgeSub.innerText = `Orbit-Höhe: ${alt} LJ • Sub-System Nahbereich`;
+        orbitBadgeSub.innerText = `Höhe: ${alt} LJ • ${moons.length} Monde im Orbit`;
       }
     } else {
       orbitBadge.style.display = "none";
@@ -37254,33 +37278,77 @@ function updatePhysics(dt) {
       }
     }
   });
-  let orbitTriggerDist = 65;
-  let lowOrbitTriggerDist = 28;
-  if (nearestPlanet) {
-    const planetSize = nearestPlanet.size || 2.5;
-    const moons = activePlanets.filter((m) => m.isMoon && m.parentPlanet === nearestPlanet);
-    const maxMoonBaseDist = moons.reduce((max, m) => Math.max(max, m.baseDistance || m.distance || 6), 0);
-    orbitTriggerDist = Math.max(55, planetSize * 10 + maxMoonBaseDist * 1.5);
-    lowOrbitTriggerDist = Math.max(24, planetSize * 5);
-  }
-  if (nearestPlanet && nearestPlanetDist < orbitTriggerDist) {
-    STATE.isInPlanetOrbit = true;
-    STATE.orbitPlanet = nearestPlanet;
-    const rawProximity = Math.max(0, Math.min(1, 1 - nearestPlanetDist / orbitTriggerDist));
-    const easedProximity = Math.sin(rawProximity * Math.PI / 2);
-    STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1, dt * 3.5));
-    const currentPlanetRadius = (nearestPlanet.size || 2.5) * (nearestPlanet.mesh ? nearestPlanet.mesh.scale.x : 1);
-    const distAboveSurface = Math.max(0, nearestPlanetDist - currentPlanetRadius);
-    const rawLowOrbit = Math.max(0, Math.min(1, 1 - distAboveSurface / lowOrbitTriggerDist));
-    const easedLowOrbit = rawLowOrbit * rawLowOrbit * (3 - 2 * rawLowOrbit);
-    STATE.lowOrbitFactor = MathUtils.lerp(STATE.lowOrbitFactor || 0, easedLowOrbit, Math.min(1, dt * 3.5));
+  let nearestMoon = null;
+  let nearestMoonDist = Infinity;
+  activePlanets.forEach((m) => {
+    if (m.isMoon) {
+      const dx = STATE.playerPosition.x - m.mesh.position.x;
+      const dz = STATE.playerPosition.z - m.mesh.position.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < nearestMoonDist) {
+        nearestMoonDist = dist;
+        nearestMoon = m;
+      }
+    }
+  });
+  const currentLevel = STATE.orbitLevel || "solar";
+  if (currentLevel === "moon") {
+    if (nearestMoon && nearestMoonDist < 22) {
+      STATE.orbitLevel = "moon";
+      STATE.activeMoonOrbit = nearestMoon;
+      STATE.isInPlanetOrbit = true;
+      STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
+    } else if (nearestPlanet && nearestPlanetDist < 60) {
+      STATE.orbitLevel = "planet";
+      STATE.activeMoonOrbit = null;
+      STATE.isInPlanetOrbit = true;
+      STATE.orbitPlanet = nearestPlanet;
+    } else {
+      STATE.orbitLevel = "solar";
+      STATE.activeMoonOrbit = null;
+      STATE.isInPlanetOrbit = false;
+      STATE.orbitPlanet = null;
+    }
+  } else if (currentLevel === "planet") {
+    if (nearestMoon && nearestMoonDist < 18) {
+      STATE.orbitLevel = "moon";
+      STATE.activeMoonOrbit = nearestMoon;
+      STATE.isInPlanetOrbit = true;
+      STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
+    } else if (nearestPlanet && nearestPlanetDist < 62) {
+      STATE.orbitLevel = "planet";
+      STATE.activeMoonOrbit = null;
+      STATE.isInPlanetOrbit = true;
+      STATE.orbitPlanet = nearestPlanet;
+    } else {
+      STATE.orbitLevel = "solar";
+      STATE.activeMoonOrbit = null;
+      STATE.isInPlanetOrbit = false;
+      STATE.orbitPlanet = null;
+    }
   } else {
-    STATE.isInPlanetOrbit = false;
-    STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1, dt * 3));
-    STATE.lowOrbitFactor = MathUtils.lerp(STATE.lowOrbitFactor || 0, 0, Math.min(1, dt * 3));
+    if (nearestMoon && nearestMoonDist < 18) {
+      STATE.orbitLevel = "moon";
+      STATE.activeMoonOrbit = nearestMoon;
+      STATE.isInPlanetOrbit = true;
+      STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
+    } else if (nearestPlanet && nearestPlanetDist < 50) {
+      STATE.orbitLevel = "planet";
+      STATE.activeMoonOrbit = null;
+      STATE.isInPlanetOrbit = true;
+      STATE.orbitPlanet = nearestPlanet;
+    } else {
+      STATE.orbitLevel = "solar";
+      STATE.activeMoonOrbit = null;
+      STATE.isInPlanetOrbit = false;
+      STATE.orbitPlanet = null;
+    }
   }
-  const zoomFactor = STATE.orbitZoomFactor || 0;
-  const lowOrbitFactor = STATE.lowOrbitFactor || 0;
+  const targetZoomFactor = STATE.orbitLevel === "moon" ? 1 : STATE.orbitLevel === "planet" ? 0.85 : 0;
+  STATE.orbitZoomFactor = MathUtils.lerp(STATE.orbitZoomFactor || 0, targetZoomFactor, Math.min(1, dt * 3.5));
+  const zoomFactor = STATE.orbitZoomFactor;
+  const targetTransition = STATE.orbitLevel === "moon" ? 1 : STATE.orbitLevel === "planet" ? 0.5 : 0;
+  STATE.orbitTransitionProgress = MathUtils.lerp(STATE.orbitTransitionProgress || 0, targetTransition, Math.min(1, dt * 3.5));
   activePlanets.forEach((p) => {
     if (!p.isMoon) {
       p.angle += dt * p.speed;
@@ -37292,7 +37360,7 @@ function updatePhysics(dt) {
         p.ringMesh.position.set(px2, 0, pz2);
       }
       const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
-      const targetScale = isFocus ? 1 + 1.8 * zoomFactor + 0.8 * lowOrbitFactor : 1;
+      const targetScale = isFocus ? 1 + 0.45 * zoomFactor : 1;
       const curScale = MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1, dt * 3.5));
       p.mesh.scale.set(curScale, curScale, curScale);
       p.source.radius = p.size * curScale;
@@ -37310,14 +37378,15 @@ function updatePhysics(dt) {
   });
   activePlanets.forEach((m) => {
     if (m.isMoon && m.parentPlanet) {
-      const isParentFocus = STATE.isInPlanetOrbit && (STATE.orbitPlanet === m.parentPlanet || STATE.orbitPlanet === m);
+      const isParentFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === m.parentPlanet;
+      const isThisMoonFocus = STATE.orbitLevel === "moon" && STATE.activeMoonOrbit === m;
       const baseDist = m.baseDistance || m.distance || 30;
       const siblingMoons = activePlanets.filter((s) => s.isMoon && s.parentPlanet === m.parentPlanet);
       const moonIdx = siblingMoons.indexOf(m);
       const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 8;
-      const targetMoonDist = isParentFocus ? baseDist + (20 + staggerOffset) * zoomFactor : baseDist;
+      const targetMoonDist = isParentFocus ? baseDist + (12 + staggerOffset) * zoomFactor : baseDist;
       m.distance = MathUtils.lerp(m.distance, targetMoonDist, Math.min(1, dt * 3.5));
-      const targetMoonScale = isParentFocus ? 1 + 0.45 * zoomFactor : 1;
+      const targetMoonScale = isThisMoonFocus ? 1.45 : isParentFocus ? 1.15 : 1;
       const curMScale = MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1, dt * 3.5));
       m.mesh.scale.set(curMScale, curMScale, curMScale);
       m.source.radius = m.size * curMScale;
@@ -37328,9 +37397,7 @@ function updatePhysics(dt) {
       m.mesh.position.set(mx, 0, mz);
       m.source.position.set(mx, 0, mz);
       if (m.ringMesh) {
-        m.ringMesh.position.copy(parentPos);
-        const rScale = m.distance / baseDist;
-        m.ringMesh.scale.set(rScale, 1, rScale);
+        m.ringMesh.position.set(mx, 0, mz);
       }
       if (m.bodyMesh) {
         m.bodyMesh.rotation.y += 0.2 * dt;
@@ -37368,6 +37435,16 @@ function updatePhysics(dt) {
   let targetDist = Infinity;
   if (STATE.lockedTarget && STATE.lockedTarget.mesh) {
     targetPlanet = STATE.lockedTarget;
+    const dx = STATE.playerPosition.x - targetPlanet.mesh.position.x;
+    const dz = STATE.playerPosition.z - targetPlanet.mesh.position.z;
+    targetDist = Math.sqrt(dx * dx + dz * dz);
+  } else if (STATE.orbitLevel === "moon" && STATE.activeMoonOrbit && STATE.activeMoonOrbit.mesh) {
+    targetPlanet = STATE.activeMoonOrbit;
+    const dx = STATE.playerPosition.x - targetPlanet.mesh.position.x;
+    const dz = STATE.playerPosition.z - targetPlanet.mesh.position.z;
+    targetDist = Math.sqrt(dx * dx + dz * dz);
+  } else if (STATE.orbitLevel === "planet" && STATE.orbitPlanet && STATE.orbitPlanet.mesh) {
+    targetPlanet = STATE.orbitPlanet;
     const dx = STATE.playerPosition.x - targetPlanet.mesh.position.x;
     const dz = STATE.playerPosition.z - targetPlanet.mesh.position.z;
     targetDist = Math.sqrt(dx * dx + dz * dz);
@@ -37438,10 +37515,12 @@ function updatePhysics(dt) {
   if (STATE.playerGroup) {
     STATE.playerGroup.position.copy(STATE.playerPosition);
   }
-  camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, Math.min(1, dt * 6.5));
-  camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, Math.min(1, dt * 6.5));
-  camera.position.y = 65;
+  const targetHeight = STATE.orbitLevel === "moon" ? 48 : STATE.orbitLevel === "planet" ? 58 : 85;
+  STATE.targetCameraHeight = targetHeight;
+  camera.position.y = MathUtils.lerp(camera.position.y, targetHeight, Math.min(1, dt * 3.5));
   STATE.cameraHeight = camera.position.y;
+  camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, Math.min(1, dt * 7.5));
+  camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, Math.min(1, dt * 7.5));
   camera.rotation.set(-Math.PI / 2, 0, 0);
   camera.up.set(0, 0, -1);
   if (camera.fov !== 60) {

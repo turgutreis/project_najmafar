@@ -1,4 +1,4 @@
-import { STATE } from '../core/state';
+import { STATE, activePlanets } from '../core/state';
 import { addLogEntry } from '../ui/hud';
 import { startQuantumScanSound, updateQuantumScanSound, stopQuantumScanSound } from '../engine/audio';
 import { collapseQuantumCivilization } from '../procedural/quantum-civ';
@@ -150,12 +150,16 @@ export function generateFallbackMoons(p: any) {
 }
 
 export function triggerScanStart() {
-    if (!STATE.gameStarted || STATE.scanningPlanet || STATE.extractingPlanet || !STATE.nearestPlanet) return;
+    const target = (STATE.orbitLevel === 'moon' && STATE.activeMoonOrbit)
+        ? STATE.activeMoonOrbit
+        : STATE.nearestPlanet;
 
-    const planet = STATE.nearestPlanet;
+    if (!STATE.gameStarted || STATE.scanningPlanet || STATE.extractingPlanet || !target) return;
+
+    const planet = target;
     const isAlreadyScanned = planet.scanned || (STATE.scannedPlanets && STATE.scannedPlanets[planet.name]);
     if (isAlreadyScanned) {
-        addLogEntry("SYSTEM", `Planet ${planet.name} ist bereits vollständig kartografiert & gescannt.`);
+        addLogEntry("SYSTEM", `${planet.isMoon ? 'Mond' : 'Planet'} ${planet.name} ist bereits vollständig kartografiert & gescannt.`);
         return;
     }
 
@@ -294,15 +298,27 @@ export function updateScannerUI(planet: any, dist: number) {
     const orbitBadgeSub = document.getElementById('orbit-badge-sub');
 
     if (orbitBadge) {
-        if (STATE.isInPlanetOrbit && STATE.orbitPlanet) {
+        if (STATE.orbitLevel === 'moon' && STATE.activeMoonOrbit) {
             orbitBadge.style.display = 'flex';
             if (orbitBadgeTitle) {
-                orbitBadgeTitle.innerText = `🪐 ORBIT: ${STATE.orbitPlanet.name.toUpperCase()}`;
+                orbitBadgeTitle.innerText = `🌕 MOND-ORBIT: ${STATE.activeMoonOrbit.name.toUpperCase()}`;
             }
             if (orbitBadgeSub) {
+                const parentName = STATE.activeMoonOrbit.parentPlanet ? STATE.activeMoonOrbit.parentPlanet.name : (STATE.orbitPlanet ? STATE.orbitPlanet.name : 'Zentralkörper');
+                const curRadius = STATE.activeMoonOrbit.source ? STATE.activeMoonOrbit.source.radius : (STATE.activeMoonOrbit.size || 1.0);
+                const alt = Math.max(0.1, dist - curRadius).toFixed(1);
+                orbitBadgeSub.innerText = `Mutterplanet: ${parentName} • Höhe: ${alt} LJ`;
+            }
+        } else if (STATE.orbitLevel === 'planet' && STATE.orbitPlanet) {
+            orbitBadge.style.display = 'flex';
+            if (orbitBadgeTitle) {
+                orbitBadgeTitle.innerText = `🪐 SUB-SYSTEM: ${STATE.orbitPlanet.name.toUpperCase()}`;
+            }
+            if (orbitBadgeSub) {
+                const moons = activePlanets.filter(m => m.isMoon && m.parentPlanet === STATE.orbitPlanet);
                 const curRadius = STATE.orbitPlanet.source ? STATE.orbitPlanet.source.radius : (STATE.orbitPlanet.size || 2.5);
                 const alt = Math.max(0.2, dist - curRadius).toFixed(1);
-                orbitBadgeSub.innerText = `Orbit-Höhe: ${alt} LJ • Sub-System Nahbereich`;
+                orbitBadgeSub.innerText = `Höhe: ${alt} LJ • ${moons.length} Monde im Orbit`;
             }
         } else {
             orbitBadge.style.display = 'none';

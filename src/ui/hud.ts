@@ -9,6 +9,7 @@ import { triggerBioDischarge } from '../systems/fleet';
 
 let minimapCanvas: HTMLCanvasElement | null = null;
 let minimapCtx: CanvasRenderingContext2D | null = null;
+let currentRadarRange = 220;
 
 let sonarWaveMesh: THREE.Mesh | null = null;
 let sonarTimer = 0;
@@ -173,7 +174,12 @@ export function updateMinimap() {
     const height = minimapCanvas.height;
     const cx = width / 2;
     const cy = height / 2;
-    const range = 450;
+
+    // Star Control 2 Style Dynamic Hierarchical Radar Range
+    // Solar: 220 LJ, Planet Sub-System: 65 LJ, Moon Orbit: 28 LJ
+    const targetRange = STATE.orbitLevel === 'moon' ? 28 : (STATE.orbitLevel === 'planet' ? 65 : 220);
+    currentRadarRange = THREE.MathUtils.lerp(currentRadarRange, targetRange, 0.08);
+    const range = currentRadarRange;
 
     minimapCtx.fillStyle = 'rgba(3, 7, 18, 0.85)';
     minimapCtx.fillRect(0, 0, width, height);
@@ -329,6 +335,17 @@ export function updateMinimap() {
     minimapCtx.closePath();
     minimapCtx.fill();
     minimapCtx.restore();
+
+    // Radar mode & range telemetry label
+    minimapCtx.fillStyle = 'rgba(56, 189, 248, 0.85)';
+    minimapCtx.font = '9px monospace';
+    minimapCtx.textAlign = 'center';
+    const modeLabel = STATE.orbitLevel === 'moon'
+        ? `🌕 MOND: ${STATE.activeMoonOrbit?.name || 'Orbit'}`
+        : (STATE.orbitLevel === 'planet'
+            ? `🪐 SUB-SYS: ${STATE.orbitPlanet?.name || 'Orbit'}`
+            : `RADAR: ${Math.round(range)} LJ`);
+    minimapCtx.fillText(modeLabel, cx, height - 6);
 }
 
 export function triggerPsionicSonar() {

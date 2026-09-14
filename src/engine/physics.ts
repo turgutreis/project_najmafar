@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
+import { PlanetEntry } from '../types/game';
 import { camera, scene } from './scene';
 import { playCrashSound, playBioCollectSound, playSiliconCollectSound } from './audio';
 import { targetReticleGroup, createTargetReticle } from '../procedural/meshes';
@@ -14,8 +15,8 @@ const _bounceDir = new THREE.Vector3();
 const _inputDir = new THREE.Vector3();
 
 export function updatePhysics(dt: number) {
-    // 0. Detect nearest planetary sub-system with dynamic size-proportional SOI
-    let nearestPlanet: any = null;
+    // 0. Detect nearest planetary sub-system and nearest moon
+    let nearestPlanet: PlanetEntry | null = null;
     let nearestPlanetDist = Infinity;
 
     activePlanets.forEach(p => {
@@ -30,37 +31,88 @@ export function updatePhysics(dt: number) {
         }
     });
 
-    let orbitTriggerDist = 65.0;
-    let lowOrbitTriggerDist = 28.0;
-    if (nearestPlanet) {
-        const planetSize = nearestPlanet.size || 2.5;
-        const moons = activePlanets.filter(m => m.isMoon && m.parentPlanet === nearestPlanet);
-        const maxMoonBaseDist = moons.reduce((max, m) => Math.max(max, m.baseDistance || m.distance || 6.0), 0);
-        orbitTriggerDist = Math.max(55.0, planetSize * 10.0 + maxMoonBaseDist * 1.5);
-        lowOrbitTriggerDist = Math.max(24.0, planetSize * 5.0);
-    }
+    let nearestMoon: PlanetEntry | null = null;
+    let nearestMoonDist = Infinity;
 
-    if (nearestPlanet && nearestPlanetDist < orbitTriggerDist) {
-        STATE.isInPlanetOrbit = true;
-        STATE.orbitPlanet = nearestPlanet;
-        const rawProximity = Math.max(0, Math.min(1.0, 1.0 - (nearestPlanetDist / orbitTriggerDist)));
-        const easedProximity = Math.sin(rawProximity * Math.PI / 2);
-        STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, easedProximity, Math.min(1.0, dt * 3.5));
+    activePlanets.forEach(m => {
+        if (m.isMoon) {
+            const dx = STATE.playerPosition.x - m.mesh.position.x;
+            const dz = STATE.playerPosition.z - m.mesh.position.z;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < nearestMoonDist) {
+                nearestMoonDist = dist;
+                nearestMoon = m;
+            }
+        }
+    });
 
-        // Stage 2: Low Planetary Orbit (LPO) Super-Zoom as you approach the upper atmosphere
-        const currentPlanetRadius = (nearestPlanet.size || 2.5) * (nearestPlanet.mesh ? nearestPlanet.mesh.scale.x : 1.0);
-        const distAboveSurface = Math.max(0, nearestPlanetDist - currentPlanetRadius);
-        const rawLowOrbit = Math.max(0, Math.min(1.0, 1.0 - (distAboveSurface / lowOrbitTriggerDist)));
-        const easedLowOrbit = rawLowOrbit * rawLowOrbit * (3.0 - 2.0 * rawLowOrbit); // Smoothstep curve
-        (STATE as any).lowOrbitFactor = THREE.MathUtils.lerp((STATE as any).lowOrbitFactor || 0, easedLowOrbit, Math.min(1.0, dt * 3.5));
+    // Star Control 2 Style 3-Level Hierarchical Orbit System
+    // Level 1: 'solar' (Interplanetary flight, broad overview)
+    // Level 2: 'planet' (Planetary sub-system, parent planet & moons)
+    // Level 3: 'moon' (Lunar orbit, high-res surface details)
+    const currentLevel = STATE.orbitLevel || 'solar';
+
+    if (currentLevel === 'moon') {
+        if (nearestMoon && nearestMoonDist < 22.0) {
+            STATE.orbitLevel = 'moon';
+            STATE.activeMoonOrbit = nearestMoon;
+            STATE.isInPlanetOrbit = true;
+            STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
+        } else if (nearestPlanet && nearestPlanetDist < 60.0) {
+            STATE.orbitLevel = 'planet';
+            STATE.activeMoonOrbit = null;
+            STATE.isInPlanetOrbit = true;
+            STATE.orbitPlanet = nearestPlanet;
+        } else {
+            STATE.orbitLevel = 'solar';
+            STATE.activeMoonOrbit = null;
+            STATE.isInPlanetOrbit = false;
+            STATE.orbitPlanet = null;
+        }
+    } else if (currentLevel === 'planet') {
+        if (nearestMoon && nearestMoonDist < 18.0) {
+            STATE.orbitLevel = 'moon';
+            STATE.activeMoonOrbit = nearestMoon;
+            STATE.isInPlanetOrbit = true;
+            STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
+        } else if (nearestPlanet && nearestPlanetDist < 62.0) {
+            STATE.orbitLevel = 'planet';
+            STATE.activeMoonOrbit = null;
+            STATE.isInPlanetOrbit = true;
+            STATE.orbitPlanet = nearestPlanet;
+        } else {
+            STATE.orbitLevel = 'solar';
+            STATE.activeMoonOrbit = null;
+            STATE.isInPlanetOrbit = false;
+            STATE.orbitPlanet = null;
+        }
     } else {
-        STATE.isInPlanetOrbit = false;
-        STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, 0, Math.min(1.0, dt * 3.0));
-        (STATE as any).lowOrbitFactor = THREE.MathUtils.lerp((STATE as any).lowOrbitFactor || 0, 0, Math.min(1.0, dt * 3.0));
+        // Solar level
+        if (nearestMoon && nearestMoonDist < 18.0) {
+            STATE.orbitLevel = 'moon';
+            STATE.activeMoonOrbit = nearestMoon;
+            STATE.isInPlanetOrbit = true;
+            STATE.orbitPlanet = nearestMoon.parentPlanet || nearestPlanet;
+        } else if (nearestPlanet && nearestPlanetDist < 50.0) {
+            STATE.orbitLevel = 'planet';
+            STATE.activeMoonOrbit = null;
+            STATE.isInPlanetOrbit = true;
+            STATE.orbitPlanet = nearestPlanet;
+        } else {
+            STATE.orbitLevel = 'solar';
+            STATE.activeMoonOrbit = null;
+            STATE.isInPlanetOrbit = false;
+            STATE.orbitPlanet = null;
+        }
     }
 
-    const zoomFactor = STATE.orbitZoomFactor || 0;
-    const lowOrbitFactor = (STATE as any).lowOrbitFactor || 0;
+    // Smooth Orbit Zoom Factor & Transition Progress
+    const targetZoomFactor = STATE.orbitLevel === 'moon' ? 1.0 : (STATE.orbitLevel === 'planet' ? 0.85 : 0.0);
+    STATE.orbitZoomFactor = THREE.MathUtils.lerp(STATE.orbitZoomFactor || 0, targetZoomFactor, Math.min(1.0, dt * 3.5));
+    const zoomFactor = STATE.orbitZoomFactor;
+
+    const targetTransition = STATE.orbitLevel === 'moon' ? 1.0 : (STATE.orbitLevel === 'planet' ? 0.5 : 0.0);
+    STATE.orbitTransitionProgress = THREE.MathUtils.lerp(STATE.orbitTransitionProgress || 0, targetTransition, Math.min(1.0, dt * 3.5));
 
     // 1. Update celestial orbits (Planets around star, Moons around parent planet)
     activePlanets.forEach(p => {
@@ -75,9 +127,9 @@ export function updatePhysics(dt: number) {
                 p.ringMesh.position.set(px, 0, pz);
             }
 
-            // Dynamic Planetary Scale: Planet swells majestically into a colossal world upon approach
+            // Dynamic Planetary Scale: Planet swells subtly and harmoniously
             const isFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === p;
-            const targetScale = isFocus ? (1.0 + 1.8 * zoomFactor + 0.8 * lowOrbitFactor) : 1.0;
+            const targetScale = isFocus ? (1.0 + 0.45 * zoomFactor) : 1.0;
             const curScale = THREE.MathUtils.lerp(p.mesh.scale.x, targetScale, Math.min(1.0, dt * 3.5));
             p.mesh.scale.set(curScale, curScale, curScale);
             p.source.radius = p.size * curScale;
@@ -97,8 +149,8 @@ export function updatePhysics(dt: number) {
 
     activePlanets.forEach(m => {
         if (m.isMoon && m.parentPlanet) {
-            // Moons maintain expansive, clear orbital tracks
-            const isParentFocus = STATE.isInPlanetOrbit && (STATE.orbitPlanet === m.parentPlanet || STATE.orbitPlanet === m);
+            const isParentFocus = STATE.isInPlanetOrbit && STATE.orbitPlanet === m.parentPlanet;
+            const isThisMoonFocus = STATE.orbitLevel === 'moon' && STATE.activeMoonOrbit === m;
             const baseDist = m.baseDistance || m.distance || 30.0;
 
             const siblingMoons = activePlanets.filter(s => s.isMoon && s.parentPlanet === m.parentPlanet);
@@ -106,11 +158,11 @@ export function updatePhysics(dt: number) {
             const staggerOffset = (moonIdx >= 0 ? moonIdx : 0) * 8.0;
 
             const targetMoonDist = isParentFocus
-                ? (baseDist + (20.0 + staggerOffset) * zoomFactor)
+                ? (baseDist + (12.0 + staggerOffset) * zoomFactor)
                 : baseDist;
             m.distance = THREE.MathUtils.lerp(m.distance, targetMoonDist, Math.min(1.0, dt * 3.5));
 
-            const targetMoonScale = isParentFocus ? (1.0 + 0.45 * zoomFactor) : 1.0;
+            const targetMoonScale = isThisMoonFocus ? 1.45 : (isParentFocus ? 1.15 : 1.0);
             const curMScale = THREE.MathUtils.lerp(m.mesh.scale.x, targetMoonScale, Math.min(1.0, dt * 3.5));
             m.mesh.scale.set(curMScale, curMScale, curMScale);
             m.source.radius = m.size * curMScale;
@@ -123,9 +175,7 @@ export function updatePhysics(dt: number) {
             m.mesh.position.set(mx, 0, mz);
             m.source.position.set(mx, 0, mz);
             if (m.ringMesh) {
-                m.ringMesh.position.copy(parentPos);
-                const rScale = m.distance / baseDist;
-                m.ringMesh.scale.set(rScale, 1, rScale);
+                m.ringMesh.position.set(mx, 0, mz);
             }
 
             if (m.bodyMesh) {
@@ -173,6 +223,16 @@ export function updatePhysics(dt: number) {
 
     if (STATE.lockedTarget && STATE.lockedTarget.mesh) {
         targetPlanet = STATE.lockedTarget;
+        const dx = STATE.playerPosition.x - targetPlanet.mesh.position.x;
+        const dz = STATE.playerPosition.z - targetPlanet.mesh.position.z;
+        targetDist = Math.sqrt(dx * dx + dz * dz);
+    } else if (STATE.orbitLevel === 'moon' && STATE.activeMoonOrbit && STATE.activeMoonOrbit.mesh) {
+        targetPlanet = STATE.activeMoonOrbit;
+        const dx = STATE.playerPosition.x - targetPlanet.mesh.position.x;
+        const dz = STATE.playerPosition.z - targetPlanet.mesh.position.z;
+        targetDist = Math.sqrt(dx * dx + dz * dz);
+    } else if (STATE.orbitLevel === 'planet' && STATE.orbitPlanet && STATE.orbitPlanet.mesh) {
+        targetPlanet = STATE.orbitPlanet;
         const dx = STATE.playerPosition.x - targetPlanet.mesh.position.x;
         const dz = STATE.playerPosition.z - targetPlanet.mesh.position.z;
         targetDist = Math.sqrt(dx * dx + dz * dz);
@@ -256,11 +316,14 @@ export function updatePhysics(dt: number) {
         STATE.playerGroup.position.copy(STATE.playerPosition);
     }
 
-    // 6.5 Direct & Responsive Camera Scrolling (Centered on ship at optimal, stable altitude)
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, Math.min(1.0, dt * 6.5));
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, STATE.playerPosition.z, Math.min(1.0, dt * 6.5));
-    camera.position.y = 65.0;
+    // 6.5 Star Control 2 Hierarchical Camera Altitude & Responsive Following
+    const targetHeight = STATE.orbitLevel === 'moon' ? 48.0 : (STATE.orbitLevel === 'planet' ? 58.0 : 85.0);
+    STATE.targetCameraHeight = targetHeight;
+    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetHeight, Math.min(1.0, dt * 3.5));
     STATE.cameraHeight = camera.position.y;
+
+    camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, Math.min(1.0, dt * 7.5));
+    camera.position.z = THREE.MathUtils.lerp(camera.position.z, STATE.playerPosition.z, Math.min(1.0, dt * 7.5));
 
     // Rock-solid fixed orientation: strictly prevent any camera rotation when ship moves or turns
     camera.rotation.set(-Math.PI / 2, 0, 0);
