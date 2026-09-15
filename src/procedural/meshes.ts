@@ -37,7 +37,7 @@ export function createPlayerMesh(): THREE.Group {
     ship.group.add(empLight);
 
     ship.group.position.copy(STATE.playerPosition);
-    ship.group.scale.set(0.65, 0.65, 0.65);
+    ship.group.scale.set(0.42, 0.42, 0.42);
     scene.add(ship.group);
     STATE.playerGroup = ship.group;
 

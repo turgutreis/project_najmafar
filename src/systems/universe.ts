@@ -270,7 +270,7 @@ export function spawnPlanetsAndAsteroids() {
 
     // 2. Celestial Bodies (Planets, Constructs, Vortices, Captured Stars)
     activeSystem.planets.forEach((p, idx) => {
-        const scaledDist = 65.0 + (p.distance * 2.8) + (idx * 24.0);
+        const scaledDist = 110.0 + (p.distance * 3.8) + (idx * 55.0);
         const angle = (idx * 1.8) + (STATE.currentSystemId * 0.5);
         const px = scaledDist * Math.cos(angle);
         const pz = scaledDist * Math.sin(angle);
@@ -338,7 +338,7 @@ export function spawnPlanetsAndAsteroids() {
                 texData = createRockyTextures(p.color, seed);
             }
 
-            const geo = new THREE.SphereGeometry(p.size, 32, 32);
+            const geo = new THREE.SphereGeometry(p.size, 64, 64);
             const mat = new THREE.MeshStandardMaterial({
                 map: texData.map,
                 bumpMap: texData.bumpMap || null,
@@ -367,7 +367,7 @@ export function spawnPlanetsAndAsteroids() {
             }
 
             if (cloudTexture && isHab) {
-                const cloudGeo = new THREE.SphereGeometry(p.size * 1.018, 32, 32);
+                const cloudGeo = new THREE.SphereGeometry(p.size * 1.018, 64, 64);
                 const cloudMat = new THREE.MeshStandardMaterial({
                     map: cloudTexture,
                     transparent: true,
@@ -407,7 +407,6 @@ export function spawnPlanetsAndAsteroids() {
         };
         STATE.gravitySources.push(sourceObj);
 
-        const ring = createGravityRing(px, pz, pRange, parseInt(p.color), 0.08);
         const orbitSpeed = 0.055 / Math.sqrt(scaledDist);
         const pColorCss = p.color.replace("0x", "#");
 
@@ -417,7 +416,7 @@ export function spawnPlanetsAndAsteroids() {
             cloudMesh: cloudMesh,
             psioAuraMesh: psioAuraMesh,
             source: sourceObj,
-            ringMesh: ring,
+            ringMesh: null,
             angle: angle,
             speed: orbitSpeed,
             distance: scaledDist,
@@ -438,9 +437,13 @@ export function spawnPlanetsAndAsteroids() {
         };
         activePlanets.push(planetEntry);
 
-        // Spawn Moons
+        // Spawn Moons with natural, aesthetically pleasing orbital clearance around parent planet
         const moonsList = p.moons || [];
         moonsList.forEach((m: any, m_idx: number) => {
+            const naturalDist = (p.size * 1.8) + 4.5 + (m_idx * 3.8);
+            m.distance = naturalDist;
+            m.baseDistance = naturalDist;
+
             const moonAngle = (m_idx * 2.2) + (idx * 0.7) + 0.5;
             const mx = px + m.distance * Math.cos(moonAngle);
             const mz = pz + m.distance * Math.sin(moonAngle);
@@ -455,7 +458,7 @@ export function spawnPlanetsAndAsteroids() {
                 mTex = createRockyTextures(m.color, mSeed);
             }
 
-            const mGeo = new THREE.SphereGeometry(m.size, 24, 24);
+            const mGeo = new THREE.SphereGeometry(m.size, 48, 48);
             const mMat = new THREE.MeshStandardMaterial({
                 map: mTex.map,
                 bumpMap: mTex.bumpMap || null,
@@ -483,7 +486,7 @@ export function spawnPlanetsAndAsteroids() {
             };
             STATE.gravitySources.push(mSource);
 
-            const mRing = createGravityRing(px, pz, m.distance, parseInt(m.color), 0.04);
+            const mRing = createGravityRing(px, pz, m.distance, parseInt(m.color), 0.035);
             const moonOrbitSpeed = 0.12 + 0.06 / Math.sqrt(m.distance);
 
             const moonEntry: any = {

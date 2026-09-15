@@ -121,7 +121,10 @@ export const STATE: GameState = {
     cameraLookTarget: new THREE.Vector3(0, 0, 0),
     isInPlanetOrbit: false,
     orbitPlanet: null,
-    orbitZoomFactor: 0.0
+    orbitZoomFactor: 0.0,
+    orbitLevel: 'solar',
+    activeMoonOrbit: null,
+    orbitTransitionProgress: 0.0
 };
 
 export const activePlanets: PlanetEntry[] = [];

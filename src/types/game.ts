@@ -358,4 +358,9 @@ export interface GameState {
     isInPlanetOrbit?: boolean;
     orbitPlanet?: PlanetEntry | null;
     orbitZoomFactor?: number;
+    orbitLevel?: OrbitLevel;
+    activeMoonOrbit?: PlanetEntry | null;
+    orbitTransitionProgress?: number;
 }
+
+export type OrbitLevel = 'solar' | 'planet' | 'moon';
