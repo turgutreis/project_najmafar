@@ -676,3 +676,201 @@ export function updateMusicButtonsUI() {
         }
     }
 }
+
+// ----------------------------------------------------------------------------
+// INTERSTELLAR WARP DROPOUT & ARRIVAL SOUNDSCAPE
+// ----------------------------------------------------------------------------
+
+export function playWarpDropoutSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    // A. Soft Space-Time Displacement Resonance (Sub-Bass glide)
+    const subOsc = ctx.createOscillator();
+    const subGain = ctx.createGain();
+    const subFilter = ctx.createBiquadFilter();
+
+    subOsc.type = 'triangle';
+    subOsc.frequency.setValueAtTime(140, time);
+    subOsc.frequency.exponentialRampToValueAtTime(45, time + 0.9);
+
+    subFilter.type = 'lowpass';
+    subFilter.frequency.setValueAtTime(320, time);
+    subFilter.frequency.exponentialRampToValueAtTime(80, time + 0.9);
+
+    subGain.gain.setValueAtTime(0, time);
+    subGain.gain.linearRampToValueAtTime(0.14, time + 0.08);
+    subGain.gain.exponentialRampToValueAtTime(0.001, time + 0.95);
+
+    subOsc.connect(subFilter);
+    subFilter.connect(subGain);
+    subGain.connect(ctx.destination);
+
+    subOsc.start(time);
+    subOsc.stop(time + 1.0);
+
+    // B. Soft Vacuum Displacement Whoosh
+    const bufferSize = Math.floor(ctx.sampleRate * 0.8);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(350, time);
+    noiseFilter.frequency.exponentialRampToValueAtTime(90, time + 0.8);
+    noiseFilter.Q.setValueAtTime(1.0, time);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0, time);
+    noiseGain.gain.linearRampToValueAtTime(0.08, time + 0.1);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.85);
+
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+
+    noise.start(time);
+    noise.stop(time + 0.9);
+}
+
+export function playSystemArrivalChime() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    const notes = [523.25, 659.25, 783.99]; // C5 - E5 - G5 major triad
+    notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time + idx * 0.09);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1800, time);
+
+        gain.gain.setValueAtTime(0, time + idx * 0.09);
+        gain.gain.linearRampToValueAtTime(0.06, time + idx * 0.09 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + idx * 0.09 + 0.55);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(time + idx * 0.09);
+        osc.stop(time + idx * 0.09 + 0.6);
+    });
+}
+
+export function playWarpSpoolSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    // 1. Deep Sub-Harmonic Reactor Throbbing (Pure Warm Sines with 3Hz Binaural Beating)
+    const subOsc1 = ctx.createOscillator();
+    const subOsc2 = ctx.createOscillator();
+    const subGain = ctx.createGain();
+
+    subOsc1.type = 'sine';
+    subOsc2.type = 'sine';
+
+    // 44 Hz & 47 Hz generate a slow, heavy 3 Hz organic pulsation
+    subOsc1.frequency.setValueAtTime(44, time);
+    subOsc2.frequency.setValueAtTime(47, time);
+
+    // Subtle dark swell (stays strictly within sub-bass range < 65 Hz)
+    if (subOsc1.frequency.exponentialRampToValueAtTime) {
+        subOsc1.frequency.exponentialRampToValueAtTime(60, time + 1.5);
+    }
+    if (subOsc2.frequency.exponentialRampToValueAtTime) {
+        subOsc2.frequency.exponentialRampToValueAtTime(64, time + 1.5);
+    }
+
+    subGain.gain.setValueAtTime(0, time);
+    subGain.gain.linearRampToValueAtTime(0.15, time + 0.4);
+    subGain.gain.linearRampToValueAtTime(0.22, time + 1.35);
+    subGain.gain.exponentialRampToValueAtTime(0.001, time + 1.6);
+
+    subOsc1.connect(subGain);
+    subOsc2.connect(subGain);
+    subGain.connect(ctx.destination);
+
+    subOsc1.start(time);
+    subOsc1.stop(time + 1.65);
+    subOsc2.start(time);
+    subOsc2.stop(time + 1.65);
+
+    // 2. Cosmic Vacuum Compression Swell (Dark lowpass-filtered noise, zero harshness)
+    const bufferSize = Math.floor(ctx.sampleRate * 1.5);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let lastOut = 0.0;
+    for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        lastOut = (lastOut + 0.025 * white) / 1.025;
+        data[i] = lastOut * 3.2;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.setValueAtTime(85, time);
+    if (noiseFilter.frequency.exponentialRampToValueAtTime) {
+        noiseFilter.frequency.exponentialRampToValueAtTime(170, time + 1.4);
+    }
+    noiseFilter.Q.setValueAtTime(0.7, time);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0, time);
+    noiseGain.gain.linearRampToValueAtTime(0.10, time + 0.3);
+    noiseGain.gain.linearRampToValueAtTime(0.16, time + 1.35);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 1.6);
+
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+
+    noise.start(time);
+    noise.stop(time + 1.65);
+}
+
+export function playWarpSnapSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    // Deep Sub-Bass Space-Time Cavitation Impact (Heavy Bass Thud, no laser/arcade beep)
+    const impactOsc = ctx.createOscillator();
+    const impactGain = ctx.createGain();
+    const impactFilter = ctx.createBiquadFilter();
+
+    impactOsc.type = 'triangle';
+    impactOsc.frequency.setValueAtTime(75, time);
+    if (impactOsc.frequency.exponentialRampToValueAtTime) {
+        impactOsc.frequency.exponentialRampToValueAtTime(26, time + 0.35);
+    }
+
+    impactFilter.type = 'lowpass';
+    impactFilter.frequency.setValueAtTime(130, time);
+
+    impactGain.gain.setValueAtTime(0.24, time);
+    impactGain.gain.exponentialRampToValueAtTime(0.001, time + 0.38);
+
+    impactOsc.connect(impactFilter);
+    impactFilter.connect(impactGain);
+    impactGain.connect(ctx.destination);
+
+    impactOsc.start(time);
+    impactOsc.stop(time + 0.4);
+}

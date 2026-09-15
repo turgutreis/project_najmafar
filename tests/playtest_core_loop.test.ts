@@ -65,7 +65,11 @@ if (typeof globalThis.window === 'undefined') {
             createBiquadFilter() {
                 return {
                     type: 'lowpass',
-                    frequency: { setValueAtTime: () => {} },
+                    frequency: {
+                        setValueAtTime: () => {},
+                        linearRampToValueAtTime: () => {},
+                        exponentialRampToValueAtTime: () => {}
+                    },
                     Q: { setValueAtTime: () => {} },
                     connect: () => {}
                 };
@@ -83,10 +87,13 @@ if (typeof globalThis.window === 'undefined') {
     };
 }
 
-import { STATE } from '../src/core/state';
+import { STATE, activePlanets } from '../src/core/state';
 import { triggerHarvestStart, updateHarvesting, completeHarvesting } from '../src/systems/harvesting';
 import { triggerScanStart, updateScanning, completeScanning } from '../src/systems/scanner';
 import { AUDIO_SETTINGS } from '../src/engine/audio';
+import { initiateSystemArrival, initiateSystemDeparture } from '../src/systems/universe';
+import { clearJumpGates, activeJumpGates } from '../src/procedural/meshes';
+import { updatePhysics } from '../src/engine/physics';
 
 describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
     let mockPlanet: any;
@@ -261,5 +268,109 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         expect(AUDIO_SETTINGS.masterVolume).toBeLessThanOrEqual(0.70);
         expect(AUDIO_SETTINGS.sfxVolume).toBeLessThanOrEqual(0.50);
         expect(AUDIO_SETTINGS.thrusterVolume).toBeLessThanOrEqual(0.50);
+    });
+
+    test("8. Outer-Rim arrival vector points inward toward central star at high speed", () => {
+        const fromSys = { id: 1, name: "Sol", x: 0, z: 0 };
+        const targetSys = { id: 2, name: "Vega", x: 100, z: 0 };
+
+        initiateSystemArrival(fromSys, targetSys);
+
+        // Player placed on outer rim perimeter (R = 150)
+        const distFromCenter = Math.sqrt(STATE.playerPosition.x ** 2 + STATE.playerPosition.z ** 2);
+        expect(distFromCenter).toBeCloseTo(150.0, 1);
+
+        // Direction points inward toward center (dot product negative)
+        const dotProduct = STATE.playerPosition.x * STATE.systemArrivalDirection.x +
+                           STATE.playerPosition.z * STATE.systemArrivalDirection.z;
+        expect(dotProduct).toBeLessThan(0);
+
+        // State is active and speed is high warp dropout (32 LJ/s)
+        expect(STATE.systemArrivalActive).toBe(true);
+        expect(STATE.systemArrivalTimer).toBe(2.2);
+        expect(STATE.playerVelocity.length()).toBeCloseTo(32.0, 1);
+    });
+
+    test("9. Spacefaring systems spawn a Faction Jump Gate and clean up on departure", () => {
+        activePlanets.length = 0;
+        clearJumpGates();
+
+        activePlanets.push({
+            id: 10,
+            name: "Nova Prime",
+            type: "Terrestrial",
+            size: 4,
+            distance: 40,
+            angle: 0,
+            speed: 0.05,
+            isMoon: false,
+            mesh: new THREE.Group(),
+            source: { position: new THREE.Vector3(), radius: 4, mass: 100, gravityRange: 20 },
+            attributes: {
+                species: {
+                    name: "Terran Ascendancy",
+                    techLevel: "Spacefaring",
+                    factionId: "sol_federation"
+                }
+            }
+        });
+
+        const fromSys = { id: 1, name: "Sol", x: 0, z: 0 };
+        const targetSys = { id: 2, name: "Terran Center", x: 50, z: 50 };
+
+        initiateSystemArrival(fromSys, targetSys);
+
+        expect(STATE.incomingJumpGate).not.toBeNull();
+        expect(activeJumpGates.length).toBe(1);
+
+        clearJumpGates();
+        expect(activeJumpGates.length).toBe(0);
+    });
+
+    test("10. Warp-braking physics smoothly decelerates ship toward cruise speed", () => {
+        activePlanets.length = 0;
+        clearJumpGates();
+
+        const fromSys = { id: 1, name: "Sol", x: 0, z: 0 };
+        const targetSys = { id: 2, name: "Vega", x: 100, z: 0 };
+
+        initiateSystemArrival(fromSys, targetSys);
+        expect(STATE.playerVelocity.length()).toBeCloseTo(32.0, 1);
+
+        // Step physics by 1.1s
+        updatePhysics(1.1);
+        const midSpeed = STATE.playerVelocity.length();
+        expect(midSpeed).toBeLessThan(32.0);
+        expect(midSpeed).toBeGreaterThan(7.5);
+        expect(STATE.systemArrivalActive).toBe(true);
+
+        // Step physics through the remainder (1.2s more)
+        updatePhysics(1.2);
+        expect(STATE.systemArrivalActive).toBe(false);
+    });
+
+    test("11. Interstellar departure spools up, locks heading and punches into hyperspace", () => {
+        const fromSys = { id: 1, name: "Sol", x: 0, z: 0 };
+        const targetSys = { id: 2, name: "Alpha Centauri", x: 100, z: 0 };
+        STATE.universe = { systems: [fromSys, targetSys] } as any;
+        STATE.currentSystemId = 1;
+
+        initiateSystemDeparture(fromSys, targetSys);
+
+        expect(STATE.systemDepartureActive).toBe(true);
+        expect(STATE.systemDepartureTimer).toBe(1.6);
+        // Departure vector points from Sol to Alpha Centauri (+X direction)
+        expect(STATE.systemDepartureDirection.x).toBeGreaterThan(0.9);
+
+        // Advance 0.5s into spooling phase
+        updatePhysics(0.5);
+        expect(STATE.systemDepartureActive).toBe(true);
+
+        // Advance into phase 2 (fold punch) and completion (1.2s more)
+        updatePhysics(1.2);
+        // Departure should be complete, triggering arrival in target system
+        expect(STATE.systemDepartureActive).toBe(false);
+        expect(STATE.systemArrivalActive).toBe(true);
+        expect(STATE.currentSystemId).toBe(2);
     });
 });

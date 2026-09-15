@@ -404,3 +404,67 @@ export function updateSonarWave(dt: number) {
         sonarWaveMesh = null;
     }
 }
+
+// ----------------------------------------------------------------------------
+// INTERSTELLAR SYSTEM ARRIVAL HUD BANNER
+// ----------------------------------------------------------------------------
+
+let arrivalBannerTimeout: any = null;
+
+export function triggerSystemArrivalBanner(system: any, factionName?: string) {
+    const banner = document.getElementById('system-arrival-banner');
+    if (!banner) return;
+
+    if (arrivalBannerTimeout) {
+        clearTimeout(arrivalBannerTimeout);
+        arrivalBannerTimeout = null;
+    }
+
+    const titleEl = document.getElementById('arrival-system-title');
+    const sectorEl = document.getElementById('arrival-sector-label');
+    const starEl = document.getElementById('arrival-star-badge');
+    const planetsEl = document.getElementById('arrival-planets-badge');
+    const factionEl = document.getElementById('arrival-faction-badge');
+
+    if (titleEl) titleEl.innerText = (system.name || 'UNBEKANNT').toUpperCase();
+    if (sectorEl) sectorEl.innerText = system.sectorName ? `${system.sectorName.toUpperCase()} • TRANSIT` : 'SYSTEM-TRANSIT ABGESCHLOSSEN';
+
+    if (starEl && system.star) {
+        starEl.innerText = `⭐ ${system.star.type || 'Zentralgestirn'}`;
+    }
+
+    const planetCount = system.planets ? system.planets.length : 0;
+    let moonCount = 0;
+    if (system.planets) {
+        system.planets.forEach((p: any) => {
+            if (p.moons) moonCount += p.moons.length;
+        });
+    }
+
+    if (planetsEl) {
+        planetsEl.innerText = moonCount > 0
+            ? `🪐 ${planetCount} Planeten | ${moonCount} Monde`
+            : `🪐 ${planetCount} Himmelskörper`;
+    }
+
+    if (factionEl) {
+        if (factionName) {
+            factionEl.innerText = `🛡️ ${factionName}`;
+            factionEl.style.display = 'inline-flex';
+        } else {
+            factionEl.innerText = `🌌 Unerschlossener Raum`;
+            factionEl.style.display = 'inline-flex';
+        }
+    }
+
+    banner.classList.remove('banner-exit');
+    banner.style.display = 'flex';
+
+    arrivalBannerTimeout = setTimeout(() => {
+        banner.classList.add('banner-exit');
+        setTimeout(() => {
+            banner.style.display = 'none';
+            banner.classList.remove('banner-exit');
+        }, 800);
+    }, 4500);
+}

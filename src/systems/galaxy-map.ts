@@ -2,7 +2,7 @@ import { STATE } from '../core/state';
 import { StarSystem } from '../types/game';
 import { playSiliconCollectSound, playCrashSound, setThrusterSound } from '../engine/audio';
 import { addLogEntry } from '../ui/hud';
-import { clearActiveSystem, spawnPlanetsAndAsteroids } from './universe';
+import { clearActiveSystem, spawnPlanetsAndAsteroids, initiateSystemArrival, initiateSystemDeparture } from './universe';
 
 let mapOpen = false;
 let selectedSystem: StarSystem | null = null;
@@ -930,33 +930,14 @@ export function warpToSystem(systemId: number) {
         STATE.visitedSystemIds.push(targetSys.id);
     }
 
-    // Trigger Warp VFX overlay
-    const warpOverlay = document.getElementById('warp-overlay');
-    if (warpOverlay) {
-        warpOverlay.style.display = 'block';
-        warpOverlay.style.opacity = '1';
+    // Close Galaxy Map immediately so player enters full 3D space in current system
+    if (mapOpen) {
+        toggleGalaxyMap();
     }
 
-    // Audio cues
-    playSiliconCollectSound();
-    setThrusterSound(true);
+    // Log departure in HUD
+    addLogEntry("SYSTEM", `🌌 RAUMZEIT-FALTUNG INITIIERT: Kurs gesetzt auf ${targetSys.name} (${targetSys.sectorName || 'Sektor'}). -${warpCost}% Bio-Energie.`);
 
-    addLogEntry("SYSTEM", `🌌 RAUMZEIT GEFALTET: Transit nach ${targetSys.name} (${targetSys.sectorName || 'Sektor'}). -${warpCost}% Bio-Energie.`);
-
-    setTimeout(() => {
-        clearActiveSystem();
-        spawnPlanetsAndAsteroids();
-
-        if (warpOverlay) {
-            warpOverlay.style.opacity = '0';
-            setTimeout(() => {
-                warpOverlay.style.display = 'none';
-            }, 600);
-        }
-        setThrusterSound(false);
-
-        if (mapOpen) {
-            toggleGalaxyMap();
-        }
-    }, 1200);
+    // Initiate Departure Sequence in the starting/current system!
+    initiateSystemDeparture(currentSys, targetSys);
 }

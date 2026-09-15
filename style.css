@@ -2015,107 +2015,20 @@ body.game-started .hud-left {
     flex-shrink: 0;
 }
 
-/* --- WARP SCREEN OVERLAY --- */
-.warp-overlay {
-    position: absolute;
+/* --- CINEMATIC WARP FLASH OVERLAY --- */
+.warp-flash {
+    position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background: #000000;
+    width: 100vw;
+    height: 100vh;
+    background: radial-gradient(circle at center, rgba(168, 85, 247, 0.7) 0%, rgba(56, 189, 248, 0.4) 40%, rgba(6, 11, 25, 0.92) 100%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     z-index: 9999;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-}
-
-.warp-grid-effect {
-    position: absolute;
-    width: 200%;
-    height: 200%;
-    background-image:
-        radial-gradient(circle at center, rgba(168, 85, 247, 0.15) 0%, transparent 70%),
-        linear-gradient(rgba(255, 255, 255, 0.01) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
-    background-size: 100% 100%, 30px 30px, 30px 30px;
-    background-position: center;
-    animation: warpGridSpin 10s infinite linear;
-}
-
-@keyframes warpGridSpin {
-    0% {
-        transform: translate(-25%, -25%) rotate(0deg) scale(1.0);
-    }
-
-    50% {
-        transform: translate(-25%, -25%) rotate(180deg) scale(1.5);
-    }
-
-    100% {
-        transform: translate(-25%, -25%) rotate(360deg) scale(1.0);
-    }
-}
-
-.warp-vortex {
-    position: absolute;
-    width: 600px;
-    height: 600px;
-    border-radius: 50%;
-    background: radial-gradient(circle, transparent 20%, rgba(168, 85, 247, 0.3) 50%, rgba(6, 182, 212, 0.6) 80%, transparent 100%);
-    filter: blur(20px);
-    animation: vortexPulse 1.2s infinite alternate ease-in-out;
-}
-
-@keyframes vortexPulse {
-    from {
-        transform: scale(0.6) rotate(0deg);
-        opacity: 0.5;
-    }
-
-    to {
-        transform: scale(1.3) rotate(180deg);
-        opacity: 0.95;
-    }
-}
-
-.warp-text-container {
-    text-align: center;
-    position: relative;
-    z-index: 100;
-}
-
-.warp-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 3rem;
-    font-weight: 900;
-    letter-spacing: 1.2rem;
-    margin: 0;
-    color: #ffffff;
-    text-shadow: 0 0 30px rgba(168, 85, 247, 0.8), 0 0 10px rgba(6, 182, 212, 0.6);
-    animation: textFlash 0.5s infinite alternate;
-}
-
-@keyframes textFlash {
-    0% {
-        opacity: 0.7;
-        transform: scale(0.98);
-    }
-
-    100% {
-        opacity: 1;
-        transform: scale(1.02);
-    }
-}
-
-.warp-status {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #06b6d4;
-    margin-top: 1rem;
-    letter-spacing: 0.3rem;
-    text-transform: uppercase;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* --- PLANETARY SCANNER (LEFT HUD) --- */
@@ -3817,4 +3730,146 @@ body.game-started .hud-left {
     background: linear-gradient(135deg, #0369a1, #075985);
     box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
     transform: translateY(-1px);
+}
+
+/* ============================================================================
+   INTERSTELLAR SYSTEM ARRIVAL HUD BANNER
+   ============================================================================ */
+
+.system-arrival-banner {
+    position: fixed;
+    top: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15000;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 480px;
+    max-width: 720px;
+    background: linear-gradient(180deg, rgba(8, 15, 30, 0.88) 0%, rgba(3, 7, 18, 0.82) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 12px;
+    padding: 16px 36px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 35px rgba(56, 189, 248, 0.25);
+    animation: arrivalBannerSlideIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.system-arrival-banner.banner-exit {
+    animation: arrivalBannerSlideOut 0.8s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+
+@keyframes arrivalBannerSlideIn {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -24px) scale(0.96);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1.0);
+    }
+}
+
+@keyframes arrivalBannerSlideOut {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1.0);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -20px) scale(0.98);
+    }
+}
+
+.arrival-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.arrival-kicker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #38bdf8;
+    letter-spacing: 0.22rem;
+    text-transform: uppercase;
+}
+
+.arrival-pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #00ff88;
+    box-shadow: 0 0 10px #00ff88;
+    animation: scanPulse 1.2s infinite alternate;
+}
+
+.arrival-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 900;
+    letter-spacing: 0.25rem;
+    margin: 2px 0 6px 0;
+    color: #ffffff;
+    text-transform: uppercase;
+    text-shadow: 0 0 20px rgba(56, 189, 248, 0.6), 0 0 40px rgba(56, 189, 248, 0.3);
+}
+
+.arrival-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.88rem;
+    color: #cbd5e1;
+}
+
+.arrival-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.arrival-badge.star-badge {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
+.arrival-badge.faction-badge {
+    color: #d946ef;
+    font-weight: 600;
+}
+
+.arrival-separator {
+    color: rgba(255, 255, 255, 0.25);
+    font-size: 0.75rem;
+}
+
+.arrival-bracket {
+    position: absolute;
+    width: 24px;
+    height: 8px;
+    border-color: #38bdf8;
+    border-style: solid;
+    pointer-events: none;
+}
+
+.arrival-bracket-top {
+    top: -2px;
+    border-width: 2px 0 0 0;
+    width: 60px;
+}
+
+.arrival-bracket-bottom {
+    bottom: -2px;
+    border-width: 0 0 2px 0;
+    width: 60px;
 }

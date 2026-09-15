@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
-import { scene } from '../engine/scene';
+import { scene, camera } from '../engine/scene';
 import { PlanetEntry, StarSystem } from '../types/game';
-import { createGravityRing, createBlackHoleMesh, createPrecursorConstructMesh, createPlasmaVortexMesh } from '../procedural/meshes';
+import { createGravityRing, createBlackHoleMesh, createPrecursorConstructMesh, createPlasmaVortexMesh, clearJumpGates, createJumpGateMesh, activeJumpGates } from '../procedural/meshes';
 import { createHabitableTextures, createGasGiantTextures, createRockyTextures, createIceMoonTextures, createVolcanicMoonTextures, createStarTexture, createCloudTexture, createCityLightsTexture } from '../procedural/textures';
 import { generatePlanetAttributes, generateFallbackMoons, updateScannerUI } from './scanner';
 import { initPlanetDefenseFleets, clearFleet } from './fleet';
-import { addLogEntry } from '../ui/hud';
+import { addLogEntry, triggerSystemArrivalBanner } from '../ui/hud';
+import { playWarpDropoutSound, playWarpSpoolSound, playWarpSnapSound } from '../engine/audio';
+import { getFaction } from './factions';
 import { createSunCoronaMesh } from '../procedural/sun-shader';
 import { createAtmosphereMesh } from '../procedural/atmosphere-shader';
 import { createPlanetaryRings } from '../procedural/planet-rings';
@@ -19,6 +21,7 @@ export let activeSunRays: SunRaysController | null = null;
 
 export function updateUniverseShaders(dt: number, cam?: THREE.Camera) {
     activeCoronaUpdaters.forEach(fn => fn(dt));
+    activeJumpGates.forEach(jg => jg.update(dt));
     if (activeSunRays && cam) {
         activeSunRays.update(dt, cam);
     }
@@ -176,6 +179,7 @@ export function clearActiveSystem() {
     STATE.abductProgress = 0;
 
     clearFleet();
+    clearJumpGates();
 
     const badge = document.getElementById('target-lock-badge');
     const label = document.getElementById('target-label-text');
@@ -568,6 +572,120 @@ export function spawnPlanetsAndAsteroids() {
 
     initPlanetDefenseFleets();
     addLogEntry("NAV", `Sensoren initialisiert: ${activeSystem.name} [${activeSystem.sectorName || 'Sektor'}].`);
+}
+
+// ----------------------------------------------------------------------------
+// INTERSTELLAR SYSTEM DEPARTURE (SPOOLING & FOLD PUNCH)
+// ----------------------------------------------------------------------------
+
+export function initiateSystemDeparture(fromSys: any, targetSys: any) {
+    if (!targetSys) return;
+
+    // 1. Calculate departure vector pointing towards target system
+    const departureDir = new THREE.Vector3(1, 0, 0);
+    if (fromSys && (fromSys.x !== targetSys.x || fromSys.z !== targetSys.z)) {
+        departureDir.set(targetSys.x - fromSys.x, 0, targetSys.z - fromSys.z).normalize();
+    } else {
+        const h = STATE.shipHeading || 0;
+        departureDir.set(Math.cos(h), 0, -Math.sin(h)).normalize();
+    }
+
+    // 2. Disengage any planetary / moon orbit locking
+    STATE.isInPlanetOrbit = false;
+    STATE.orbitPlanet = null;
+    STATE.orbitLevel = 'solar';
+    STATE.activeMoonOrbit = null;
+    STATE.orbitZoomFactor = 0.0;
+
+    // 3. Set departure state
+    STATE.systemDepartureActive = true;
+    STATE.systemDepartureTimer = 1.6;
+    STATE.systemDepartureMaxTime = 1.6;
+    STATE.systemDepartureDirection.copy(departureDir);
+    STATE.systemDepartureTarget = targetSys;
+
+    // 4. Log & Spool-up Audio
+    addLogEntry("NAV", `🌀 FALTUNGS-SEQUENZ INITIIERT: Vektor nach ${targetSys.name} (${targetSys.sectorName || 'Sektor'}) arretiert. Raumzeit-Krümmung lädt...`);
+    playWarpSpoolSound();
+}
+
+// ----------------------------------------------------------------------------
+// INTERSTELLAR SYSTEM ARRIVAL & WARP-DROPOUT CONTROLLER
+// ----------------------------------------------------------------------------
+
+export function initiateSystemArrival(fromSys: any, targetSys: any) {
+    if (!targetSys) return;
+
+    // 1. Calculate directional arrival vector from Galaxy Map transit
+    let inboundAngle = Math.PI * 0.75;
+    if (fromSys && (fromSys.x !== targetSys.x || fromSys.z !== targetSys.z)) {
+        const dx = targetSys.x - fromSys.x;
+        const dz = targetSys.z - fromSys.z;
+        inboundAngle = Math.atan2(-dz, -dx);
+    }
+
+    const entryDist = 150.0; // Outer rim perimeter (safe from inner solar orbits)
+    const entryX = Math.cos(inboundAngle) * entryDist;
+    const entryZ = Math.sin(inboundAngle) * entryDist;
+
+    STATE.playerPosition.set(entryX, 0, entryZ);
+    if (STATE.playerGroup) {
+        STATE.playerGroup.position.copy(STATE.playerPosition);
+    }
+
+    // 2. Align heading and forward velocity toward system center (0, 0, 0)
+    const forwardDir = new THREE.Vector3(-entryX, 0, -entryZ).normalize();
+    STATE.systemArrivalDirection.copy(forwardDir);
+    STATE.shipHeading = Math.atan2(-forwardDir.z, forwardDir.x);
+
+    // Initial high-velocity warp dropout
+    STATE.playerVelocity.copy(forwardDir).multiplyScalar(32.0);
+
+    // Activate smooth deceleration state
+    STATE.systemArrivalActive = true;
+    STATE.systemArrivalTimer = 2.2;
+    STATE.systemArrivalMaxTime = 2.2;
+
+    // Cinematic elevated establishing camera view
+    STATE.cameraHeight = 92.0;
+    STATE.targetCameraHeight = 65.0;
+    if (camera) {
+        camera.position.set(entryX, 92.0, entryZ);
+    }
+
+    // 3. Faction Jump Gate / Nav-Beacon Detection
+    let dominantFaction: any = null;
+    let dominantFactionName = '';
+    const spacefaringPlanet = activePlanets.find(p => p.attributes && p.attributes.species && (p.attributes.species.techLevel === 'Spacefaring' || p.attributes.species.techLevel === 'Hyper-Advanced' || p.attributes.species.techLevel === 'Industrial'));
+
+    if (spacefaringPlanet && spacefaringPlanet.attributes.species) {
+        const spec = spacefaringPlanet.attributes.species;
+        if (spec.factionId) {
+            dominantFaction = getFaction(spec.factionId);
+            dominantFactionName = dominantFaction ? dominantFaction.name : spec.name;
+        } else {
+            dominantFactionName = spec.name;
+        }
+    }
+
+    if (dominantFaction || spacefaringPlanet) {
+        const gateColor = dominantFaction ? parseInt(dominantFaction.color) : 0x38bdf8;
+        const jumpGate = createJumpGateMesh(9.5, gateColor);
+        jumpGate.group.position.set(entryX, 0, entryZ);
+        jumpGate.group.rotation.y = Math.atan2(forwardDir.x, forwardDir.z);
+        STATE.incomingJumpGate = jumpGate;
+
+        addLogEntry("NAV", `📡 SPRUNGTOR-SIGNAL ERFASST: Navigations-Vektor autorisiert durch ${dominantFactionName}. Willkommen im System ${targetSys.name}.`);
+    } else {
+        STATE.incomingJumpGate = null;
+        addLogEntry("NAV", `🌌 WARP-AUSTRITT: Unkartierter Raumsektor erreicht. Faltungsfeld kollabiert. Eintrittsvektor stabil.`);
+    }
+
+    // 4. Acoustic Warp Exit Soundscape (Deep Sub-Bass & Vacuum Whoosh)
+    playWarpDropoutSound();
+
+    // 5. Trigger Cinematic System Arrival Banner
+    triggerSystemArrivalBanner(targetSys, dominantFactionName);
 }
 
 export function updateActivePlanets(dt: number) {
