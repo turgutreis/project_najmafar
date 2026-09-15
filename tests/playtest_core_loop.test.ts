@@ -91,7 +91,7 @@ import { STATE, activePlanets } from '../src/core/state';
 import { triggerHarvestStart, updateHarvesting, completeHarvesting } from '../src/systems/harvesting';
 import { triggerScanStart, updateScanning, completeScanning } from '../src/systems/scanner';
 import { AUDIO_SETTINGS } from '../src/engine/audio';
-import { initiateSystemArrival } from '../src/systems/universe';
+import { initiateSystemArrival, initiateSystemDeparture } from '../src/systems/universe';
 import { clearJumpGates, activeJumpGates } from '../src/procedural/meshes';
 import { updatePhysics } from '../src/engine/physics';
 
@@ -347,5 +347,30 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         // Step physics through the remainder (1.2s more)
         updatePhysics(1.2);
         expect(STATE.systemArrivalActive).toBe(false);
+    });
+
+    test("11. Interstellar departure spools up, locks heading and punches into hyperspace", () => {
+        const fromSys = { id: 1, name: "Sol", x: 0, z: 0 };
+        const targetSys = { id: 2, name: "Alpha Centauri", x: 100, z: 0 };
+        STATE.universe = { systems: [fromSys, targetSys] } as any;
+        STATE.currentSystemId = 1;
+
+        initiateSystemDeparture(fromSys, targetSys);
+
+        expect(STATE.systemDepartureActive).toBe(true);
+        expect(STATE.systemDepartureTimer).toBe(1.6);
+        // Departure vector points from Sol to Alpha Centauri (+X direction)
+        expect(STATE.systemDepartureDirection.x).toBeGreaterThan(0.9);
+
+        // Advance 0.5s into spooling phase
+        updatePhysics(0.5);
+        expect(STATE.systemDepartureActive).toBe(true);
+
+        // Advance into phase 2 (fold punch) and completion (1.2s more)
+        updatePhysics(1.2);
+        // Departure should be complete, triggering arrival in target system
+        expect(STATE.systemDepartureActive).toBe(false);
+        expect(STATE.systemArrivalActive).toBe(true);
+        expect(STATE.currentSystemId).toBe(2);
     });
 });

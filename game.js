@@ -29461,7 +29461,12 @@ var STATE = {
   systemArrivalTimer: 0,
   systemArrivalMaxTime: 2.2,
   systemArrivalDirection: new Vector3(0, 0, 0),
-  incomingJumpGate: null
+  incomingJumpGate: null,
+  systemDepartureActive: false,
+  systemDepartureTimer: 0,
+  systemDepartureMaxTime: 1.6,
+  systemDepartureDirection: new Vector3(1, 0, 0),
+  systemDepartureTarget: null
 };
 var activePlanets = [];
 
@@ -32667,6 +32672,68 @@ function playSystemArrivalChime() {
     osc.stop(time + idx * 0.09 + 0.6);
   });
 }
+function playWarpSpoolSound() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const time = ctx.currentTime;
+  const spoolOsc = ctx.createOscillator();
+  const spoolGain = ctx.createGain();
+  const spoolFilter = ctx.createBiquadFilter();
+  spoolOsc.type = "sawtooth";
+  spoolOsc.frequency.setValueAtTime(80, time);
+  if (spoolOsc.frequency.exponentialRampToValueAtTime) {
+    spoolOsc.frequency.exponentialRampToValueAtTime(380, time + 1.5);
+  }
+  spoolFilter.type = "lowpass";
+  spoolFilter.frequency.setValueAtTime(180, time);
+  if (spoolFilter.frequency.exponentialRampToValueAtTime) {
+    spoolFilter.frequency.exponentialRampToValueAtTime(750, time + 1.5);
+  }
+  spoolFilter.Q.setValueAtTime(2.5, time);
+  spoolGain.gain.setValueAtTime(0, time);
+  spoolGain.gain.linearRampToValueAtTime(0.12, time + 0.3);
+  spoolGain.gain.linearRampToValueAtTime(0.18, time + 1.4);
+  spoolGain.gain.exponentialRampToValueAtTime(0.001, time + 1.6);
+  spoolOsc.connect(spoolFilter);
+  spoolFilter.connect(spoolGain);
+  spoolGain.connect(ctx.destination);
+  spoolOsc.start(time);
+  spoolOsc.stop(time + 1.65);
+  const subOsc = ctx.createOscillator();
+  const subGain = ctx.createGain();
+  subOsc.type = "sine";
+  subOsc.frequency.setValueAtTime(55, time);
+  if (subOsc.frequency.exponentialRampToValueAtTime) {
+    subOsc.frequency.exponentialRampToValueAtTime(120, time + 1.5);
+  }
+  subGain.gain.setValueAtTime(0, time);
+  subGain.gain.linearRampToValueAtTime(0.13, time + 0.4);
+  subGain.gain.exponentialRampToValueAtTime(0.001, time + 1.6);
+  subOsc.connect(subGain);
+  subGain.connect(ctx.destination);
+  subOsc.start(time);
+  subOsc.stop(time + 1.65);
+}
+function playWarpSnapSound() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const time = ctx.currentTime;
+  const snapOsc = ctx.createOscillator();
+  const snapGain = ctx.createGain();
+  snapOsc.type = "triangle";
+  snapOsc.frequency.setValueAtTime(480, time);
+  if (snapOsc.frequency.exponentialRampToValueAtTime) {
+    snapOsc.frequency.exponentialRampToValueAtTime(40, time + 0.28);
+  }
+  snapGain.gain.setValueAtTime(0.2, time);
+  snapGain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+  snapOsc.connect(snapGain);
+  snapGain.connect(ctx.destination);
+  snapOsc.start(time);
+  snapOsc.stop(time + 0.32);
+}
 
 // src/systems/crew.ts
 function calculateCrewBuffs() {
@@ -35636,6 +35703,29 @@ function spawnPlanetsAndAsteroids() {
   initPlanetDefenseFleets();
   addLogEntry("NAV", `Sensoren initialisiert: ${activeSystem.name} [${activeSystem.sectorName || "Sektor"}].`);
 }
+function initiateSystemDeparture(fromSys, targetSys) {
+  if (!targetSys)
+    return;
+  const departureDir = new Vector3(1, 0, 0);
+  if (fromSys && (fromSys.x !== targetSys.x || fromSys.z !== targetSys.z)) {
+    departureDir.set(targetSys.x - fromSys.x, 0, targetSys.z - fromSys.z).normalize();
+  } else {
+    const h = STATE.shipHeading || 0;
+    departureDir.set(Math.cos(h), 0, -Math.sin(h)).normalize();
+  }
+  STATE.isInPlanetOrbit = false;
+  STATE.orbitPlanet = null;
+  STATE.orbitLevel = "solar";
+  STATE.activeMoonOrbit = null;
+  STATE.orbitZoomFactor = 0;
+  STATE.systemDepartureActive = true;
+  STATE.systemDepartureTimer = 1.6;
+  STATE.systemDepartureMaxTime = 1.6;
+  STATE.systemDepartureDirection.copy(departureDir);
+  STATE.systemDepartureTarget = targetSys;
+  addLogEntry("NAV", `\uD83C\uDF00 FALTUNGS-SEQUENZ INITIIERT: Vektor nach ${targetSys.name} (${targetSys.sectorName || "Sektor"}) arretiert. Raumzeit-Krümmung lädt...`);
+  playWarpSpoolSound();
+}
 function initiateSystemArrival(fromSys, targetSys) {
   if (!targetSys)
     return;
@@ -36526,22 +36616,9 @@ function warpToSystem(systemId) {
   if (mapOpen) {
     toggleGalaxyMap();
   }
-  const warpFlash = document.getElementById("warp-flash");
-  if (warpFlash) {
-    warpFlash.style.display = "block";
-    warpFlash.style.opacity = "0.9";
-    setTimeout(() => {
-      warpFlash.style.opacity = "0";
-      setTimeout(() => {
-        warpFlash.style.display = "none";
-      }, 350);
-    }, 60);
-  }
   playSiliconCollectSound();
-  addLogEntry("SYSTEM", `\uD83C\uDF0C RAUMZEIT GEFALTET: Transit nach ${targetSys.name} (${targetSys.sectorName || "Sektor"}). -${warpCost}% Bio-Energie.`);
-  clearActiveSystem();
-  spawnPlanetsAndAsteroids();
-  initiateSystemArrival(currentSys, targetSys);
+  addLogEntry("SYSTEM", `\uD83C\uDF0C RAUMZEIT-FALTUNG INITIIERT: Kurs gesetzt auf ${targetSys.name} (${targetSys.sectorName || "Sektor"}). -${warpCost}% Bio-Energie.`);
+  initiateSystemDeparture(currentSys, targetSys);
 }
 
 // src/systems/harvesting.ts
@@ -37403,6 +37480,9 @@ function processInput(dt) {
     }
     prevGpButtons = gp.buttons.map((b) => b ? b.pressed || b.value > 0.5 : false);
   }
+  if (STATE.systemDepartureActive) {
+    return;
+  }
   if (STATE.systemArrivalActive && (turnInput !== 0 || isThrusting || isRetroBraking)) {
     STATE.systemArrivalActive = false;
   }
@@ -37861,7 +37941,47 @@ function updatePhysics(dt) {
       netGz += dz * invDist * gForce;
     }
   }
-  if (STATE.systemArrivalActive) {
+  if (STATE.systemDepartureActive) {
+    STATE.systemDepartureTimer = (STATE.systemDepartureTimer || 1.6) - dt;
+    const depMax = STATE.systemDepartureMaxTime || 1.6;
+    const depProgress = 1 - Math.max(0, STATE.systemDepartureTimer / depMax);
+    const targetHeading = Math.atan2(-STATE.systemDepartureDirection.z, STATE.systemDepartureDirection.x);
+    const angleDiff = (targetHeading - STATE.shipHeading + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+    STATE.shipHeading += angleDiff * Math.min(1, dt * 7);
+    if (STATE.playerGroup) {
+      STATE.playerGroup.rotation.y = STATE.shipHeading;
+    }
+    if (depProgress < 0.55) {
+      STATE.playerVelocity.multiplyScalar(Math.exp(-3.5 * dt));
+    } else {
+      const punchT = (depProgress - 0.55) / 0.45;
+      const punchSpeed = MathUtils.lerp(4, 52, Math.pow(punchT, 2.2));
+      STATE.playerVelocity.copy(STATE.systemDepartureDirection).multiplyScalar(punchSpeed);
+    }
+    if (STATE.systemDepartureTimer <= 0) {
+      STATE.systemDepartureActive = false;
+      const targetSys = STATE.systemDepartureTarget;
+      const fromSys = STATE.universe?.systems.find((s) => s.id === STATE.currentSystemId) || STATE.universe?.systems[0];
+      playWarpSnapSound();
+      const warpFlash = document.getElementById("warp-flash");
+      if (warpFlash) {
+        warpFlash.style.display = "block";
+        warpFlash.style.opacity = "0.95";
+        setTimeout(() => {
+          warpFlash.style.opacity = "0";
+          setTimeout(() => {
+            warpFlash.style.display = "none";
+          }, 350);
+        }, 60);
+      }
+      if (targetSys) {
+        STATE.currentSystemId = targetSys.id;
+        clearActiveSystem();
+        spawnPlanetsAndAsteroids();
+        initiateSystemArrival(fromSys, targetSys);
+      }
+    }
+  } else if (STATE.systemArrivalActive) {
     STATE.systemArrivalTimer -= dt;
     const progress = 1 - Math.max(0, STATE.systemArrivalTimer / STATE.systemArrivalMaxTime);
     const arrivalSpeed = MathUtils.lerp(32, 7.5, Math.pow(progress, 0.6));
@@ -37911,7 +38031,12 @@ function updatePhysics(dt) {
   const planetAltitudeOffset = 18 * planetApproachFactor;
   const moonAltitudeOffset = 16 * moonApproachFactor;
   let targetHeight = Math.max(48, 82 - planetAltitudeOffset - moonAltitudeOffset);
-  if (STATE.systemArrivalActive) {
+  if (STATE.systemDepartureActive) {
+    const depMax = STATE.systemDepartureMaxTime || 1.6;
+    const depRatio = 1 - Math.max(0, (STATE.systemDepartureTimer || 0) / depMax);
+    const warpDistortion = Math.sin(depRatio * Math.PI) * 14;
+    targetHeight = (STATE.targetCameraHeight || 65) + warpDistortion;
+  } else if (STATE.systemArrivalActive) {
     const arrivalRatio = Math.max(0, STATE.systemArrivalTimer / STATE.systemArrivalMaxTime);
     targetHeight = MathUtils.lerp(targetHeight, 92, Math.pow(arrivalRatio, 0.8));
   }

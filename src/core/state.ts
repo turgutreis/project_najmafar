@@ -132,7 +132,14 @@ export const STATE: GameState = {
     systemArrivalTimer: 0.0,
     systemArrivalMaxTime: 2.2,
     systemArrivalDirection: new THREE.Vector3(0, 0, 0),
-    incomingJumpGate: null
+    incomingJumpGate: null,
+
+    // Interstellar Departure (Spooling & Fold Punch)
+    systemDepartureActive: false,
+    systemDepartureTimer: 0.0,
+    systemDepartureMaxTime: 1.6,
+    systemDepartureDirection: new THREE.Vector3(1, 0, 0),
+    systemDepartureTarget: null
 };
 
 export const activePlanets: PlanetEntry[] = [];

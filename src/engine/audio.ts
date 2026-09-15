@@ -769,3 +769,82 @@ export function playSystemArrivalChime() {
         osc.stop(time + idx * 0.09 + 0.6);
     });
 }
+
+export function playWarpSpoolSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    // Rising psionic warp spool-up hum (80 Hz -> 380 Hz)
+    const spoolOsc = ctx.createOscillator();
+    const spoolGain = ctx.createGain();
+    const spoolFilter = ctx.createBiquadFilter();
+
+    spoolOsc.type = 'sawtooth';
+    spoolOsc.frequency.setValueAtTime(80, time);
+    if (spoolOsc.frequency.exponentialRampToValueAtTime) {
+        spoolOsc.frequency.exponentialRampToValueAtTime(380, time + 1.5);
+    }
+
+    spoolFilter.type = 'lowpass';
+    spoolFilter.frequency.setValueAtTime(180, time);
+    if (spoolFilter.frequency.exponentialRampToValueAtTime) {
+        spoolFilter.frequency.exponentialRampToValueAtTime(750, time + 1.5);
+    }
+    spoolFilter.Q.setValueAtTime(2.5, time);
+
+    spoolGain.gain.setValueAtTime(0, time);
+    spoolGain.gain.linearRampToValueAtTime(0.12, time + 0.3);
+    spoolGain.gain.linearRampToValueAtTime(0.18, time + 1.4);
+    spoolGain.gain.exponentialRampToValueAtTime(0.001, time + 1.6);
+
+    spoolOsc.connect(spoolFilter);
+    spoolFilter.connect(spoolGain);
+    spoolGain.connect(ctx.destination);
+
+    spoolOsc.start(time);
+    spoolOsc.stop(time + 1.65);
+
+    // Sub-bass resonance underpinning
+    const subOsc = ctx.createOscillator();
+    const subGain = ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(55, time);
+    if (subOsc.frequency.exponentialRampToValueAtTime) {
+        subOsc.frequency.exponentialRampToValueAtTime(120, time + 1.5);
+    }
+    subGain.gain.setValueAtTime(0, time);
+    subGain.gain.linearRampToValueAtTime(0.13, time + 0.4);
+    subGain.gain.exponentialRampToValueAtTime(0.001, time + 1.6);
+
+    subOsc.connect(subGain);
+    subGain.connect(ctx.destination);
+
+    subOsc.start(time);
+    subOsc.stop(time + 1.65);
+}
+
+export function playWarpSnapSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    // High energy space-time puncture snap
+    const snapOsc = ctx.createOscillator();
+    const snapGain = ctx.createGain();
+
+    snapOsc.type = 'triangle';
+    snapOsc.frequency.setValueAtTime(480, time);
+    if (snapOsc.frequency.exponentialRampToValueAtTime) {
+        snapOsc.frequency.exponentialRampToValueAtTime(40, time + 0.28);
+    }
+
+    snapGain.gain.setValueAtTime(0.20, time);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+
+    snapOsc.connect(snapGain);
+    snapGain.connect(ctx.destination);
+
+    snapOsc.start(time);
+    snapOsc.stop(time + 0.32);
+}

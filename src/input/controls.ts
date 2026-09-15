@@ -412,6 +412,9 @@ export function processInput(dt: number) {
 
         prevGpButtons = gp.buttons.map(b => b ? (b.pressed || b.value > 0.5) : false);
     }
+    if (STATE.systemDepartureActive) {
+        return;
+    }
     if (STATE.systemArrivalActive && (turnInput !== 0 || isThrusting || isRetroBraking)) {
         STATE.systemArrivalActive = false;
     }

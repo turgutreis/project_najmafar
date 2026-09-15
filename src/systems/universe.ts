@@ -7,7 +7,7 @@ import { createHabitableTextures, createGasGiantTextures, createRockyTextures, c
 import { generatePlanetAttributes, generateFallbackMoons, updateScannerUI } from './scanner';
 import { initPlanetDefenseFleets, clearFleet } from './fleet';
 import { addLogEntry, triggerSystemArrivalBanner } from '../ui/hud';
-import { playWarpDropoutSound, playSystemArrivalChime } from '../engine/audio';
+import { playWarpDropoutSound, playSystemArrivalChime, playWarpSpoolSound, playWarpSnapSound } from '../engine/audio';
 import { getFaction } from './factions';
 import { createSunCoronaMesh } from '../procedural/sun-shader';
 import { createAtmosphereMesh } from '../procedural/atmosphere-shader';
@@ -572,6 +572,41 @@ export function spawnPlanetsAndAsteroids() {
 
     initPlanetDefenseFleets();
     addLogEntry("NAV", `Sensoren initialisiert: ${activeSystem.name} [${activeSystem.sectorName || 'Sektor'}].`);
+}
+
+// ----------------------------------------------------------------------------
+// INTERSTELLAR SYSTEM DEPARTURE (SPOOLING & FOLD PUNCH)
+// ----------------------------------------------------------------------------
+
+export function initiateSystemDeparture(fromSys: any, targetSys: any) {
+    if (!targetSys) return;
+
+    // 1. Calculate departure vector pointing towards target system
+    const departureDir = new THREE.Vector3(1, 0, 0);
+    if (fromSys && (fromSys.x !== targetSys.x || fromSys.z !== targetSys.z)) {
+        departureDir.set(targetSys.x - fromSys.x, 0, targetSys.z - fromSys.z).normalize();
+    } else {
+        const h = STATE.shipHeading || 0;
+        departureDir.set(Math.cos(h), 0, -Math.sin(h)).normalize();
+    }
+
+    // 2. Disengage any planetary / moon orbit locking
+    STATE.isInPlanetOrbit = false;
+    STATE.orbitPlanet = null;
+    STATE.orbitLevel = 'solar';
+    STATE.activeMoonOrbit = null;
+    STATE.orbitZoomFactor = 0.0;
+
+    // 3. Set departure state
+    STATE.systemDepartureActive = true;
+    STATE.systemDepartureTimer = 1.6;
+    STATE.systemDepartureMaxTime = 1.6;
+    STATE.systemDepartureDirection.copy(departureDir);
+    STATE.systemDepartureTarget = targetSys;
+
+    // 4. Log & Spool-up Audio
+    addLogEntry("NAV", `🌀 FALTUNGS-SEQUENZ INITIIERT: Vektor nach ${targetSys.name} (${targetSys.sectorName || 'Sektor'}) arretiert. Raumzeit-Krümmung lädt...`);
+    playWarpSpoolSound();
 }
 
 // ----------------------------------------------------------------------------

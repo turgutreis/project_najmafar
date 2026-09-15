@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
 import { PlanetEntry } from '../types/game';
 import { camera, scene } from './scene';
-import { playCrashSound, playBioCollectSound, playSiliconCollectSound } from './audio';
+import { playCrashSound, playBioCollectSound, playSiliconCollectSound, playWarpSnapSound } from './audio';
+import { clearActiveSystem, spawnPlanetsAndAsteroids, initiateSystemArrival } from '../systems/universe';
 import { targetReticleGroup, createTargetReticle, updateTargetReticleState } from '../procedural/meshes';
 import { addLogEntry, updateHUDStats } from '../ui/hud';
 import { updateScannerUI } from '../systems/scanner';
@@ -273,8 +274,57 @@ export function updatePhysics(dt: number) {
         }
     }
 
-    // 4.5 Interstellar Arrival & Warp Deceleration Controller
-    if (STATE.systemArrivalActive) {
+    // 4.3 Interstellar Departure Sequence (Warp Spooling & Fold Punch)
+    if (STATE.systemDepartureActive) {
+        STATE.systemDepartureTimer = (STATE.systemDepartureTimer || 1.6) - dt;
+        const depMax = STATE.systemDepartureMaxTime || 1.6;
+        const depProgress = 1.0 - Math.max(0, STATE.systemDepartureTimer / depMax);
+
+        // Turn ship smoothly towards departure vector
+        const targetHeading = Math.atan2(-STATE.systemDepartureDirection.z, STATE.systemDepartureDirection.x);
+        const angleDiff = (targetHeading - STATE.shipHeading + Math.PI * 3) % (Math.PI * 2) - Math.PI;
+        STATE.shipHeading += angleDiff * Math.min(1.0, dt * 7.0);
+        if (STATE.playerGroup) {
+            STATE.playerGroup.rotation.y = STATE.shipHeading;
+        }
+
+        if (depProgress < 0.55) {
+            // Phase 1: Energy spool-up & alignment - ship steadies its drift
+            STATE.playerVelocity.multiplyScalar(Math.exp(-3.5 * dt));
+        } else {
+            // Phase 2: Fold Punch! Sudden massive acceleration forward into hyperspace
+            const punchT = (depProgress - 0.55) / 0.45;
+            const punchSpeed = THREE.MathUtils.lerp(4.0, 52.0, Math.pow(punchT, 2.2));
+            STATE.playerVelocity.copy(STATE.systemDepartureDirection).multiplyScalar(punchSpeed);
+        }
+
+        if (STATE.systemDepartureTimer <= 0) {
+            STATE.systemDepartureActive = false;
+            const targetSys = STATE.systemDepartureTarget;
+            const fromSys = STATE.universe?.systems.find(s => s.id === STATE.currentSystemId) || STATE.universe?.systems[0];
+
+            playWarpSnapSound();
+
+            const warpFlash = document.getElementById('warp-flash');
+            if (warpFlash) {
+                warpFlash.style.display = 'block';
+                warpFlash.style.opacity = '0.95';
+                setTimeout(() => {
+                    warpFlash.style.opacity = '0';
+                    setTimeout(() => {
+                        warpFlash.style.display = 'none';
+                    }, 350);
+                }, 60);
+            }
+
+            if (targetSys) {
+                STATE.currentSystemId = targetSys.id;
+                clearActiveSystem();
+                spawnPlanetsAndAsteroids();
+                initiateSystemArrival(fromSys, targetSys);
+            }
+        }
+    } else if (STATE.systemArrivalActive) {
         STATE.systemArrivalTimer -= dt;
         const progress = 1.0 - Math.max(0, STATE.systemArrivalTimer / STATE.systemArrivalMaxTime);
         // Smooth non-linear deceleration from 32.0 down to 7.5 LJ/s
@@ -336,7 +386,13 @@ export function updatePhysics(dt: number) {
     const moonAltitudeOffset = 16.0 * moonApproachFactor;
     let targetHeight = Math.max(48.0, 82.0 - planetAltitudeOffset - moonAltitudeOffset);
 
-    if (STATE.systemArrivalActive) {
+    if (STATE.systemDepartureActive) {
+        const depMax = STATE.systemDepartureMaxTime || 1.6;
+        const depRatio = 1.0 - Math.max(0, (STATE.systemDepartureTimer || 0) / depMax);
+        // Dynamic camera pullback as space-time warps around ship
+        const warpDistortion = Math.sin(depRatio * Math.PI) * 14.0;
+        targetHeight = (STATE.targetCameraHeight || 65.0) + warpDistortion;
+    } else if (STATE.systemArrivalActive) {
         const arrivalRatio = Math.max(0, STATE.systemArrivalTimer / STATE.systemArrivalMaxTime);
         // Blend from elevated wide-angle establishing shot (92.0) down to cruise height
         targetHeight = THREE.MathUtils.lerp(targetHeight, 92.0, Math.pow(arrivalRatio, 0.8));
