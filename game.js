@@ -34382,9 +34382,9 @@ var SPECIES_ARCHETYPES = [
     speciesType: "ephemeral",
     avatarIcon: "\uD83C\uDF44",
     speciesColor: "#10b981",
-    names: ["Thal", "Zhirr", "Oona", "Vael", "Kael", "Myco", "Sula", "Spore-7", "Phael", "Nyra"],
-    titles: ["Bio-Architekt", "Sporen-Priester", "Membran-Wächter", "Kokon-Flechter", "Xenobotaniker"],
-    origins: ["den Phosphor-Höhlen", "dem Myzel-Gürtel", "den Flechten-Ozeanen", "den Sporen-Nebeln"],
+    firstNames: ["Thal", "Zhirr", "Oona", "Vael", "Kael", "Myco-9", "Sula", "Spore-7", "Phael", "Nyra", "Hypha-4", "Xylos", "Chitin-V", "Mycorrh", "Biolux-3", "Sporan-Rho", "Calyx", "Rhizo-2"],
+    titles: ["Bio-Architekt", "Sporen-Priester", "Membran-Wächter", "Kokon-Flechter", "Xenobotaniker", "Symbiose-Lotse", "Fungus-Resonator"],
+    origins: ["den Phosphor-Höhlen", "dem Myzel-Gürtel", "den Flechten-Ozeanen", "den Sporen-Nebeln", "den Bio-Kavernen", "den Nährstoff-Sümpfen"],
     preferredRoles: ["biologist", "engineer"],
     traits: [
       { name: "Biolumineszent", desc: "+25% Biomasse-Metabolismus im Kokon", type: "bio" },
@@ -34397,9 +34397,9 @@ var SPECIES_ARCHETYPES = [
     speciesType: "longlived",
     avatarIcon: "\uD83E\uDD16",
     speciesColor: "#38bdf8",
-    names: ["Dax-04", "Rex-Sigma", "Cipher-9", "Unit-77", "Nexus-V", "Kinet-8", "Proxy-Zero", "Vectis", "Null-1"],
-    titles: ["Naniten-Meister", "Kybernetiker", "Subraum-Logiker", "Quanten-Mechaniker", "Reaktor-Pfleger"],
-    origins: ["der Silizium-Schmiede", "dem Schaltkreis-Archipel", "den Titan-Minen", "den Daten-Gürteln"],
+    firstNames: ["Dax-04", "Rex-Sigma", "Cipher-9", "Unit-77", "Nexus-V", "Kinet-8", "Proxy-Zero", "Vectis-9", "Null-1", "Synapse-X", "Core-42", "Aegis-7", "Proton-11", "Chronos-3", "Optic-88", "Echo-101"],
+    titles: ["Naniten-Meister", "Kybernetiker", "Subraum-Logiker", "Quanten-Mechaniker", "Reaktor-Pfleger", "Kinetik-Adept", "System-Architekt", "Gleichstrom-Lotse"],
+    origins: ["der Silizium-Schmiede", "dem Schaltkreis-Archipel", "den Titan-Minen", "den Daten-Gürteln", "den Quanten-Gießereien"],
     preferredRoles: ["engineer", "pilot"],
     traits: [
       { name: "Maschinen-Synästhesie", desc: "+0.4 HP/s Naniten-Schiffshüllenreparatur", type: "repair" },
@@ -34412,9 +34412,9 @@ var SPECIES_ARCHETYPES = [
     speciesType: "ancient",
     avatarIcon: "\uD83E\uDDDD",
     speciesColor: "#a855f7",
-    names: ["Astraea", "Maya", "Solas", "Elyon", "Kaelen", "Lyra", "Seraph", "Zephyra", "Olynn", "Val-Marek"],
-    titles: ["Gedanken-Diplomat", "Astromant", "Resonanz-Weber", "Seelen-Navigator", "Traum-Hüter"],
-    origins: ["den schwebenden Kristallsphären", "dem Äther-Konsens", "den Saphir-Tempeln", "den Ringwäldern"],
+    firstNames: ["Astraea", "Maya-Sol", "Solas", "Elyon", "Kaelen", "Lyra", "Seraph", "Zephyra", "Olynn", "Val-Marek", "Isolde", "Thalor-Sol", "Caelum", "Elysia", "Auriel", "Vesper", "Lumin"],
+    titles: ["Gedanken-Diplomat", "Astromant", "Resonanz-Weber", "Seelen-Navigator", "Traum-Hüter", "Äther-Sänger", "Sphären-Wächter", "Harmonie-Lotse"],
+    origins: ["den schwebenden Kristallsphären", "dem Äther-Konsens", "den Saphir-Tempeln", "den Ringwäldern", "den Astralen Säulen"],
     preferredRoles: ["psychologist", "pilot"],
     traits: [
       { name: "Resonanz-Träumer", desc: "Senkt kosmische Einsamkeit des Schiffs um weitere 15%", type: "psionic" },
@@ -34427,9 +34427,9 @@ var SPECIES_ARCHETYPES = [
     speciesType: "mortal",
     avatarIcon: "\uD83D\uDC19",
     speciesColor: "#06b6d4",
-    names: ["Kraal", "Triton", "Nautis", "Cala", "Mael", "Hydros", "Pelagos", "Vell", "Moros"],
-    titles: ["Druckwellen-Lotse", "Hydro-Ingenieur", "Kiemen-Navigator", "Tiefen-Echoforscher"],
-    origins: ["den Methan-Gräben", "den Abyssal-Schloten", "den Salzwasser-Kernen", "den Gezeiten-Riffen"],
+    firstNames: ["Nautis", "Triton", "Pelagos", "Hydros", "Moros", "Cala", "Mael", "Vell", "Thalass", "Gorgon", "Nerios", "Glaukos", "Benthos", "Proteus", "Abysso", "Thalor", "Karkin", "Ozean-8", "Kraal-Zeth", "Scylla-Mor", "Dagon-7", "Pontos"],
+    titles: ["Abyssal-Lotse", "Druckwellen-Architekt", "Kiemen-Navigator", "Tiefen-Echoforscher", "Hydro-Ingenieur", "Strömungs-Meister", "Thermen-Taucher", "Benthos-Führer"],
+    origins: ["den Methan-Gräben", "den Abyssal-Schloten", "den Salzwasser-Kernen", "den Gezeiten-Riffen", "den Tiefsee-Vulkanen", "den Schwefel-Quellen"],
     preferredRoles: ["pilot", "biologist"],
     traits: [
       { name: "Druckresistenz", desc: "+20% Hüllendämpfung bei Gravitations-Stößen", type: "repair" },
@@ -34442,9 +34442,9 @@ var SPECIES_ARCHETYPES = [
     speciesType: "longlived",
     avatarIcon: "\uD83D\uDCA0",
     speciesColor: "#f59e0b",
-    names: ["Quarz-9", "Obsid", "Pyrit", "Beryll", "Granat", "Feldspat", "Zirkon", "Silikat-Rho"],
-    titles: ["Kristall-Geologe", "Prismen-Harmoniker", "Seismologe", "Kern-Resonator"],
-    origins: ["den Obsidian-Stollen", "den Geoden-Schluchten", "den tektonischen Falten", "den Basalt-Hochebenen"],
+    firstNames: ["Pyrit-7", "Obsid-Prime", "Beryll-Rho", "Quarz-Matrix", "Granat-V", "Zirkon-9", "Silikat-Omega", "Basalt-K", "Andalus-3", "Topas-Delta", "Geod-12", "Monolith-4"],
+    titles: ["Prismen-Harmoniker", "Kristall-Geologe", "Kern-Resonator", "Seismologe", "Gesteins-Adept", "Feldspat-Meister", "Tektonik-Lotse"],
+    origins: ["den Obsidian-Stollen", "den Geoden-Schluchten", "den tektonischen Falten", "den Basalt-Hochebenen", "den Quarz-Kernen"],
     preferredRoles: ["engineer", "psychologist"],
     traits: [
       { name: "Silizium-Katalysator", desc: "Reduziert Silizium-Verbrauch bei Naniten-Reparaturen", type: "repair" },
@@ -34457,9 +34457,10 @@ var SPECIES_ARCHETYPES = [
     speciesType: "mortal",
     avatarIcon: "\uD83E\uDDD1‍\uD83D\uDE80",
     speciesColor: "#3b82f6",
-    names: ["Capt. Miller", "Dr. Song", "Valeria", "Jamal", "Elena", "Vance", "Chen", "Thorne", "Sarah", "Aris"],
-    titles: ["Astral-Pilot", "Kolonie-Scout", "System-Astrophysiker", "Missions-Chirurg", "Überlebens-Experte"],
-    origins: ["der Orbital-Station Alpha", "dem Kolonieschiff Exodus", "den Mars-Glaskuppeln", "den Mond-Außenposten"],
+    firstNames: ["Aiden", "Cassian", "Elena", "Tarek", "Marcus", "Kira", "Nora", "Lin", "Youssef", "Darius", "Sora", "Mateo", "Leona", "Silas", "Amara", "Viktor", "Zoe", "Felix", "Selene", "Ronan", "Chloe", "Kenji", "Talia", "Ezekiel", "Mira", "Anton", "Maya", "Julian", "Liam", "Iris", "Jonas", "Freja"],
+    lastNames: ["Vance", "Thorne", "Kovacs", "Reyes", "Dubois", "Hansen", "Lindqvist", "Zhang", "Tanaka", "Moreau", "Al-Mansoor", "Petrov", "Becker", "Rossi", "Sterling", "Kowalski", "O'Neill", "Navarro", "Sinclair", "Vargas", "Hawthorne", "Castillo", "Müller", "Novak", "Richter", "Fontaine"],
+    titles: ["Cmdr.", "Dr.", "Bio-Pionier", "Astro-Ingenieur", "Exobiologe", "Kolonie-Scout", "System-Navigator", "Feldarzt", "Sensoren-Offizier", "Orbit-Lotse"],
+    origins: ["der Orbital-Station Alpha", "dem Kolonieschiff Exodus", "den Mars-Glaskuppeln", "den Mond-Außenposten", "der Venus-Wolkenstadt", "der Titan-Forschungsbasis"],
     preferredRoles: ["pilot", "engineer", "biologist"],
     traits: [
       { name: "Unbeugsamer Wille", desc: "+25% Triebwerkschub bei kritischer Schiffs-Energie", type: "speed" },
@@ -34508,30 +34509,57 @@ var LIFESPAN_PRESETS = {
   longlived: { base: 950, variance: 200 },
   ancient: { base: 1400, variance: 300 }
 };
-function generateProceduralCandidates(seedHash, count = 2) {
+function generateProceduralCandidates(seedHash, count = 2, bannedNames) {
   const candidates = [];
   const roles = ["pilot", "biologist", "engineer", "psychologist"];
+  const usedNames = new Set(bannedNames || []);
+  if (typeof STATE !== "undefined" && STATE.crew) {
+    STATE.crew.forEach((c) => usedNames.add(c.name));
+  }
   for (let i = 0;i < count; i++) {
-    const itemHash = seedHash * 31 + i * 179 + 42 >>> 0;
-    const arch = SPECIES_ARCHETYPES[itemHash % SPECIES_ARCHETYPES.length];
+    let itemHash = seedHash * 31 + i * 179 + 42 >>> 0;
+    let chosenName = "";
+    let chosenArch = SPECIES_ARCHETYPES[itemHash % SPECIES_ARCHETYPES.length];
+    let origin = "";
+    for (let attempt = 0;attempt < 30; attempt++) {
+      const currentHash = itemHash + attempt * 7919 >>> 0;
+      const arch = SPECIES_ARCHETYPES[(itemHash + attempt) % SPECIES_ARCHETYPES.length];
+      chosenArch = arch;
+      const firstName = arch.firstNames[(currentHash + i * 3) % arch.firstNames.length];
+      const title = arch.titles[(currentHash + i * 5) % arch.titles.length];
+      origin = arch.origins[(currentHash + i * 7) % arch.origins.length];
+      let candidateName = "";
+      if (arch.lastNames && arch.lastNames.length > 0) {
+        const lastName = arch.lastNames[(currentHash + i * 11 + attempt * 17) % arch.lastNames.length];
+        candidateName = `${title} ${firstName} ${lastName}`;
+      } else {
+        candidateName = `${title} ${firstName}`;
+      }
+      if (!usedNames.has(candidateName)) {
+        chosenName = candidateName;
+        itemHash = currentHash;
+        break;
+      }
+    }
+    if (!chosenName || usedNames.has(chosenName)) {
+      const fallbackSuffix = ["II", "III", "IV", "V", "Prime", "Secundus"][i % 6];
+      chosenName = `${chosenName || "Pionier"} ${fallbackSuffix}`;
+    }
+    usedNames.add(chosenName);
     let role = roles[(itemHash + i) % roles.length];
-    if (arch.preferredRoles && arch.preferredRoles.length > 0 && itemHash % 3 !== 0) {
-      role = arch.preferredRoles[itemHash % arch.preferredRoles.length];
+    if (chosenArch.preferredRoles && chosenArch.preferredRoles.length > 0 && itemHash % 3 !== 0) {
+      role = chosenArch.preferredRoles[itemHash % chosenArch.preferredRoles.length];
     }
     const roleDef = ROLE_DEFINITIONS[role];
-    const firstName = arch.names[(itemHash + i * 3) % arch.names.length];
-    const title = arch.titles[(itemHash + i * 5) % arch.titles.length];
-    const origin = arch.origins[(itemHash + i * 7) % arch.origins.length];
-    const fullName = `${title} ${firstName}`;
-    const trait = arch.traits[(itemHash + i) % arch.traits.length];
-    const preset = LIFESPAN_PRESETS[arch.speciesType];
+    const trait = chosenArch.traits[(itemHash + i) % chosenArch.traits.length];
+    const preset = LIFESPAN_PRESETS[chosenArch.speciesType];
     const lifespan = preset.base + itemHash % 100 / 100 * preset.variance;
     const initialAge = lifespan * (0.05 + itemHash % 20 / 100);
     candidates.push({
-      id: Date.now() + Math.floor(Math.random() * 1e5) + i,
-      name: fullName,
-      species: `${arch.speciesName} (${origin})`,
-      speciesType: arch.speciesType,
+      id: Date.now() + Math.floor(Math.random() * 1e6) + i * 1000 + itemHash % 999,
+      name: chosenName,
+      species: `${chosenArch.speciesName} (${origin})`,
+      speciesType: chosenArch.speciesType,
       role,
       roleName: roleDef.roleName,
       roleIcon: roleDef.roleIcon,
@@ -34540,8 +34568,8 @@ function generateProceduralCandidates(seedHash, count = 2) {
       buffDesc: roleDef.buffDesc,
       perk: trait.desc,
       trait,
-      avatarIcon: arch.avatarIcon,
-      speciesColor: arch.speciesColor,
+      avatarIcon: chosenArch.avatarIcon,
+      speciesColor: chosenArch.speciesColor,
       stress: 15 + itemHash % 15,
       baseStressRate: roleDef.baseStressRate,
       illusionStability: 100,
@@ -34568,7 +34596,10 @@ function generatePlanetAttributes(p) {
       species: p.species || null
     };
   }
-  const hash = p.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const sysId = STATE.currentSystemId || 0;
+  const nameHash = p.name.split("").reduce((acc, char) => acc * 31 + char.charCodeAt(0) >>> 0, 0);
+  const distFactor = Math.floor((p.distance || 1) * 73);
+  const hash = (sysId * 7919 ^ nameHash * 17 ^ distFactor) >>> 0;
   let atmos, temp, bio, res, species;
   if (p.type === "Habitable") {
     atmos = hash % 2 === 0 ? "Stickstoff & Sauerstoff (Klasse M)" : "Dichte Aerosole & Wasserdampf";
@@ -37194,6 +37225,11 @@ function completeAbduction() {
     if (planet.attributes.species && planet.attributes.species.candidates && planet.attributes.species.candidates.length > 0) {
       const candidate = planet.attributes.species.candidates.shift();
       if (candidate) {
+        const existingNames = new Set(STATE.crew.map((c) => c.name));
+        if (existingNames.has(candidate.name)) {
+          const fallbackSuffix = ["II", "III", "IV", "V", "Prime"][STATE.crew.length % 5];
+          candidate.name = `${candidate.name} ${fallbackSuffix}`;
+        }
         STATE.crew.push(candidate);
         STATE.crewSatietyTimer = 0;
         calculateCrewBuffs();
@@ -37203,6 +37239,7 @@ function completeAbduction() {
         addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.roleName || candidate.role}) in Kokon-Kammer transferiert.`);
         addLogEntry("CREW", `Traum-Matrix initialisiert: ${candidate.name} lindert deine Einsamkeit! (${Math.round(STATE.loneliness)}% Einsamkeit)`);
         renderCrewUI();
+        updatePartyGrid();
         updateHUDStats();
         if (STATE.nearestPlanet === planet) {
           updateScannerUI(planet, 10);

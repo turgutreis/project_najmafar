@@ -3,6 +3,7 @@ import { createAbductBeam, removeAbductBeam, updateAbductBeam } from '../procedu
 import { getAudioContext } from '../engine/audio';
 import { addLogEntry, updateHUDStats } from '../ui/hud';
 import { calculateCrewBuffs, renderCrewUI } from './crew';
+import { updatePartyGrid } from '../ui/party-grid';
 import { updateScannerUI, generatePlanetAttributes } from './scanner';
 
 let abductOsc: OscillatorNode | null = null;
@@ -112,6 +113,13 @@ export function completeAbduction() {
         if (planet.attributes.species && planet.attributes.species.candidates && planet.attributes.species.candidates.length > 0) {
             const candidate = planet.attributes.species.candidates.shift();
             if (candidate) {
+                // Safeguard against any existing duplicate names in the ship's collective
+                const existingNames = new Set(STATE.crew.map(c => c.name));
+                if (existingNames.has(candidate.name)) {
+                    const fallbackSuffix = ['II', 'III', 'IV', 'V', 'Prime'][STATE.crew.length % 5];
+                    candidate.name = `${candidate.name} ${fallbackSuffix}`;
+                }
+
                 STATE.crew.push(candidate);
                 STATE.crewSatietyTimer = 0;
                 calculateCrewBuffs();
@@ -125,6 +133,7 @@ export function completeAbduction() {
                 addLogEntry("CREW", `Traum-Matrix initialisiert: ${candidate.name} lindert deine Einsamkeit! (${Math.round(STATE.loneliness)}% Einsamkeit)`);
 
                 renderCrewUI();
+                updatePartyGrid();
                 updateHUDStats();
                 if (STATE.nearestPlanet === planet) {
                     updateScannerUI(planet, 10);

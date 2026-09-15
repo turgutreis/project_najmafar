@@ -19,7 +19,10 @@ export function generatePlanetAttributes(p: any) {
         };
     }
 
-    const hash = p.name.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+    const sysId = STATE.currentSystemId || 0;
+    const nameHash = p.name.split('').reduce((acc: number, char: string) => (acc * 31 + char.charCodeAt(0)) >>> 0, 0);
+    const distFactor = Math.floor((p.distance || 1) * 73);
+    const hash = ((sysId * 7919) ^ (nameHash * 17) ^ distFactor) >>> 0;
 
     let atmos: string, temp: string, bio: string, res: string, species: any;
     if (p.type === 'Habitable') {

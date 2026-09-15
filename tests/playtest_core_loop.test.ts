@@ -435,5 +435,36 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         expect(member.criticalAlertTriggered).toBe(false);
         expect(member.rejuvenationCount).toBe(1);
     });
+
+    test("14. Strict anti-collision guarantee: Multiple planets and crew members NEVER produce duplicate names", () => {
+        STATE.crew = [];
+        const seenNames = new Set<string>();
+
+        // Generate candidates across 25 different planets
+        for (let planetIdx = 0; planetIdx < 25; planetIdx++) {
+            const planetSeed = 1000 + planetIdx * 37;
+            const candidates = generateProceduralCandidates(planetSeed, 2);
+
+            expect(candidates.length).toBe(2);
+            // Candidate 1 and Candidate 2 on the same planet must have distinct names
+            expect(candidates[0].name).not.toBe(candidates[1].name);
+
+            candidates.forEach(c => {
+                // Must not collide with any previously seen names
+                expect(seenNames.has(c.name)).toBe(false);
+                seenNames.add(c.name);
+
+                // Add to crew and verify generator respects existing crew members
+                if (STATE.crew.length < 5) {
+                    STATE.crew.push(c);
+                }
+            });
+        }
+
+        // Verify that in a full crew, every single name is completely unique
+        const crewNames = STATE.crew.map(c => c.name);
+        const uniqueCrewNames = new Set(crewNames);
+        expect(crewNames.length).toBe(uniqueCrewNames.size);
+    });
 });
 
