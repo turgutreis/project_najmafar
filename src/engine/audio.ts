@@ -676,3 +676,96 @@ export function updateMusicButtonsUI() {
         }
     }
 }
+
+// ----------------------------------------------------------------------------
+// INTERSTELLAR WARP DROPOUT & ARRIVAL SOUNDSCAPE
+// ----------------------------------------------------------------------------
+
+export function playWarpDropoutSound() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    // A. Soft Space-Time Displacement Resonance (Sub-Bass glide)
+    const subOsc = ctx.createOscillator();
+    const subGain = ctx.createGain();
+    const subFilter = ctx.createBiquadFilter();
+
+    subOsc.type = 'triangle';
+    subOsc.frequency.setValueAtTime(140, time);
+    subOsc.frequency.exponentialRampToValueAtTime(45, time + 0.9);
+
+    subFilter.type = 'lowpass';
+    subFilter.frequency.setValueAtTime(320, time);
+    subFilter.frequency.exponentialRampToValueAtTime(80, time + 0.9);
+
+    subGain.gain.setValueAtTime(0, time);
+    subGain.gain.linearRampToValueAtTime(0.14, time + 0.08);
+    subGain.gain.exponentialRampToValueAtTime(0.001, time + 0.95);
+
+    subOsc.connect(subFilter);
+    subFilter.connect(subGain);
+    subGain.connect(ctx.destination);
+
+    subOsc.start(time);
+    subOsc.stop(time + 1.0);
+
+    // B. Soft Vacuum Displacement Whoosh
+    const bufferSize = Math.floor(ctx.sampleRate * 0.8);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(350, time);
+    noiseFilter.frequency.exponentialRampToValueAtTime(90, time + 0.8);
+    noiseFilter.Q.setValueAtTime(1.0, time);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0, time);
+    noiseGain.gain.linearRampToValueAtTime(0.08, time + 0.1);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.85);
+
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+
+    noise.start(time);
+    noise.stop(time + 0.9);
+}
+
+export function playSystemArrivalChime() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    const notes = [523.25, 659.25, 783.99]; // C5 - E5 - G5 major triad
+    notes.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time + idx * 0.09);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1800, time);
+
+        gain.gain.setValueAtTime(0, time + idx * 0.09);
+        gain.gain.linearRampToValueAtTime(0.06, time + idx * 0.09 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + idx * 0.09 + 0.55);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(time + idx * 0.09);
+        osc.stop(time + idx * 0.09 + 0.6);
+    });
+}

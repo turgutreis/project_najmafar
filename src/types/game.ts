@@ -364,6 +364,13 @@ export interface GameState {
     orbitLevel?: OrbitLevel;
     activeMoonOrbit?: PlanetEntry | null;
     orbitTransitionProgress?: number;
+
+    // Interstellar Arrival & Warp-Dropout System
+    systemArrivalActive?: boolean;
+    systemArrivalTimer?: number;
+    systemArrivalMaxTime?: number;
+    systemArrivalDirection?: THREE.Vector3;
+    incomingJumpGate?: any | null;
 }
 
 export type OrbitLevel = 'solar' | 'planet' | 'moon';

@@ -29456,7 +29456,12 @@ var STATE = {
   orbitZoomFactor: 0,
   orbitLevel: "solar",
   activeMoonOrbit: null,
-  orbitTransitionProgress: 0
+  orbitTransitionProgress: 0,
+  systemArrivalActive: false,
+  systemArrivalTimer: 0,
+  systemArrivalMaxTime: 2.2,
+  systemArrivalDirection: new Vector3(0, 0, 0),
+  incomingJumpGate: null
 };
 var activePlanets = [];
 
@@ -31945,6 +31950,91 @@ function createPlasmaVortexMesh(size, colorHex) {
     }
   };
 }
+var activeJumpGates = [];
+function clearJumpGates() {
+  activeJumpGates.forEach((jg) => {
+    scene.remove(jg.group);
+    jg.group.traverse((obj) => {
+      if (obj.geometry) {
+        obj.geometry.dispose();
+      }
+      if (obj.material) {
+        const mat = obj.material;
+        if (Array.isArray(mat)) {
+          mat.forEach((m) => m.dispose());
+        } else {
+          mat.dispose();
+        }
+      }
+    });
+  });
+  activeJumpGates.length = 0;
+}
+function createJumpGateMesh(size = 9, factionColor = 3718648) {
+  const group = new Group;
+  const gateGeo = new TorusGeometry(size, 0.45, 8, 32);
+  const gateMat = new MeshStandardMaterial({
+    color: 1976635,
+    emissive: factionColor,
+    emissiveIntensity: 0.85,
+    roughness: 0.25,
+    metalness: 0.9
+  });
+  const gateRing = new Mesh(gateGeo, gateMat);
+  group.add(gateRing);
+  const innerRingGeo = new TorusGeometry(size * 0.82, 0.2, 8, 24);
+  const innerRingMat = new MeshBasicMaterial({
+    color: factionColor,
+    transparent: true,
+    opacity: 0.75,
+    blending: AdditiveBlending
+  });
+  const innerRing = new Mesh(innerRingGeo, innerRingMat);
+  group.add(innerRing);
+  const vortexGeo = new RingGeometry(0.1, size * 0.8, 32);
+  const vortexMat = new MeshBasicMaterial({
+    color: factionColor,
+    transparent: true,
+    opacity: 0.65,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  const energyDisc = new Mesh(vortexGeo, vortexMat);
+  group.add(energyDisc);
+  for (let i = 0;i < 4; i++) {
+    const pylonAngle = i * Math.PI / 2;
+    const pylonGeo = new BoxGeometry(0.6, 1.8, 0.6);
+    const pylonMat = new MeshStandardMaterial({
+      color: 988970,
+      emissive: factionColor,
+      emissiveIntensity: 1.4,
+      metalness: 0.95
+    });
+    const pylonMesh = new Mesh(pylonGeo, pylonMat);
+    pylonMesh.position.set(Math.cos(pylonAngle) * (size + 0.6), Math.sin(pylonAngle) * (size + 0.6), 0);
+    group.add(pylonMesh);
+  }
+  const beaconLight = new PointLight(factionColor, 2.8, 85, 1.4);
+  beaconLight.position.set(0, 0, 0.5);
+  group.add(beaconLight);
+  const controller = {
+    group,
+    beaconLight,
+    energyDisc,
+    factionColor,
+    update: (dt) => {
+      innerRing.rotation.z += 0.8 * dt;
+      innerRing.rotation.y += 0.4 * dt;
+      energyDisc.rotation.z -= 1.2 * dt;
+      const pulse = 0.5 + Math.sin(Date.now() * 0.006) * 0.25;
+      energyDisc.material.opacity = pulse;
+      beaconLight.intensity = 2 + Math.sin(Date.now() * 0.009) * 1.2;
+    }
+  };
+  activeJumpGates.push(controller);
+  scene.add(group);
+  return controller;
+}
 
 // src/engine/audio.ts
 var audioListener = null;
@@ -32507,6 +32597,75 @@ function updateMusicButtonsUI() {
       menuMusicBtn.innerText = "\uD83D\uDD07 Musik: Aus";
     }
   }
+}
+function playWarpDropoutSound() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const time = ctx.currentTime;
+  const subOsc = ctx.createOscillator();
+  const subGain = ctx.createGain();
+  const subFilter = ctx.createBiquadFilter();
+  subOsc.type = "triangle";
+  subOsc.frequency.setValueAtTime(140, time);
+  subOsc.frequency.exponentialRampToValueAtTime(45, time + 0.9);
+  subFilter.type = "lowpass";
+  subFilter.frequency.setValueAtTime(320, time);
+  subFilter.frequency.exponentialRampToValueAtTime(80, time + 0.9);
+  subGain.gain.setValueAtTime(0, time);
+  subGain.gain.linearRampToValueAtTime(0.14, time + 0.08);
+  subGain.gain.exponentialRampToValueAtTime(0.001, time + 0.95);
+  subOsc.connect(subFilter);
+  subFilter.connect(subGain);
+  subGain.connect(ctx.destination);
+  subOsc.start(time);
+  subOsc.stop(time + 1);
+  const bufferSize = Math.floor(ctx.sampleRate * 0.8);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0;i < bufferSize; i++) {
+    data[i] = Math.random() * 2 - 1;
+  }
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  const noiseFilter = ctx.createBiquadFilter();
+  noiseFilter.type = "bandpass";
+  noiseFilter.frequency.setValueAtTime(350, time);
+  noiseFilter.frequency.exponentialRampToValueAtTime(90, time + 0.8);
+  noiseFilter.Q.setValueAtTime(1, time);
+  const noiseGain = ctx.createGain();
+  noiseGain.gain.setValueAtTime(0, time);
+  noiseGain.gain.linearRampToValueAtTime(0.08, time + 0.1);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.85);
+  noise.connect(noiseFilter);
+  noiseFilter.connect(noiseGain);
+  noiseGain.connect(ctx.destination);
+  noise.start(time);
+  noise.stop(time + 0.9);
+}
+function playSystemArrivalChime() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const time = ctx.currentTime;
+  const notes = [523.25, 659.25, 783.99];
+  notes.forEach((freq, idx) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, time + idx * 0.09);
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(1800, time);
+    gain.gain.setValueAtTime(0, time + idx * 0.09);
+    gain.gain.linearRampToValueAtTime(0.06, time + idx * 0.09 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + idx * 0.09 + 0.55);
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(time + idx * 0.09);
+    osc.stop(time + idx * 0.09 + 0.6);
+  });
 }
 
 // src/systems/crew.ts
@@ -33523,6 +33682,57 @@ function updateSonarWave(dt) {
       sonarWaveMesh.material.dispose();
     sonarWaveMesh = null;
   }
+}
+var arrivalBannerTimeout = null;
+function triggerSystemArrivalBanner(system, factionName) {
+  const banner = document.getElementById("system-arrival-banner");
+  if (!banner)
+    return;
+  if (arrivalBannerTimeout) {
+    clearTimeout(arrivalBannerTimeout);
+    arrivalBannerTimeout = null;
+  }
+  const titleEl = document.getElementById("arrival-system-title");
+  const sectorEl = document.getElementById("arrival-sector-label");
+  const starEl = document.getElementById("arrival-star-badge");
+  const planetsEl = document.getElementById("arrival-planets-badge");
+  const factionEl = document.getElementById("arrival-faction-badge");
+  if (titleEl)
+    titleEl.innerText = (system.name || "UNBEKANNT").toUpperCase();
+  if (sectorEl)
+    sectorEl.innerText = system.sectorName ? `${system.sectorName.toUpperCase()} • TRANSIT` : "SYSTEM-TRANSIT ABGESCHLOSSEN";
+  if (starEl && system.star) {
+    starEl.innerText = `⭐ ${system.star.type || "Zentralgestirn"}`;
+  }
+  const planetCount = system.planets ? system.planets.length : 0;
+  let moonCount = 0;
+  if (system.planets) {
+    system.planets.forEach((p) => {
+      if (p.moons)
+        moonCount += p.moons.length;
+    });
+  }
+  if (planetsEl) {
+    planetsEl.innerText = moonCount > 0 ? `\uD83E\uDE90 ${planetCount} Planeten | ${moonCount} Monde` : `\uD83E\uDE90 ${planetCount} Himmelskörper`;
+  }
+  if (factionEl) {
+    if (factionName) {
+      factionEl.innerText = `\uD83D\uDEE1️ ${factionName}`;
+      factionEl.style.display = "inline-flex";
+    } else {
+      factionEl.innerText = `\uD83C\uDF0C Unerschlossener Raum`;
+      factionEl.style.display = "inline-flex";
+    }
+  }
+  banner.classList.remove("banner-exit");
+  banner.style.display = "flex";
+  arrivalBannerTimeout = setTimeout(() => {
+    banner.classList.add("banner-exit");
+    setTimeout(() => {
+      banner.style.display = "none";
+      banner.classList.remove("banner-exit");
+    }, 800);
+  }, 4500);
 }
 
 // src/procedural/quantum-civ.ts
@@ -34952,6 +35162,7 @@ var activeStarLights = [];
 var activeSunRays = null;
 function updateUniverseShaders(dt, cam) {
   activeCoronaUpdaters.forEach((fn) => fn(dt));
+  activeJumpGates.forEach((jg) => jg.update(dt));
   if (activeSunRays && cam) {
     activeSunRays.update(dt, cam);
   }
@@ -35084,6 +35295,7 @@ function clearActiveSystem() {
   STATE.harvestProgress = 0;
   STATE.abductProgress = 0;
   clearFleet();
+  clearJumpGates();
   const badge = document.getElementById("target-lock-badge");
   const label = document.getElementById("target-label-text");
   if (badge)
@@ -35423,6 +35635,63 @@ function spawnPlanetsAndAsteroids() {
   });
   initPlanetDefenseFleets();
   addLogEntry("NAV", `Sensoren initialisiert: ${activeSystem.name} [${activeSystem.sectorName || "Sektor"}].`);
+}
+function initiateSystemArrival(fromSys, targetSys) {
+  if (!targetSys)
+    return;
+  let inboundAngle = Math.PI * 0.75;
+  if (fromSys && (fromSys.x !== targetSys.x || fromSys.z !== targetSys.z)) {
+    const dx = targetSys.x - fromSys.x;
+    const dz = targetSys.z - fromSys.z;
+    inboundAngle = Math.atan2(-dz, -dx);
+  }
+  const entryDist = 150;
+  const entryX = Math.cos(inboundAngle) * entryDist;
+  const entryZ = Math.sin(inboundAngle) * entryDist;
+  STATE.playerPosition.set(entryX, 0, entryZ);
+  if (STATE.playerGroup) {
+    STATE.playerGroup.position.copy(STATE.playerPosition);
+  }
+  const forwardDir = new Vector3(-entryX, 0, -entryZ).normalize();
+  STATE.systemArrivalDirection.copy(forwardDir);
+  STATE.shipHeading = Math.atan2(-forwardDir.z, forwardDir.x);
+  STATE.playerVelocity.copy(forwardDir).multiplyScalar(32);
+  STATE.systemArrivalActive = true;
+  STATE.systemArrivalTimer = 2.2;
+  STATE.systemArrivalMaxTime = 2.2;
+  STATE.cameraHeight = 92;
+  STATE.targetCameraHeight = 65;
+  if (camera) {
+    camera.position.set(entryX, 92, entryZ);
+  }
+  let dominantFaction = null;
+  let dominantFactionName = "";
+  const spacefaringPlanet = activePlanets.find((p) => p.attributes && p.attributes.species && (p.attributes.species.techLevel === "Spacefaring" || p.attributes.species.techLevel === "Hyper-Advanced" || p.attributes.species.techLevel === "Industrial"));
+  if (spacefaringPlanet && spacefaringPlanet.attributes.species) {
+    const spec = spacefaringPlanet.attributes.species;
+    if (spec.factionId) {
+      dominantFaction = getFaction(spec.factionId);
+      dominantFactionName = dominantFaction ? dominantFaction.name : spec.name;
+    } else {
+      dominantFactionName = spec.name;
+    }
+  }
+  if (dominantFaction || spacefaringPlanet) {
+    const gateColor = dominantFaction ? parseInt(dominantFaction.color) : 3718648;
+    const jumpGate = createJumpGateMesh(9.5, gateColor);
+    jumpGate.group.position.set(entryX, 0, entryZ);
+    jumpGate.group.rotation.y = Math.atan2(forwardDir.x, forwardDir.z);
+    STATE.incomingJumpGate = jumpGate;
+    addLogEntry("NAV", `\uD83D\uDCE1 SPRUNGTOR-SIGNAL ERFASST: Navigations-Vektor autorisiert durch ${dominantFactionName}. Willkommen im System ${targetSys.name}.`);
+  } else {
+    STATE.incomingJumpGate = null;
+    addLogEntry("NAV", `\uD83C\uDF0C WARP-AUSTRITT: Unkartierter Raumsektor erreicht. Faltungsfeld kollabiert. Eintrittsvektor stabil.`);
+  }
+  playWarpDropoutSound();
+  setTimeout(() => {
+    playSystemArrivalChime();
+  }, 380);
+  triggerSystemArrivalBanner(targetSys, dominantFactionName);
 }
 
 // src/systems/galaxy-map.ts
@@ -36265,6 +36534,7 @@ function warpToSystem(systemId) {
   setTimeout(() => {
     clearActiveSystem();
     spawnPlanetsAndAsteroids();
+    initiateSystemArrival(currentSys, targetSys);
     if (warpOverlay) {
       warpOverlay.style.opacity = "0";
       setTimeout(() => {
@@ -37137,6 +37407,9 @@ function processInput(dt) {
     }
     prevGpButtons = gp.buttons.map((b) => b ? b.pressed || b.value > 0.5 : false);
   }
+  if (STATE.systemArrivalActive && (turnInput !== 0 || isThrusting || isRetroBraking)) {
+    STATE.systemArrivalActive = false;
+  }
   if (turnInput !== 0) {
     STATE.shipAngularVelocity = turnInput * STATE.turnSpeed;
   } else {
@@ -37592,18 +37865,32 @@ function updatePhysics(dt) {
       netGz += dz * invDist * gForce;
     }
   }
-  STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
-  STATE.playerVelocity.x += netGx * dt;
-  STATE.playerVelocity.z += netGz * dt;
-  const effectiveDrag = STATE.currentDrag;
-  STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
-  const pilotMult = STATE.crewBuffs ? STATE.crewBuffs.thrust || 1 : 1;
-  const maxSpeed = 28 * Math.max(1, pilotMult * 0.85);
-  const curSpeed = STATE.playerVelocity.length();
-  if (curSpeed > maxSpeed) {
-    STATE.playerVelocity.multiplyScalar(maxSpeed / curSpeed);
+  if (STATE.systemArrivalActive) {
+    STATE.systemArrivalTimer -= dt;
+    const progress = 1 - Math.max(0, STATE.systemArrivalTimer / STATE.systemArrivalMaxTime);
+    const arrivalSpeed = MathUtils.lerp(32, 7.5, Math.pow(progress, 0.6));
+    STATE.playerVelocity.copy(STATE.systemArrivalDirection).multiplyScalar(arrivalSpeed);
+    STATE.shipHeading = Math.atan2(-STATE.systemArrivalDirection.z, STATE.systemArrivalDirection.x);
+    if (STATE.playerGroup) {
+      STATE.playerGroup.rotation.y = STATE.shipHeading;
+    }
+    if (STATE.systemArrivalTimer <= 0) {
+      STATE.systemArrivalActive = false;
+    }
+  } else {
+    STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
+    STATE.playerVelocity.x += netGx * dt;
+    STATE.playerVelocity.z += netGz * dt;
+    const effectiveDrag = STATE.currentDrag;
+    STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
+    const pilotMult = STATE.crewBuffs ? STATE.crewBuffs.thrust || 1 : 1;
+    const maxSpeed = 28 * Math.max(1, pilotMult * 0.85);
+    const curSpeed = STATE.playerVelocity.length();
+    if (curSpeed > maxSpeed) {
+      STATE.playerVelocity.multiplyScalar(maxSpeed / curSpeed);
+    }
   }
-  STATE.shipSpeed = curSpeed;
+  STATE.shipSpeed = STATE.playerVelocity.length();
   STATE.playerPosition.x += STATE.playerVelocity.x * dt;
   STATE.playerPosition.z += STATE.playerVelocity.z * dt;
   const maxBound = 1450;
@@ -37627,17 +37914,26 @@ function updatePhysics(dt) {
   }
   const planetAltitudeOffset = 18 * planetApproachFactor;
   const moonAltitudeOffset = 16 * moonApproachFactor;
-  const targetHeight = Math.max(48, 82 - planetAltitudeOffset - moonAltitudeOffset);
+  let targetHeight = Math.max(48, 82 - planetAltitudeOffset - moonAltitudeOffset);
+  if (STATE.systemArrivalActive) {
+    const arrivalRatio = Math.max(0, STATE.systemArrivalTimer / STATE.systemArrivalMaxTime);
+    targetHeight = MathUtils.lerp(targetHeight, 92, Math.pow(arrivalRatio, 0.8));
+  }
   STATE.targetCameraHeight = targetHeight;
-  camera.position.y = MathUtils.lerp(camera.position.y, targetHeight, Math.min(1, dt * 4));
-  STATE.cameraHeight = camera.position.y;
-  camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, Math.min(1, dt * 7.5));
-  camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, Math.min(1, dt * 7.5));
-  camera.rotation.set(-Math.PI / 2, 0, 0);
-  camera.up.set(0, 0, -1);
-  if (camera.fov !== 60) {
-    camera.fov = 60;
-    camera.updateProjectionMatrix();
+  if (camera) {
+    const camLerpSpeed = STATE.systemArrivalActive ? 2.5 : 4;
+    camera.position.y = MathUtils.lerp(camera.position.y, targetHeight, Math.min(1, dt * camLerpSpeed));
+    STATE.cameraHeight = camera.position.y;
+    camera.position.x = MathUtils.lerp(camera.position.x, STATE.playerPosition.x, Math.min(1, dt * 7.5));
+    camera.position.z = MathUtils.lerp(camera.position.z, STATE.playerPosition.z, Math.min(1, dt * 7.5));
+    camera.rotation.set(-Math.PI / 2, 0, 0);
+    camera.up.set(0, 0, -1);
+    if (camera.fov !== 60) {
+      camera.fov = 60;
+      camera.updateProjectionMatrix();
+    }
+  } else {
+    STATE.cameraHeight = targetHeight;
   }
   if (STATE.health <= 0 && !STATE.isGameOver && STATE.gameStarted) {
     triggerGameOver("Biologischer Zellkern kollabiert durch extreme Umwelteinflüsse & Hüllenschaden.");

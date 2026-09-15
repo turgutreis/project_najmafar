@@ -507,3 +507,112 @@ export function createPlasmaVortexMesh(size: number, colorHex: number) {
         }
     };
 }
+
+// 7. Interstellar Faction Jump Gate & Navigational Beacon
+export interface JumpGateController {
+    group: THREE.Group;
+    update: (dt: number) => void;
+    beaconLight: THREE.PointLight;
+    energyDisc: THREE.Mesh;
+    factionColor: number;
+}
+
+export const activeJumpGates: JumpGateController[] = [];
+
+export function clearJumpGates() {
+    activeJumpGates.forEach(jg => {
+        scene.remove(jg.group);
+        jg.group.traverse(obj => {
+            if ((obj as THREE.Mesh).geometry) {
+                (obj as THREE.Mesh).geometry.dispose();
+            }
+            if ((obj as THREE.Mesh).material) {
+                const mat = (obj as THREE.Mesh).material;
+                if (Array.isArray(mat)) {
+                    mat.forEach(m => m.dispose());
+                } else {
+                    mat.dispose();
+                }
+            }
+        });
+    });
+    activeJumpGates.length = 0;
+}
+
+export function createJumpGateMesh(size: number = 9.0, factionColor: number = 0x38bdf8): JumpGateController {
+    const group = new THREE.Group();
+
+    // A. Hexagonal / Octagonal Outer Pylon Ring Structure
+    const gateGeo = new THREE.TorusGeometry(size, 0.45, 8, 32);
+    const gateMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        emissive: factionColor,
+        emissiveIntensity: 0.85,
+        roughness: 0.25,
+        metalness: 0.9
+    });
+    const gateRing = new THREE.Mesh(gateGeo, gateMat);
+    group.add(gateRing);
+
+    // B. Inner Gyro Accretion Ring
+    const innerRingGeo = new THREE.TorusGeometry(size * 0.82, 0.2, 8, 24);
+    const innerRingMat = new THREE.MeshBasicMaterial({
+        color: factionColor,
+        transparent: true,
+        opacity: 0.75,
+        blending: THREE.AdditiveBlending
+    });
+    const innerRing = new THREE.Mesh(innerRingGeo, innerRingMat);
+    group.add(innerRing);
+
+    // C. Translucent Subspace Event Horizon Energy Vortex
+    const vortexGeo = new THREE.RingGeometry(0.1, size * 0.8, 32);
+    const vortexMat = new THREE.MeshBasicMaterial({
+        color: factionColor,
+        transparent: true,
+        opacity: 0.65,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending
+    });
+    const energyDisc = new THREE.Mesh(vortexGeo, vortexMat);
+    group.add(energyDisc);
+
+    // D. 4 Cardinal Navigation Pylons / Guide Beacons
+    for (let i = 0; i < 4; i++) {
+        const pylonAngle = (i * Math.PI / 2);
+        const pylonGeo = new THREE.BoxGeometry(0.6, 1.8, 0.6);
+        const pylonMat = new THREE.MeshStandardMaterial({
+            color: 0x0f172a,
+            emissive: factionColor,
+            emissiveIntensity: 1.4,
+            metalness: 0.95
+        });
+        const pylonMesh = new THREE.Mesh(pylonGeo, pylonMat);
+        pylonMesh.position.set(Math.cos(pylonAngle) * (size + 0.6), Math.sin(pylonAngle) * (size + 0.6), 0);
+        group.add(pylonMesh);
+    }
+
+    // E. Dynamic Pulsing Nav-Beacon Light
+    const beaconLight = new THREE.PointLight(factionColor, 2.8, 85, 1.4);
+    beaconLight.position.set(0, 0, 0.5);
+    group.add(beaconLight);
+
+    const controller: JumpGateController = {
+        group,
+        beaconLight,
+        energyDisc,
+        factionColor,
+        update: (dt: number) => {
+            innerRing.rotation.z += 0.8 * dt;
+            innerRing.rotation.y += 0.4 * dt;
+            energyDisc.rotation.z -= 1.2 * dt;
+            const pulse = 0.5 + Math.sin(Date.now() * 0.006) * 0.25;
+            (energyDisc.material as THREE.Material).opacity = pulse;
+            beaconLight.intensity = 2.0 + Math.sin(Date.now() * 0.009) * 1.2;
+        }
+    };
+
+    activeJumpGates.push(controller);
+    scene.add(group);
+    return controller;
+}

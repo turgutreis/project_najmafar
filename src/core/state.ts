@@ -125,7 +125,14 @@ export const STATE: GameState = {
     orbitZoomFactor: 0.0,
     orbitLevel: 'solar',
     activeMoonOrbit: null,
-    orbitTransitionProgress: 0.0
+    orbitTransitionProgress: 0.0,
+
+    // Interstellar Arrival & Warp-Dropout System
+    systemArrivalActive: false,
+    systemArrivalTimer: 0.0,
+    systemArrivalMaxTime: 2.2,
+    systemArrivalDirection: new THREE.Vector3(0, 0, 0),
+    incomingJumpGate: null
 };
 
 export const activePlanets: PlanetEntry[] = [];

@@ -3818,3 +3818,145 @@ body.game-started .hud-left {
     box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
     transform: translateY(-1px);
 }
+
+/* ============================================================================
+   INTERSTELLAR SYSTEM ARRIVAL HUD BANNER
+   ============================================================================ */
+
+.system-arrival-banner {
+    position: fixed;
+    top: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15000;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 480px;
+    max-width: 720px;
+    background: linear-gradient(180deg, rgba(8, 15, 30, 0.88) 0%, rgba(3, 7, 18, 0.82) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 12px;
+    padding: 16px 36px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8), 0 0 35px rgba(56, 189, 248, 0.25);
+    animation: arrivalBannerSlideIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.system-arrival-banner.banner-exit {
+    animation: arrivalBannerSlideOut 0.8s cubic-bezier(0.7, 0, 0.84, 0) forwards;
+}
+
+@keyframes arrivalBannerSlideIn {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -24px) scale(0.96);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1.0);
+    }
+}
+
+@keyframes arrivalBannerSlideOut {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, 0) scale(1.0);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -20px) scale(0.98);
+    }
+}
+
+.arrival-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.arrival-kicker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #38bdf8;
+    letter-spacing: 0.22rem;
+    text-transform: uppercase;
+}
+
+.arrival-pulse-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #00ff88;
+    box-shadow: 0 0 10px #00ff88;
+    animation: scanPulse 1.2s infinite alternate;
+}
+
+.arrival-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 2.2rem;
+    font-weight: 900;
+    letter-spacing: 0.25rem;
+    margin: 2px 0 6px 0;
+    color: #ffffff;
+    text-transform: uppercase;
+    text-shadow: 0 0 20px rgba(56, 189, 248, 0.6), 0 0 40px rgba(56, 189, 248, 0.3);
+}
+
+.arrival-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.88rem;
+    color: #cbd5e1;
+}
+
+.arrival-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.arrival-badge.star-badge {
+    color: #f59e0b;
+    font-weight: 600;
+}
+
+.arrival-badge.faction-badge {
+    color: #d946ef;
+    font-weight: 600;
+}
+
+.arrival-separator {
+    color: rgba(255, 255, 255, 0.25);
+    font-size: 0.75rem;
+}
+
+.arrival-bracket {
+    position: absolute;
+    width: 24px;
+    height: 8px;
+    border-color: #38bdf8;
+    border-style: solid;
+    pointer-events: none;
+}
+
+.arrival-bracket-top {
+    top: -2px;
+    border-width: 2px 0 0 0;
+    width: 60px;
+}
+
+.arrival-bracket-bottom {
+    bottom: -2px;
+    border-width: 0 0 2px 0;
+    width: 60px;
+}

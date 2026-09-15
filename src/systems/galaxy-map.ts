@@ -2,7 +2,7 @@ import { STATE } from '../core/state';
 import { StarSystem } from '../types/game';
 import { playSiliconCollectSound, playCrashSound, setThrusterSound } from '../engine/audio';
 import { addLogEntry } from '../ui/hud';
-import { clearActiveSystem, spawnPlanetsAndAsteroids } from './universe';
+import { clearActiveSystem, spawnPlanetsAndAsteroids, initiateSystemArrival } from './universe';
 
 let mapOpen = false;
 let selectedSystem: StarSystem | null = null;
@@ -946,6 +946,7 @@ export function warpToSystem(systemId: number) {
     setTimeout(() => {
         clearActiveSystem();
         spawnPlanetsAndAsteroids();
+        initiateSystemArrival(currentSys, targetSys);
 
         if (warpOverlay) {
             warpOverlay.style.opacity = '0';

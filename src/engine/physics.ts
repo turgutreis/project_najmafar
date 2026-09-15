@@ -273,24 +273,42 @@ export function updatePhysics(dt: number) {
         }
     }
 
-    STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
-    STATE.playerVelocity.x += netGx * dt;
-    STATE.playerVelocity.z += netGz * dt;
+    // 4.5 Interstellar Arrival & Warp Deceleration Controller
+    if (STATE.systemArrivalActive) {
+        STATE.systemArrivalTimer -= dt;
+        const progress = 1.0 - Math.max(0, STATE.systemArrivalTimer / STATE.systemArrivalMaxTime);
+        // Smooth non-linear deceleration from 32.0 down to 7.5 LJ/s
+        const arrivalSpeed = THREE.MathUtils.lerp(32.0, 7.5, Math.pow(progress, 0.6));
+        STATE.playerVelocity.copy(STATE.systemArrivalDirection).multiplyScalar(arrivalSpeed);
+        STATE.shipHeading = Math.atan2(-STATE.systemArrivalDirection.z, STATE.systemArrivalDirection.x);
 
-    // 5. Apply Natural Vacuum Drag
-    const effectiveDrag = STATE.currentDrag;
-    STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
+        if (STATE.playerGroup) {
+            STATE.playerGroup.rotation.y = STATE.shipHeading;
+        }
 
-    // Top Speed Clamp (Harmonized cosmic cruise speed)
-    const pilotMult = STATE.crewBuffs ? (STATE.crewBuffs.thrust || 1.0) : 1.0;
-    const maxSpeed = 28.0 * Math.max(1.0, pilotMult * 0.85);
-    const curSpeed = STATE.playerVelocity.length();
-    if (curSpeed > maxSpeed) {
-        STATE.playerVelocity.multiplyScalar(maxSpeed / curSpeed);
+        if (STATE.systemArrivalTimer <= 0) {
+            STATE.systemArrivalActive = false;
+        }
+    } else {
+        STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
+        STATE.playerVelocity.x += netGx * dt;
+        STATE.playerVelocity.z += netGz * dt;
+
+        // 5. Apply Natural Vacuum Drag
+        const effectiveDrag = STATE.currentDrag;
+        STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
+
+        // Top Speed Clamp (Harmonized cosmic cruise speed)
+        const pilotMult = STATE.crewBuffs ? (STATE.crewBuffs.thrust || 1.0) : 1.0;
+        const maxSpeed = 28.0 * Math.max(1.0, pilotMult * 0.85);
+        const curSpeed = STATE.playerVelocity.length();
+        if (curSpeed > maxSpeed) {
+            STATE.playerVelocity.multiplyScalar(maxSpeed / curSpeed);
+        }
     }
 
     // Update real-time speed in state for HUD
-    STATE.shipSpeed = curSpeed;
+    STATE.shipSpeed = STATE.playerVelocity.length();
 
     // 6. Integrate Position
     STATE.playerPosition.x += STATE.playerVelocity.x * dt;
@@ -316,22 +334,33 @@ export function updatePhysics(dt: number) {
     // Seamlessly descends from 82.0 down to 64.0 as you approach a colossal planet, and down to 48.0 near a moon
     const planetAltitudeOffset = 18.0 * planetApproachFactor;
     const moonAltitudeOffset = 16.0 * moonApproachFactor;
-    const targetHeight = Math.max(48.0, 82.0 - planetAltitudeOffset - moonAltitudeOffset);
+    let targetHeight = Math.max(48.0, 82.0 - planetAltitudeOffset - moonAltitudeOffset);
+
+    if (STATE.systemArrivalActive) {
+        const arrivalRatio = Math.max(0, STATE.systemArrivalTimer / STATE.systemArrivalMaxTime);
+        // Blend from elevated wide-angle establishing shot (92.0) down to cruise height
+        targetHeight = THREE.MathUtils.lerp(targetHeight, 92.0, Math.pow(arrivalRatio, 0.8));
+    }
 
     STATE.targetCameraHeight = targetHeight;
-    camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetHeight, Math.min(1.0, dt * 4.0));
-    STATE.cameraHeight = camera.position.y;
+    if (camera) {
+        const camLerpSpeed = STATE.systemArrivalActive ? 2.5 : 4.0;
+        camera.position.y = THREE.MathUtils.lerp(camera.position.y, targetHeight, Math.min(1.0, dt * camLerpSpeed));
+        STATE.cameraHeight = camera.position.y;
 
-    camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, Math.min(1.0, dt * 7.5));
-    camera.position.z = THREE.MathUtils.lerp(camera.position.z, STATE.playerPosition.z, Math.min(1.0, dt * 7.5));
+        camera.position.x = THREE.MathUtils.lerp(camera.position.x, STATE.playerPosition.x, Math.min(1.0, dt * 7.5));
+        camera.position.z = THREE.MathUtils.lerp(camera.position.z, STATE.playerPosition.z, Math.min(1.0, dt * 7.5));
 
-    // Rock-solid fixed orientation: strictly prevent any camera rotation when ship moves or turns
-    camera.rotation.set(-Math.PI / 2, 0, 0);
-    camera.up.set(0, 0, -1);
+        // Rock-solid fixed orientation: strictly prevent any camera rotation when ship moves or turns
+        camera.rotation.set(-Math.PI / 2, 0, 0);
+        camera.up.set(0, 0, -1);
 
-    if (camera.fov !== 60.0) {
-        camera.fov = 60.0;
-        camera.updateProjectionMatrix();
+        if (camera.fov !== 60.0) {
+            camera.fov = 60.0;
+            camera.updateProjectionMatrix();
+        }
+    } else {
+        STATE.cameraHeight = targetHeight;
     }
 
     // Check for Critical Biological Collapse (Game Over)
