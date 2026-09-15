@@ -7,7 +7,7 @@ import { createHabitableTextures, createGasGiantTextures, createRockyTextures, c
 import { generatePlanetAttributes, generateFallbackMoons, updateScannerUI } from './scanner';
 import { initPlanetDefenseFleets, clearFleet } from './fleet';
 import { addLogEntry, triggerSystemArrivalBanner } from '../ui/hud';
-import { playWarpDropoutSound, playSystemArrivalChime, playWarpSpoolSound, playWarpSnapSound } from '../engine/audio';
+import { playWarpDropoutSound, playWarpSpoolSound, playWarpSnapSound } from '../engine/audio';
 import { getFaction } from './factions';
 import { createSunCoronaMesh } from '../procedural/sun-shader';
 import { createAtmosphereMesh } from '../procedural/atmosphere-shader';
@@ -681,11 +681,8 @@ export function initiateSystemArrival(fromSys: any, targetSys: any) {
         addLogEntry("NAV", `🌌 WARP-AUSTRITT: Unkartierter Raumsektor erreicht. Faltungsfeld kollabiert. Eintrittsvektor stabil.`);
     }
 
-    // 4. Acoustic Warp Exit Soundscape
+    // 4. Acoustic Warp Exit Soundscape (Deep Sub-Bass & Vacuum Whoosh)
     playWarpDropoutSound();
-    setTimeout(() => {
-        playSystemArrivalChime();
-    }, 380);
 
     // 5. Trigger Cinematic System Arrival Banner
     triggerSystemArrivalBanner(targetSys, dominantFactionName);

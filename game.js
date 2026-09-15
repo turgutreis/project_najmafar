@@ -32648,30 +32648,6 @@ function playWarpDropoutSound() {
   noise.start(time);
   noise.stop(time + 0.9);
 }
-function playSystemArrivalChime() {
-  const ctx = getAudioContext();
-  if (!ctx)
-    return;
-  const time = ctx.currentTime;
-  const notes = [523.25, 659.25, 783.99];
-  notes.forEach((freq, idx) => {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(freq, time + idx * 0.09);
-    filter.type = "lowpass";
-    filter.frequency.setValueAtTime(1800, time);
-    gain.gain.setValueAtTime(0, time + idx * 0.09);
-    gain.gain.linearRampToValueAtTime(0.06, time + idx * 0.09 + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + idx * 0.09 + 0.55);
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(time + idx * 0.09);
-    osc.stop(time + idx * 0.09 + 0.6);
-  });
-}
 function playWarpSpoolSound() {
   const ctx = getAudioContext();
   if (!ctx)
@@ -35778,9 +35754,6 @@ function initiateSystemArrival(fromSys, targetSys) {
     addLogEntry("NAV", `\uD83C\uDF0C WARP-AUSTRITT: Unkartierter Raumsektor erreicht. Faltungsfeld kollabiert. Eintrittsvektor stabil.`);
   }
   playWarpDropoutSound();
-  setTimeout(() => {
-    playSystemArrivalChime();
-  }, 380);
   triggerSystemArrivalBanner(targetSys, dominantFactionName);
 }
 
@@ -36616,7 +36589,6 @@ function warpToSystem(systemId) {
   if (mapOpen) {
     toggleGalaxyMap();
   }
-  playSiliconCollectSound();
   addLogEntry("SYSTEM", `\uD83C\uDF0C RAUMZEIT-FALTUNG INITIIERT: Kurs gesetzt auf ${targetSys.name} (${targetSys.sectorName || "Sektor"}). -${warpCost}% Bio-Energie.`);
   initiateSystemDeparture(currentSys, targetSys);
 }

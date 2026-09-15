@@ -935,8 +935,7 @@ export function warpToSystem(systemId: number) {
         toggleGalaxyMap();
     }
 
-    // Audio cue & Log
-    playSiliconCollectSound();
+    // Log departure in HUD
     addLogEntry("SYSTEM", `🌌 RAUMZEIT-FALTUNG INITIIERT: Kurs gesetzt auf ${targetSys.name} (${targetSys.sectorName || 'Sektor'}). -${warpCost}% Bio-Energie.`);
 
     // Initiate Departure Sequence in the starting/current system!
