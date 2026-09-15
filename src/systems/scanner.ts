@@ -198,6 +198,23 @@ export function completeScanning() {
     STATE.scanProgress = 0;
 }
 
+let manuallyDismissedTarget: string | null = null;
+
+export function dismissScannerPanel(): void {
+    const scannerPanel = document.getElementById('left-deck-panel');
+    if (scannerPanel) {
+        scannerPanel.classList.remove('visible');
+    }
+    if (STATE.lockedTarget) {
+        STATE.lockedTarget = null;
+    }
+    manuallyDismissedTarget = STATE.nearestPlanet ? STATE.nearestPlanet.name : '__all__';
+}
+
+export function resetDismissedScanner(): void {
+    manuallyDismissedTarget = null;
+}
+
 export function updateScannerUI(planet: any, dist: number) {
     const scannerPanel = document.getElementById('left-deck-panel');
     const nameEl = document.getElementById('nearest-planet-name');
@@ -209,7 +226,7 @@ export function updateScannerUI(planet: any, dist: number) {
     const placeholderBox = document.getElementById('scan-placeholder-box');
 
     if (!planet) {
-        if (scannerPanel && !scannerPanel.classList.contains('manual-pin')) {
+        if (scannerPanel) {
             scannerPanel.classList.remove('visible');
         }
         if (nameEl) nameEl.innerText = "Keiner in Reichweite";
@@ -220,11 +237,34 @@ export function updateScannerUI(planet: any, dist: number) {
         return;
     }
 
-    const shouldShow = STATE.isInPlanetOrbit || STATE.lockedTarget !== null || dist < 65;
+    // Reset manual dismissal if approaching a different body
+    if (manuallyDismissedTarget && planet && manuallyDismissedTarget !== planet.name) {
+        manuallyDismissedTarget = null;
+    }
+
+    const isDismissed = manuallyDismissedTarget === planet.name || manuallyDismissedTarget === '__all__';
+    const isLocked = STATE.lockedTarget !== null && STATE.lockedTarget === planet;
+    const isInOrbit = STATE.isInPlanetOrbit && (STATE.orbitPlanet === planet || STATE.activeMoonOrbit === planet);
+    const isCurrentlyVisible = scannerPanel ? scannerPanel.classList.contains('visible') : false;
+
+    // Scan interaction range is 25 units.
+    // Auto-open when within scan interaction range (dist <= 25).
+    // Auto-close with hysteresis when flying away (dist > 30).
+    let shouldShow = false;
+    if (!isDismissed) {
+        if (isInOrbit || isLocked) {
+            shouldShow = true;
+        } else if (isCurrentlyVisible) {
+            shouldShow = dist <= 30; // Keep open while within 30 units
+        } else {
+            shouldShow = dist <= 25; // Auto-open only when actually within interaction range
+        }
+    }
+
     if (scannerPanel) {
         if (shouldShow) {
             scannerPanel.classList.add('visible');
-        } else if (!scannerPanel.classList.contains('manual-pin')) {
+        } else {
             scannerPanel.classList.remove('visible');
         }
     }

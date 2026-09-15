@@ -3,6 +3,7 @@ import { playSiliconCollectSound } from '../engine/audio';
 import { addLogEntry } from './hud';
 import { calculateCrewBuffs, renderCrewUI } from '../systems/crew';
 import { renderFactionReputationUI } from '../systems/factions';
+import { dismissScannerPanel } from '../systems/scanner';
 
 export function isDeckOpen(): boolean {
     const modal = document.getElementById('deck-modal');
@@ -13,9 +14,9 @@ export function toggleDeckModal(force?: boolean) {
     const modal = document.getElementById('deck-modal');
     if (!modal) return;
     const isVisible = modal.style.display === 'flex';
-    const show = force !== undefined ? force : !isVisible;
-    modal.style.display = show ? 'flex' : 'none';
-    if (show) {
+    const nextState = force !== undefined ? force : !isVisible;
+    modal.style.display = nextState ? 'flex' : 'none';
+    if (nextState) {
         renderCrewUI();
         updateMutationUI();
         renderFactionReputationUI();
@@ -24,10 +25,9 @@ export function toggleDeckModal(force?: boolean) {
 
 export function initDeckUI() {
     const leftCollapseBtn = document.getElementById('left-collapse-btn');
-    const leftDeckPanel = document.getElementById('left-deck-panel');
-    if (leftCollapseBtn && leftDeckPanel) {
+    if (leftCollapseBtn) {
         leftCollapseBtn.addEventListener('click', () => {
-            leftDeckPanel.classList.toggle('visible');
+            dismissScannerPanel();
         });
     }
 

@@ -33477,529 +33477,6 @@ function renderFactionReputationUI() {
   });
 }
 
-// src/ui/deck.ts
-function isDeckOpen() {
-  const modal = document.getElementById("deck-modal");
-  return modal ? modal.style.display === "flex" : false;
-}
-function toggleDeckModal(force) {
-  const modal = document.getElementById("deck-modal");
-  if (!modal)
-    return;
-  const isVisible = modal.style.display === "flex";
-  const show = force !== undefined ? force : !isVisible;
-  modal.style.display = show ? "flex" : "none";
-  if (show) {
-    renderCrewUI();
-    updateMutationUI();
-    renderFactionReputationUI();
-  }
-}
-function initDeckUI() {
-  const leftCollapseBtn = document.getElementById("left-collapse-btn");
-  const leftDeckPanel = document.getElementById("left-deck-panel");
-  if (leftCollapseBtn && leftDeckPanel) {
-    leftCollapseBtn.addEventListener("click", () => {
-      leftDeckPanel.classList.toggle("visible");
-    });
-  }
-  const tabButtons = document.querySelectorAll("#right-deck-tabs .tab-btn");
-  tabButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const targetTab = btn.getAttribute("data-tab");
-      tabButtons.forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      const crewContent = document.getElementById("tab-content-crew");
-      const evoContent = document.getElementById("tab-content-evolution");
-      const facContent = document.getElementById("tab-content-factions");
-      const logContent = document.getElementById("tab-content-log");
-      if (crewContent)
-        crewContent.classList.toggle("active", targetTab === "crew");
-      if (evoContent)
-        evoContent.classList.toggle("active", targetTab === "evolution");
-      if (logContent)
-        logContent.classList.toggle("active", targetTab === "log");
-      if (facContent) {
-        facContent.classList.toggle("active", targetTab === "factions");
-        if (targetTab === "factions") {
-          renderFactionReputationUI();
-        }
-      }
-    });
-  });
-  renderFactionReputationUI();
-  const mutButtons = document.querySelectorAll(".mut-btn");
-  mutButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const mutType = btn.getAttribute("data-mutation");
-      if (mutType) {
-        buyMutation(mutType);
-      }
-    });
-  });
-}
-function buyMutation(type) {
-  const mut = STATE.mutations[type];
-  if (!mut || mut.purchased)
-    return;
-  if (STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost) {
-    STATE.bioRes -= mut.bioCost;
-    STATE.siliconRes -= mut.siliconCost;
-    mut.purchased = true;
-    playSiliconCollectSound();
-    const btn = document.querySelector(`.mut-btn[data-mutation="${type}"]`);
-    if (btn) {
-      btn.classList.add("purchased");
-      btn.innerHTML = "Aktiviert ✓";
-    }
-    if (type === "armor") {
-      addLogEntry("EVOLUTION", "Organische Chitin-Panzerung gehärtet. Kollisionsschaden um 50% reduziert.");
-      const hull = document.getElementById("schematic-hull");
-      if (hull)
-        hull.setAttribute("stroke-width", "4");
-    } else if (type === "o2") {
-      addLogEntry("EVOLUTION", "Metabolische O2-Synthese aktiviert. Stress-Zuwachs halbiert.");
-    } else if (type === "synapses") {
-      STATE.psionicRange = 140;
-      calculateCrewBuffs();
-      addLogEntry("EVOLUTION", "Psionische Synapsen erweitert! Gedanken-Echo Reichweite auf 140 LJ vergrößert.");
-    } else if (type === "cocoon") {
-      STATE.maxCrewCapacity = 4;
-      addLogEntry("EVOLUTION", "Neuronales Kokon-Gewebe mutiert! Maximale Crew-Kapazität auf 4 erweitert.");
-      renderCrewUI();
-    } else if (type === "hivemind") {
-      STATE.maxCrewCapacity = 6;
-      calculateCrewBuffs();
-      addLogEntry("EVOLUTION", "Symbiotische Synapsen-Kammer erwacht! Kapazität auf 6 erhöht & alle Spezialisten-Buffs um +20% verstärkt!");
-      renderCrewUI();
-    } else if (type === "folddrive") {
-      STATE.warpRange = 160;
-      addLogEntry("EVOLUTION", "Raumfaltungs-Membran mutiert! Warp-Reichweite auf 160 LJ erweitert, Faltungskosten um 30% gesenkt.");
-    } else if (type === "translator") {
-      addLogEntry("EVOLUTION", "Dschinn-Übersetzer integriert! Alien-Funksignale & Crew-Dialoge werden vollautomatisch dechiffriert.");
-    }
-    updateMutationUI();
-  } else {
-    addLogEntry("SYSTEM", `Evolution fehlgeschlagen: Nicht genügend Ressourcen (${mut.bioCost} Bio | ${mut.siliconCost} Silizium benötigt)!`);
-  }
-}
-function updateMutationUI() {
-  const bioEl = document.getElementById("res-bio-count");
-  const silEl = document.getElementById("res-silicon-count");
-  if (bioEl)
-    bioEl.innerText = `${Math.floor(STATE.bioRes)}`;
-  if (silEl)
-    silEl.innerText = `${Math.floor(STATE.siliconRes)}`;
-  Object.keys(STATE.mutations).forEach((key) => {
-    const mut = STATE.mutations[key];
-    const btn = document.querySelector(`.mut-btn[data-mutation="${key}"]`);
-    if (btn) {
-      if (mut.purchased) {
-        btn.disabled = true;
-        btn.classList.add("purchased");
-        btn.innerText = "Aktiviert ✓";
-      } else {
-        const canAfford = STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost;
-        btn.disabled = !canAfford;
-      }
-    }
-  });
-}
-
-// src/ui/hud.ts
-var minimapCanvas = null;
-var minimapCtx = null;
-var currentRadarRange = 220;
-var sonarWaveMesh = null;
-var sonarTimer = 0;
-function initHUD() {
-  minimapCanvas = document.getElementById("minimap-canvas");
-  if (minimapCanvas) {
-    minimapCtx = minimapCanvas.getContext("2d");
-  }
-  const sonarBtn = document.getElementById("psionic-sonar-btn") || document.getElementById("dock-sonar-btn");
-  if (sonarBtn) {
-    sonarBtn.addEventListener("click", triggerPsionicSonar);
-  }
-  const dockDeckBtn = document.getElementById("dock-deck-btn");
-  if (dockDeckBtn) {
-    dockDeckBtn.addEventListener("click", () => toggleDeckModal());
-  }
-  const closeDeckBtn = document.getElementById("close-deck-modal-btn");
-  if (closeDeckBtn) {
-    closeDeckBtn.addEventListener("click", () => toggleDeckModal(false));
-  }
-  const dockMapBtn = document.getElementById("dock-map-btn");
-  if (dockMapBtn) {
-    dockMapBtn.addEventListener("click", () => toggleGalaxyMap());
-  }
-  const dockAssistBtn = document.getElementById("dock-assist-btn");
-  if (dockAssistBtn) {
-    dockAssistBtn.addEventListener("click", () => toggleFlightAssist());
-  }
-}
-function addLogEntry(category, message) {
-  const list = document.getElementById("log-list");
-  const toastStream = document.getElementById("hud-fading-log-stream");
-  const now = new Date;
-  const timeStr = `${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-  let catClass = "sys";
-  let catText = "SYSTEM";
-  if (category === "TELEPATHY") {
-    catClass = "telepathy";
-    catText = "TELEPATHIE";
-  } else if (category === "CREW") {
-    catClass = "crew";
-    catText = "CREW-FUNK";
-  } else if (category === "EVOLUTION") {
-    catClass = "evolution";
-    catText = "EVOLUTION";
-  }
-  if (list) {
-    const li = document.createElement("li");
-    li.className = "log-item";
-    li.innerHTML = `
-            <span class="log-time">[${timeStr}]</span>
-            <span class="log-cat ${catClass}">[${catText}]</span>
-            <span class="log-msg">${message}</span>
-        `;
-    list.prepend(li);
-    while (list.children.length > 50) {
-      list.removeChild(list.lastChild);
-    }
-  }
-  if (toastStream) {
-    const toast = document.createElement("div");
-    toast.className = `fading-toast ${catClass}`;
-    toast.innerHTML = `<span style="font-weight: bold; margin-right: 4px;">[${catText}]</span> ${message}`;
-    toastStream.appendChild(toast);
-    while (toastStream.children.length > 4) {
-      toastStream.removeChild(toastStream.firstChild);
-    }
-    setTimeout(() => {
-      if (toast.parentNode === toastStream) {
-        toastStream.removeChild(toast);
-      }
-    }, 5000);
-  }
-}
-function updateHUDStats(isHarmony = false) {
-  const hpBar = document.getElementById("core-health-bar") || document.getElementById("health-bar");
-  const hpTxt = document.getElementById("core-health-text") || document.getElementById("health-text");
-  const bioBar = document.getElementById("bio-energy-bar") || document.getElementById("energy-bar");
-  const bioTxt = document.getElementById("bio-energy-text") || document.getElementById("energy-text");
-  const mentalBar = document.getElementById("telepathy-energy-bar") || document.getElementById("mental-bar");
-  const mentalTxt = document.getElementById("telepathy-energy-text") || document.getElementById("mental-text");
-  const loneBar = document.getElementById("loneliness-bar");
-  const loneTxt = document.getElementById("loneliness-text");
-  if (hpBar) {
-    hpBar.style.width = `${STATE.health / STATE.maxHealth * 100}%`;
-    if (STATE.health < 30) {
-      hpBar.className = "progress-bar health danger";
-    } else {
-      hpBar.className = "progress-bar health";
-    }
-  }
-  if (hpTxt)
-    hpTxt.innerText = `${Math.round(STATE.health)}%`;
-  if (bioBar)
-    bioBar.style.width = `${STATE.bioEnergy / STATE.maxBioEnergy * 100}%`;
-  if (bioTxt)
-    bioTxt.innerText = `${Math.round(STATE.bioEnergy)}%`;
-  if (mentalBar)
-    mentalBar.style.width = `${STATE.mentalEnergy / STATE.maxMentalEnergy * 100}%`;
-  if (mentalTxt)
-    mentalTxt.innerText = `${Math.round(STATE.mentalEnergy)}/${STATE.maxMentalEnergy}`;
-  if (loneBar) {
-    loneBar.style.width = `${STATE.loneliness}%`;
-    if (isHarmony) {
-      loneBar.style.background = "linear-gradient(90deg, #10b981, #38bdf8)";
-    } else {
-      loneBar.style.background = STATE.loneliness > 60 ? "linear-gradient(90deg, #d946ef, #ef4444)" : "linear-gradient(90deg, #38bdf8, #a855f7)";
-    }
-  }
-  if (loneTxt) {
-    let loneState = "Verzweiflung";
-    if (isHarmony)
-      loneState = "\uD83D\uDCAB Kosmische Harmonie";
-    else if (STATE.loneliness < 30)
-      loneState = "Duale Resonanz";
-    else if (STATE.loneliness < 60)
-      loneState = "Erste Bindung";
-    else if (STATE.loneliness < 70)
-      loneState = "Geistige Sättigung";
-    loneTxt.innerText = `${Math.round(STATE.loneliness)}% (${loneState})`;
-  }
-  const currentSys = STATE.universe?.systems?.find((s) => s.id === STATE.currentSystemId);
-  const sysNameEl = document.getElementById("hud-current-system-name");
-  if (sysNameEl) {
-    sysNameEl.innerText = `\uD83E\uDE90 ${currentSys ? currentSys.name : "Sol Invictus"}`;
-  }
-  const bioCountEl = document.getElementById("res-bio-count");
-  if (bioCountEl) {
-    bioCountEl.innerText = `${Math.floor(STATE.bioRes || 0)}`;
-  }
-  const silCountEl = document.getElementById("res-silicon-count");
-  if (silCountEl) {
-    silCountEl.innerText = `${Math.floor(STATE.siliconRes || 0)}`;
-  }
-  const chronosCountEl = document.getElementById("chronos-count");
-  if (chronosCountEl) {
-    const visited = STATE.visitedSystemIds ? STATE.visitedSystemIds.length : STATE.systemsVisited || 1;
-    chronosCountEl.innerText = `${visited}`;
-  }
-}
-function updateMinimap() {
-  if (!minimapCanvas || !minimapCtx)
-    return;
-  const width = minimapCanvas.width;
-  const height = minimapCanvas.height;
-  const cx = width / 2;
-  const cy = height / 2;
-  const approach = STATE.orbitTransitionProgress || 0;
-  const isMoon = STATE.orbitLevel === "moon";
-  const baseTargetRange = isMoon ? 24 : 220 - 175 * approach;
-  currentRadarRange = MathUtils.lerp(currentRadarRange, Math.max(24, baseTargetRange), 0.08);
-  const range = currentRadarRange;
-  minimapCtx.fillStyle = "rgba(3, 7, 18, 0.85)";
-  minimapCtx.fillRect(0, 0, width, height);
-  const radius = width / 2 - 4;
-  minimapCtx.strokeStyle = "rgba(56, 189, 248, 0.15)";
-  minimapCtx.lineWidth = 1;
-  minimapCtx.beginPath();
-  minimapCtx.arc(cx, cy, radius * 0.33, 0, Math.PI * 2);
-  minimapCtx.stroke();
-  minimapCtx.beginPath();
-  minimapCtx.arc(cx, cy, radius * 0.66, 0, Math.PI * 2);
-  minimapCtx.stroke();
-  minimapCtx.beginPath();
-  minimapCtx.arc(cx, cy, radius, 0, Math.PI * 2);
-  minimapCtx.stroke();
-  minimapCtx.strokeStyle = "rgba(56, 189, 248, 0.08)";
-  minimapCtx.beginPath();
-  minimapCtx.moveTo(cx, cy - radius);
-  minimapCtx.lineTo(cx, cy + radius);
-  minimapCtx.moveTo(cx - radius, cy);
-  minimapCtx.lineTo(cx + radius, cy);
-  minimapCtx.stroke();
-  const invRangeRadius = radius / range;
-  STATE.gravitySources.forEach((source) => {
-    if (source.isAbsorbed)
-      return;
-    const dx = source.position.x - STATE.playerPosition.x;
-    const dz = source.position.z - STATE.playerPosition.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < range) {
-      const sx = cx + dx * invRangeRadius;
-      const sy = cy + dz * invRangeRadius;
-      if (source.type === "star") {
-        minimapCtx.fillStyle = "#f59e0b";
-        minimapCtx.beginPath();
-        minimapCtx.arc(sx, sy, 5, 0, Math.PI * 2);
-        minimapCtx.fill();
-      } else if (source.type === "planet") {
-        const planetEntry = activePlanets.find((p) => p.source === source);
-        const hasSentient = planetEntry && planetEntry.attributes.species && planetEntry.attributes.species.population > 0;
-        if (hasSentient) {
-          minimapCtx.fillStyle = "#d946ef";
-          minimapCtx.beginPath();
-          minimapCtx.arc(sx, sy, 4.5, 0, Math.PI * 2);
-          minimapCtx.fill();
-          minimapCtx.strokeStyle = "rgba(217, 70, 239, 0.8)";
-          minimapCtx.beginPath();
-          minimapCtx.arc(sx, sy, 6.5 + Math.sin(Date.now() * 0.008) * 1.5, 0, Math.PI * 2);
-          minimapCtx.stroke();
-        } else {
-          minimapCtx.fillStyle = planetEntry && planetEntry.isMoon ? "#94a3b8" : "#38bdf8";
-          minimapCtx.beginPath();
-          minimapCtx.arc(sx, sy, planetEntry && planetEntry.isMoon ? 2 : 3.5, 0, Math.PI * 2);
-          minimapCtx.fill();
-        }
-      } else if (source.type === "asteroid") {
-        minimapCtx.fillStyle = source.resourceType === "bio" ? "#00ff88" : "#38bdf8";
-        minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
-      }
-    }
-  });
-  if (STATE.lockedTarget && STATE.lockedTarget.source) {
-    const dx = STATE.lockedTarget.source.position.x - STATE.playerPosition.x;
-    const dz = STATE.lockedTarget.source.position.z - STATE.playerPosition.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < range) {
-      const sx = cx + dx * invRangeRadius;
-      const sy = cy + dz * invRangeRadius;
-      minimapCtx.strokeStyle = "#38bdf8";
-      minimapCtx.lineWidth = 1.5;
-      minimapCtx.beginPath();
-      minimapCtx.arc(sx, sy, 8, 0, Math.PI * 2);
-      minimapCtx.stroke();
-    }
-  }
-  STATE.fleetShips.forEach((ship) => {
-    const dx = ship.position.x - STATE.playerPosition.x;
-    const dz = ship.position.z - STATE.playerPosition.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < range) {
-      const sx = cx + dx * invRangeRadius;
-      const sy = cy + dz * invRangeRadius;
-      if (ship.state === "disabled") {
-        minimapCtx.fillStyle = "#64748b";
-        minimapCtx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
-      } else if (ship.state === "intercept") {
-        minimapCtx.fillStyle = "#f43f5e";
-        minimapCtx.beginPath();
-        minimapCtx.arc(sx, sy, 3.5, 0, Math.PI * 2);
-        minimapCtx.fill();
-        minimapCtx.strokeStyle = "rgba(244, 63, 94, 0.8)";
-        minimapCtx.beginPath();
-        minimapCtx.arc(sx, sy, 5.5 + Math.sin(Date.now() * 0.015) * 1.5, 0, Math.PI * 2);
-        minimapCtx.stroke();
-      } else {
-        minimapCtx.fillStyle = "#f59e0b";
-        minimapCtx.beginPath();
-        minimapCtx.arc(sx, sy, 2.5, 0, Math.PI * 2);
-        minimapCtx.fill();
-      }
-    }
-  });
-  STATE.fleetProjectiles.forEach((proj) => {
-    const dx = proj.position.x - STATE.playerPosition.x;
-    const dz = proj.position.z - STATE.playerPosition.z;
-    const dist = Math.sqrt(dx * dx + dz * dz);
-    if (dist < range) {
-      const sx = cx + dx * invRangeRadius;
-      const sy = cy + dz * invRangeRadius;
-      minimapCtx.fillStyle = proj.type === "emp" ? "#a855f7" : "#38bdf8";
-      minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
-    }
-  });
-  const heading = STATE.playerGroup ? STATE.playerGroup.rotation.y : 0;
-  minimapCtx.save();
-  minimapCtx.translate(cx, cy);
-  minimapCtx.rotate(-heading);
-  minimapCtx.fillStyle = "#10b981";
-  minimapCtx.shadowColor = "#10b981";
-  minimapCtx.shadowBlur = 8;
-  minimapCtx.beginPath();
-  minimapCtx.moveTo(0, -7);
-  minimapCtx.lineTo(5, 5);
-  minimapCtx.lineTo(0, 2.5);
-  minimapCtx.lineTo(-5, 5);
-  minimapCtx.closePath();
-  minimapCtx.fill();
-  minimapCtx.restore();
-  minimapCtx.fillStyle = "rgba(56, 189, 248, 0.85)";
-  minimapCtx.font = "9px monospace";
-  minimapCtx.textAlign = "center";
-  const modeLabel = STATE.orbitLevel === "moon" ? `\uD83C\uDF15 MOND: ${STATE.activeMoonOrbit?.name || "Orbit"}` : STATE.orbitLevel === "planet" ? `\uD83E\uDE90 SUB-SYS: ${STATE.orbitPlanet?.name || "Orbit"}` : `RADAR: ${Math.round(range)} LJ`;
-  minimapCtx.fillText(modeLabel, cx, height - 6);
-}
-function triggerPsionicSonar() {
-  if (!STATE.gameStarted)
-    return;
-  if (STATE.mentalEnergy < 15) {
-    addLogEntry("SYSTEM", "Zu wenig Mentalkraft für psionischen Sonar-Ruf (15% benötigt)!");
-    return;
-  }
-  STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 15);
-  if (sonarWaveMesh) {
-    scene.remove(sonarWaveMesh);
-    if (sonarWaveMesh.geometry)
-      sonarWaveMesh.geometry.dispose();
-    if (sonarWaveMesh.material)
-      sonarWaveMesh.material.dispose();
-  }
-  const ringGeo = new RingGeometry(1, 4, 64);
-  ringGeo.rotateX(Math.PI / 2);
-  const ringMat = new MeshBasicMaterial({
-    color: 14239471,
-    transparent: true,
-    opacity: 0.9,
-    side: DoubleSide,
-    blending: AdditiveBlending
-  });
-  sonarWaveMesh = new Mesh(ringGeo, ringMat);
-  sonarWaveMesh.position.copy(STATE.playerPosition);
-  scene.add(sonarWaveMesh);
-  sonarTimer = 1;
-  playSonarChime();
-  const sentientPlanets = activePlanets.filter((p) => p.attributes && p.attributes.species && p.attributes.species.population > 0);
-  if (sentientPlanets.length > 0) {
-    const names = sentientPlanets.map((p) => `${p.name} (${p.attributes.species.name})`).join(", ");
-    addLogEntry("SYSTEM", `PSIONISCHER RUF: Mentales Resonanz-Echo empfangen von: ${names}! Kompass aktiv.`);
-  } else {
-    addLogEntry("SYSTEM", "PSIONISCHER RUF: Keine Gedanken-Signaturen in diesem System (Kosmische Stille).");
-  }
-}
-function updateSonarWave(dt) {
-  if (!sonarWaveMesh)
-    return;
-  sonarTimer -= dt;
-  const progress = 1 - sonarTimer;
-  const scale = 1 + progress * 60;
-  sonarWaveMesh.scale.set(scale, 1, scale);
-  sonarWaveMesh.material.opacity = Math.max(0, sonarTimer * 0.9);
-  if (sonarTimer <= 0) {
-    scene.remove(sonarWaveMesh);
-    if (sonarWaveMesh.geometry)
-      sonarWaveMesh.geometry.dispose();
-    if (sonarWaveMesh.material)
-      sonarWaveMesh.material.dispose();
-    sonarWaveMesh = null;
-  }
-}
-var arrivalBannerTimeout = null;
-function triggerSystemArrivalBanner(system, factionName) {
-  const banner = document.getElementById("system-arrival-banner");
-  if (!banner)
-    return;
-  if (arrivalBannerTimeout) {
-    clearTimeout(arrivalBannerTimeout);
-    arrivalBannerTimeout = null;
-  }
-  const titleEl = document.getElementById("arrival-system-title");
-  const sectorEl = document.getElementById("arrival-sector-label");
-  const starEl = document.getElementById("arrival-star-badge");
-  const planetsEl = document.getElementById("arrival-planets-badge");
-  const factionEl = document.getElementById("arrival-faction-badge");
-  if (titleEl)
-    titleEl.innerText = (system.name || "UNBEKANNT").toUpperCase();
-  if (sectorEl)
-    sectorEl.innerText = system.sectorName ? `${system.sectorName.toUpperCase()} • TRANSIT` : "SYSTEM-TRANSIT ABGESCHLOSSEN";
-  if (starEl && system.star) {
-    starEl.innerText = `⭐ ${system.star.type || "Zentralgestirn"}`;
-  }
-  const planetCount = system.planets ? system.planets.length : 0;
-  let moonCount = 0;
-  if (system.planets) {
-    system.planets.forEach((p) => {
-      if (p.moons)
-        moonCount += p.moons.length;
-    });
-  }
-  if (planetsEl) {
-    planetsEl.innerText = moonCount > 0 ? `\uD83E\uDE90 ${planetCount} Planeten | ${moonCount} Monde` : `\uD83E\uDE90 ${planetCount} Himmelskörper`;
-  }
-  if (factionEl) {
-    if (factionName) {
-      factionEl.innerText = `\uD83D\uDEE1️ ${factionName}`;
-      factionEl.style.display = "inline-flex";
-    } else {
-      factionEl.innerText = `\uD83C\uDF0C Unerschlossener Raum`;
-      factionEl.style.display = "inline-flex";
-    }
-  }
-  banner.classList.remove("banner-exit");
-  banner.style.display = "flex";
-  arrivalBannerTimeout = setTimeout(() => {
-    banner.classList.add("banner-exit");
-    setTimeout(() => {
-      banner.style.display = "none";
-      banner.classList.remove("banner-exit");
-    }, 800);
-  }, 4500);
-}
-
 // src/procedural/quantum-civ.ts
 function cMul(a, b) {
   return {
@@ -34723,6 +34200,20 @@ function completeScanning() {
   STATE.scanningPlanet = null;
   STATE.scanProgress = 0;
 }
+var manuallyDismissedTarget = null;
+function dismissScannerPanel() {
+  const scannerPanel = document.getElementById("left-deck-panel");
+  if (scannerPanel) {
+    scannerPanel.classList.remove("visible");
+  }
+  if (STATE.lockedTarget) {
+    STATE.lockedTarget = null;
+  }
+  manuallyDismissedTarget = STATE.nearestPlanet ? STATE.nearestPlanet.name : "__all__";
+}
+function resetDismissedScanner() {
+  manuallyDismissedTarget = null;
+}
 function updateScannerUI(planet, dist) {
   const scannerPanel = document.getElementById("left-deck-panel");
   const nameEl = document.getElementById("nearest-planet-name");
@@ -34733,7 +34224,7 @@ function updateScannerUI(planet, dist) {
   const resultsBox = document.getElementById("scan-results-box");
   const placeholderBox = document.getElementById("scan-placeholder-box");
   if (!planet) {
-    if (scannerPanel && !scannerPanel.classList.contains("manual-pin")) {
+    if (scannerPanel) {
       scannerPanel.classList.remove("visible");
     }
     if (nameEl)
@@ -34748,11 +34239,27 @@ function updateScannerUI(planet, dist) {
       placeholderBox.style.display = "block";
     return;
   }
-  const shouldShow = STATE.isInPlanetOrbit || STATE.lockedTarget !== null || dist < 65;
+  if (manuallyDismissedTarget && planet && manuallyDismissedTarget !== planet.name) {
+    manuallyDismissedTarget = null;
+  }
+  const isDismissed = manuallyDismissedTarget === planet.name || manuallyDismissedTarget === "__all__";
+  const isLocked = STATE.lockedTarget !== null && STATE.lockedTarget === planet;
+  const isInOrbit = STATE.isInPlanetOrbit && (STATE.orbitPlanet === planet || STATE.activeMoonOrbit === planet);
+  const isCurrentlyVisible = scannerPanel ? scannerPanel.classList.contains("visible") : false;
+  let shouldShow = false;
+  if (!isDismissed) {
+    if (isInOrbit || isLocked) {
+      shouldShow = true;
+    } else if (isCurrentlyVisible) {
+      shouldShow = dist <= 30;
+    } else {
+      shouldShow = dist <= 25;
+    }
+  }
   if (scannerPanel) {
     if (shouldShow) {
       scannerPanel.classList.add("visible");
-    } else if (!scannerPanel.classList.contains("manual-pin")) {
+    } else {
       scannerPanel.classList.remove("visible");
     }
   }
@@ -34913,6 +34420,528 @@ function updateScannerUI(planet, dist) {
     if (commsBtn)
       commsBtn.style.display = "none";
   }
+}
+
+// src/ui/deck.ts
+function isDeckOpen() {
+  const modal = document.getElementById("deck-modal");
+  return modal ? modal.style.display === "flex" : false;
+}
+function toggleDeckModal(force) {
+  const modal = document.getElementById("deck-modal");
+  if (!modal)
+    return;
+  const isVisible = modal.style.display === "flex";
+  const nextState = force !== undefined ? force : !isVisible;
+  modal.style.display = nextState ? "flex" : "none";
+  if (nextState) {
+    renderCrewUI();
+    updateMutationUI();
+    renderFactionReputationUI();
+  }
+}
+function initDeckUI() {
+  const leftCollapseBtn = document.getElementById("left-collapse-btn");
+  if (leftCollapseBtn) {
+    leftCollapseBtn.addEventListener("click", () => {
+      dismissScannerPanel();
+    });
+  }
+  const tabButtons = document.querySelectorAll("#right-deck-tabs .tab-btn");
+  tabButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const targetTab = btn.getAttribute("data-tab");
+      tabButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const crewContent = document.getElementById("tab-content-crew");
+      const evoContent = document.getElementById("tab-content-evolution");
+      const facContent = document.getElementById("tab-content-factions");
+      const logContent = document.getElementById("tab-content-log");
+      if (crewContent)
+        crewContent.classList.toggle("active", targetTab === "crew");
+      if (evoContent)
+        evoContent.classList.toggle("active", targetTab === "evolution");
+      if (logContent)
+        logContent.classList.toggle("active", targetTab === "log");
+      if (facContent) {
+        facContent.classList.toggle("active", targetTab === "factions");
+        if (targetTab === "factions") {
+          renderFactionReputationUI();
+        }
+      }
+    });
+  });
+  renderFactionReputationUI();
+  const mutButtons = document.querySelectorAll(".mut-btn");
+  mutButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mutType = btn.getAttribute("data-mutation");
+      if (mutType) {
+        buyMutation(mutType);
+      }
+    });
+  });
+}
+function buyMutation(type) {
+  const mut = STATE.mutations[type];
+  if (!mut || mut.purchased)
+    return;
+  if (STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost) {
+    STATE.bioRes -= mut.bioCost;
+    STATE.siliconRes -= mut.siliconCost;
+    mut.purchased = true;
+    playSiliconCollectSound();
+    const btn = document.querySelector(`.mut-btn[data-mutation="${type}"]`);
+    if (btn) {
+      btn.classList.add("purchased");
+      btn.innerHTML = "Aktiviert ✓";
+    }
+    if (type === "armor") {
+      addLogEntry("EVOLUTION", "Organische Chitin-Panzerung gehärtet. Kollisionsschaden um 50% reduziert.");
+      const hull = document.getElementById("schematic-hull");
+      if (hull)
+        hull.setAttribute("stroke-width", "4");
+    } else if (type === "o2") {
+      addLogEntry("EVOLUTION", "Metabolische O2-Synthese aktiviert. Stress-Zuwachs halbiert.");
+    } else if (type === "synapses") {
+      STATE.psionicRange = 140;
+      calculateCrewBuffs();
+      addLogEntry("EVOLUTION", "Psionische Synapsen erweitert! Gedanken-Echo Reichweite auf 140 LJ vergrößert.");
+    } else if (type === "cocoon") {
+      STATE.maxCrewCapacity = 4;
+      addLogEntry("EVOLUTION", "Neuronales Kokon-Gewebe mutiert! Maximale Crew-Kapazität auf 4 erweitert.");
+      renderCrewUI();
+    } else if (type === "hivemind") {
+      STATE.maxCrewCapacity = 6;
+      calculateCrewBuffs();
+      addLogEntry("EVOLUTION", "Symbiotische Synapsen-Kammer erwacht! Kapazität auf 6 erhöht & alle Spezialisten-Buffs um +20% verstärkt!");
+      renderCrewUI();
+    } else if (type === "folddrive") {
+      STATE.warpRange = 160;
+      addLogEntry("EVOLUTION", "Raumfaltungs-Membran mutiert! Warp-Reichweite auf 160 LJ erweitert, Faltungskosten um 30% gesenkt.");
+    } else if (type === "translator") {
+      addLogEntry("EVOLUTION", "Dschinn-Übersetzer integriert! Alien-Funksignale & Crew-Dialoge werden vollautomatisch dechiffriert.");
+    }
+    updateMutationUI();
+  } else {
+    addLogEntry("SYSTEM", `Evolution fehlgeschlagen: Nicht genügend Ressourcen (${mut.bioCost} Bio | ${mut.siliconCost} Silizium benötigt)!`);
+  }
+}
+function updateMutationUI() {
+  const bioEl = document.getElementById("res-bio-count");
+  const silEl = document.getElementById("res-silicon-count");
+  if (bioEl)
+    bioEl.innerText = `${Math.floor(STATE.bioRes)}`;
+  if (silEl)
+    silEl.innerText = `${Math.floor(STATE.siliconRes)}`;
+  Object.keys(STATE.mutations).forEach((key) => {
+    const mut = STATE.mutations[key];
+    const btn = document.querySelector(`.mut-btn[data-mutation="${key}"]`);
+    if (btn) {
+      if (mut.purchased) {
+        btn.disabled = true;
+        btn.classList.add("purchased");
+        btn.innerText = "Aktiviert ✓";
+      } else {
+        const canAfford = STATE.bioRes >= mut.bioCost && STATE.siliconRes >= mut.siliconCost;
+        btn.disabled = !canAfford;
+      }
+    }
+  });
+}
+
+// src/ui/hud.ts
+var minimapCanvas = null;
+var minimapCtx = null;
+var currentRadarRange = 220;
+var sonarWaveMesh = null;
+var sonarTimer = 0;
+function initHUD() {
+  minimapCanvas = document.getElementById("minimap-canvas");
+  if (minimapCanvas) {
+    minimapCtx = minimapCanvas.getContext("2d");
+  }
+  const sonarBtn = document.getElementById("psionic-sonar-btn") || document.getElementById("dock-sonar-btn");
+  if (sonarBtn) {
+    sonarBtn.addEventListener("click", triggerPsionicSonar);
+  }
+  const dockDeckBtn = document.getElementById("dock-deck-btn");
+  if (dockDeckBtn) {
+    dockDeckBtn.addEventListener("click", () => toggleDeckModal());
+  }
+  const closeDeckBtn = document.getElementById("close-deck-modal-btn");
+  if (closeDeckBtn) {
+    closeDeckBtn.addEventListener("click", () => toggleDeckModal(false));
+  }
+  const dockMapBtn = document.getElementById("dock-map-btn");
+  if (dockMapBtn) {
+    dockMapBtn.addEventListener("click", () => toggleGalaxyMap());
+  }
+  const dockAssistBtn = document.getElementById("dock-assist-btn");
+  if (dockAssistBtn) {
+    dockAssistBtn.addEventListener("click", () => toggleFlightAssist());
+  }
+}
+function addLogEntry(category, message) {
+  const list = document.getElementById("log-list");
+  const toastStream = document.getElementById("hud-fading-log-stream");
+  const now = new Date;
+  const timeStr = `${String(now.getMinutes()).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+  let catClass = "sys";
+  let catText = "SYSTEM";
+  if (category === "TELEPATHY") {
+    catClass = "telepathy";
+    catText = "TELEPATHIE";
+  } else if (category === "CREW") {
+    catClass = "crew";
+    catText = "CREW-FUNK";
+  } else if (category === "EVOLUTION") {
+    catClass = "evolution";
+    catText = "EVOLUTION";
+  }
+  if (list) {
+    const li = document.createElement("li");
+    li.className = "log-item";
+    li.innerHTML = `
+            <span class="log-time">[${timeStr}]</span>
+            <span class="log-cat ${catClass}">[${catText}]</span>
+            <span class="log-msg">${message}</span>
+        `;
+    list.prepend(li);
+    while (list.children.length > 50) {
+      list.removeChild(list.lastChild);
+    }
+  }
+  if (toastStream) {
+    const toast = document.createElement("div");
+    toast.className = `fading-toast ${catClass}`;
+    toast.innerHTML = `<span style="font-weight: bold; margin-right: 4px;">[${catText}]</span> ${message}`;
+    toastStream.appendChild(toast);
+    while (toastStream.children.length > 4) {
+      toastStream.removeChild(toastStream.firstChild);
+    }
+    setTimeout(() => {
+      if (toast.parentNode === toastStream) {
+        toastStream.removeChild(toast);
+      }
+    }, 5000);
+  }
+}
+function updateHUDStats(isHarmony = false) {
+  const hpBar = document.getElementById("core-health-bar") || document.getElementById("health-bar");
+  const hpTxt = document.getElementById("core-health-text") || document.getElementById("health-text");
+  const bioBar = document.getElementById("bio-energy-bar") || document.getElementById("energy-bar");
+  const bioTxt = document.getElementById("bio-energy-text") || document.getElementById("energy-text");
+  const mentalBar = document.getElementById("telepathy-energy-bar") || document.getElementById("mental-bar");
+  const mentalTxt = document.getElementById("telepathy-energy-text") || document.getElementById("mental-text");
+  const loneBar = document.getElementById("loneliness-bar");
+  const loneTxt = document.getElementById("loneliness-text");
+  if (hpBar) {
+    hpBar.style.width = `${STATE.health / STATE.maxHealth * 100}%`;
+    if (STATE.health < 30) {
+      hpBar.className = "progress-bar health danger";
+    } else {
+      hpBar.className = "progress-bar health";
+    }
+  }
+  if (hpTxt)
+    hpTxt.innerText = `${Math.round(STATE.health)}%`;
+  if (bioBar)
+    bioBar.style.width = `${STATE.bioEnergy / STATE.maxBioEnergy * 100}%`;
+  if (bioTxt)
+    bioTxt.innerText = `${Math.round(STATE.bioEnergy)}%`;
+  if (mentalBar)
+    mentalBar.style.width = `${STATE.mentalEnergy / STATE.maxMentalEnergy * 100}%`;
+  if (mentalTxt)
+    mentalTxt.innerText = `${Math.round(STATE.mentalEnergy)}/${STATE.maxMentalEnergy}`;
+  if (loneBar) {
+    loneBar.style.width = `${STATE.loneliness}%`;
+    if (isHarmony) {
+      loneBar.style.background = "linear-gradient(90deg, #10b981, #38bdf8)";
+    } else {
+      loneBar.style.background = STATE.loneliness > 60 ? "linear-gradient(90deg, #d946ef, #ef4444)" : "linear-gradient(90deg, #38bdf8, #a855f7)";
+    }
+  }
+  if (loneTxt) {
+    let loneState = "Verzweiflung";
+    if (isHarmony)
+      loneState = "\uD83D\uDCAB Kosmische Harmonie";
+    else if (STATE.loneliness < 30)
+      loneState = "Duale Resonanz";
+    else if (STATE.loneliness < 60)
+      loneState = "Erste Bindung";
+    else if (STATE.loneliness < 70)
+      loneState = "Geistige Sättigung";
+    loneTxt.innerText = `${Math.round(STATE.loneliness)}% (${loneState})`;
+  }
+  const currentSys = STATE.universe?.systems?.find((s) => s.id === STATE.currentSystemId);
+  const sysNameEl = document.getElementById("hud-current-system-name");
+  if (sysNameEl) {
+    sysNameEl.innerText = `\uD83E\uDE90 ${currentSys ? currentSys.name : "Sol Invictus"}`;
+  }
+  const bioCountEl = document.getElementById("res-bio-count");
+  if (bioCountEl) {
+    bioCountEl.innerText = `${Math.floor(STATE.bioRes || 0)}`;
+  }
+  const silCountEl = document.getElementById("res-silicon-count");
+  if (silCountEl) {
+    silCountEl.innerText = `${Math.floor(STATE.siliconRes || 0)}`;
+  }
+  const chronosCountEl = document.getElementById("chronos-count");
+  if (chronosCountEl) {
+    const visited = STATE.visitedSystemIds ? STATE.visitedSystemIds.length : STATE.systemsVisited || 1;
+    chronosCountEl.innerText = `${visited}`;
+  }
+}
+function updateMinimap() {
+  if (!minimapCanvas || !minimapCtx)
+    return;
+  const width = minimapCanvas.width;
+  const height = minimapCanvas.height;
+  const cx = width / 2;
+  const cy = height / 2;
+  const approach = STATE.orbitTransitionProgress || 0;
+  const isMoon = STATE.orbitLevel === "moon";
+  const baseTargetRange = isMoon ? 24 : 220 - 175 * approach;
+  currentRadarRange = MathUtils.lerp(currentRadarRange, Math.max(24, baseTargetRange), 0.08);
+  const range = currentRadarRange;
+  minimapCtx.fillStyle = "rgba(3, 7, 18, 0.85)";
+  minimapCtx.fillRect(0, 0, width, height);
+  const radius = width / 2 - 4;
+  minimapCtx.strokeStyle = "rgba(56, 189, 248, 0.15)";
+  minimapCtx.lineWidth = 1;
+  minimapCtx.beginPath();
+  minimapCtx.arc(cx, cy, radius * 0.33, 0, Math.PI * 2);
+  minimapCtx.stroke();
+  minimapCtx.beginPath();
+  minimapCtx.arc(cx, cy, radius * 0.66, 0, Math.PI * 2);
+  minimapCtx.stroke();
+  minimapCtx.beginPath();
+  minimapCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+  minimapCtx.stroke();
+  minimapCtx.strokeStyle = "rgba(56, 189, 248, 0.08)";
+  minimapCtx.beginPath();
+  minimapCtx.moveTo(cx, cy - radius);
+  minimapCtx.lineTo(cx, cy + radius);
+  minimapCtx.moveTo(cx - radius, cy);
+  minimapCtx.lineTo(cx + radius, cy);
+  minimapCtx.stroke();
+  const invRangeRadius = radius / range;
+  STATE.gravitySources.forEach((source) => {
+    if (source.isAbsorbed)
+      return;
+    const dx = source.position.x - STATE.playerPosition.x;
+    const dz = source.position.z - STATE.playerPosition.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < range) {
+      const sx = cx + dx * invRangeRadius;
+      const sy = cy + dz * invRangeRadius;
+      if (source.type === "star") {
+        minimapCtx.fillStyle = "#f59e0b";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 5, 0, Math.PI * 2);
+        minimapCtx.fill();
+      } else if (source.type === "planet") {
+        const planetEntry = activePlanets.find((p) => p.source === source);
+        const hasSentient = planetEntry && planetEntry.attributes.species && planetEntry.attributes.species.population > 0;
+        if (hasSentient) {
+          minimapCtx.fillStyle = "#d946ef";
+          minimapCtx.beginPath();
+          minimapCtx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+          minimapCtx.fill();
+          minimapCtx.strokeStyle = "rgba(217, 70, 239, 0.8)";
+          minimapCtx.beginPath();
+          minimapCtx.arc(sx, sy, 6.5 + Math.sin(Date.now() * 0.008) * 1.5, 0, Math.PI * 2);
+          minimapCtx.stroke();
+        } else {
+          minimapCtx.fillStyle = planetEntry && planetEntry.isMoon ? "#94a3b8" : "#38bdf8";
+          minimapCtx.beginPath();
+          minimapCtx.arc(sx, sy, planetEntry && planetEntry.isMoon ? 2 : 3.5, 0, Math.PI * 2);
+          minimapCtx.fill();
+        }
+      } else if (source.type === "asteroid") {
+        minimapCtx.fillStyle = source.resourceType === "bio" ? "#00ff88" : "#38bdf8";
+        minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
+      }
+    }
+  });
+  if (STATE.lockedTarget && STATE.lockedTarget.source) {
+    const dx = STATE.lockedTarget.source.position.x - STATE.playerPosition.x;
+    const dz = STATE.lockedTarget.source.position.z - STATE.playerPosition.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < range) {
+      const sx = cx + dx * invRangeRadius;
+      const sy = cy + dz * invRangeRadius;
+      minimapCtx.strokeStyle = "#38bdf8";
+      minimapCtx.lineWidth = 1.5;
+      minimapCtx.beginPath();
+      minimapCtx.arc(sx, sy, 8, 0, Math.PI * 2);
+      minimapCtx.stroke();
+    }
+  }
+  STATE.fleetShips.forEach((ship) => {
+    const dx = ship.position.x - STATE.playerPosition.x;
+    const dz = ship.position.z - STATE.playerPosition.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < range) {
+      const sx = cx + dx * invRangeRadius;
+      const sy = cy + dz * invRangeRadius;
+      if (ship.state === "disabled") {
+        minimapCtx.fillStyle = "#64748b";
+        minimapCtx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
+      } else if (ship.state === "intercept") {
+        minimapCtx.fillStyle = "#f43f5e";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 3.5, 0, Math.PI * 2);
+        minimapCtx.fill();
+        minimapCtx.strokeStyle = "rgba(244, 63, 94, 0.8)";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 5.5 + Math.sin(Date.now() * 0.015) * 1.5, 0, Math.PI * 2);
+        minimapCtx.stroke();
+      } else {
+        minimapCtx.fillStyle = "#f59e0b";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+        minimapCtx.fill();
+      }
+    }
+  });
+  STATE.fleetProjectiles.forEach((proj) => {
+    const dx = proj.position.x - STATE.playerPosition.x;
+    const dz = proj.position.z - STATE.playerPosition.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < range) {
+      const sx = cx + dx * invRangeRadius;
+      const sy = cy + dz * invRangeRadius;
+      minimapCtx.fillStyle = proj.type === "emp" ? "#a855f7" : "#38bdf8";
+      minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
+    }
+  });
+  const heading = STATE.playerGroup ? STATE.playerGroup.rotation.y : 0;
+  minimapCtx.save();
+  minimapCtx.translate(cx, cy);
+  minimapCtx.rotate(-heading);
+  minimapCtx.fillStyle = "#10b981";
+  minimapCtx.shadowColor = "#10b981";
+  minimapCtx.shadowBlur = 8;
+  minimapCtx.beginPath();
+  minimapCtx.moveTo(0, -7);
+  minimapCtx.lineTo(5, 5);
+  minimapCtx.lineTo(0, 2.5);
+  minimapCtx.lineTo(-5, 5);
+  minimapCtx.closePath();
+  minimapCtx.fill();
+  minimapCtx.restore();
+  minimapCtx.fillStyle = "rgba(56, 189, 248, 0.85)";
+  minimapCtx.font = "9px monospace";
+  minimapCtx.textAlign = "center";
+  const modeLabel = STATE.orbitLevel === "moon" ? `\uD83C\uDF15 MOND: ${STATE.activeMoonOrbit?.name || "Orbit"}` : STATE.orbitLevel === "planet" ? `\uD83E\uDE90 SUB-SYS: ${STATE.orbitPlanet?.name || "Orbit"}` : `RADAR: ${Math.round(range)} LJ`;
+  minimapCtx.fillText(modeLabel, cx, height - 6);
+}
+function triggerPsionicSonar() {
+  if (!STATE.gameStarted)
+    return;
+  if (STATE.mentalEnergy < 15) {
+    addLogEntry("SYSTEM", "Zu wenig Mentalkraft für psionischen Sonar-Ruf (15% benötigt)!");
+    return;
+  }
+  STATE.mentalEnergy = Math.max(0, STATE.mentalEnergy - 15);
+  if (sonarWaveMesh) {
+    scene.remove(sonarWaveMesh);
+    if (sonarWaveMesh.geometry)
+      sonarWaveMesh.geometry.dispose();
+    if (sonarWaveMesh.material)
+      sonarWaveMesh.material.dispose();
+  }
+  const ringGeo = new RingGeometry(1, 4, 64);
+  ringGeo.rotateX(Math.PI / 2);
+  const ringMat = new MeshBasicMaterial({
+    color: 14239471,
+    transparent: true,
+    opacity: 0.9,
+    side: DoubleSide,
+    blending: AdditiveBlending
+  });
+  sonarWaveMesh = new Mesh(ringGeo, ringMat);
+  sonarWaveMesh.position.copy(STATE.playerPosition);
+  scene.add(sonarWaveMesh);
+  sonarTimer = 1;
+  playSonarChime();
+  const sentientPlanets = activePlanets.filter((p) => p.attributes && p.attributes.species && p.attributes.species.population > 0);
+  if (sentientPlanets.length > 0) {
+    const names = sentientPlanets.map((p) => `${p.name} (${p.attributes.species.name})`).join(", ");
+    addLogEntry("SYSTEM", `PSIONISCHER RUF: Mentales Resonanz-Echo empfangen von: ${names}! Kompass aktiv.`);
+  } else {
+    addLogEntry("SYSTEM", "PSIONISCHER RUF: Keine Gedanken-Signaturen in diesem System (Kosmische Stille).");
+  }
+}
+function updateSonarWave(dt) {
+  if (!sonarWaveMesh)
+    return;
+  sonarTimer -= dt;
+  const progress = 1 - sonarTimer;
+  const scale = 1 + progress * 60;
+  sonarWaveMesh.scale.set(scale, 1, scale);
+  sonarWaveMesh.material.opacity = Math.max(0, sonarTimer * 0.9);
+  if (sonarTimer <= 0) {
+    scene.remove(sonarWaveMesh);
+    if (sonarWaveMesh.geometry)
+      sonarWaveMesh.geometry.dispose();
+    if (sonarWaveMesh.material)
+      sonarWaveMesh.material.dispose();
+    sonarWaveMesh = null;
+  }
+}
+var arrivalBannerTimeout = null;
+function triggerSystemArrivalBanner(system, factionName) {
+  const banner = document.getElementById("system-arrival-banner");
+  if (!banner)
+    return;
+  if (arrivalBannerTimeout) {
+    clearTimeout(arrivalBannerTimeout);
+    arrivalBannerTimeout = null;
+  }
+  const titleEl = document.getElementById("arrival-system-title");
+  const sectorEl = document.getElementById("arrival-sector-label");
+  const starEl = document.getElementById("arrival-star-badge");
+  const planetsEl = document.getElementById("arrival-planets-badge");
+  const factionEl = document.getElementById("arrival-faction-badge");
+  if (titleEl)
+    titleEl.innerText = (system.name || "UNBEKANNT").toUpperCase();
+  if (sectorEl)
+    sectorEl.innerText = system.sectorName ? `${system.sectorName.toUpperCase()} • TRANSIT` : "SYSTEM-TRANSIT ABGESCHLOSSEN";
+  if (starEl && system.star) {
+    starEl.innerText = `⭐ ${system.star.type || "Zentralgestirn"}`;
+  }
+  const planetCount = system.planets ? system.planets.length : 0;
+  let moonCount = 0;
+  if (system.planets) {
+    system.planets.forEach((p) => {
+      if (p.moons)
+        moonCount += p.moons.length;
+    });
+  }
+  if (planetsEl) {
+    planetsEl.innerText = moonCount > 0 ? `\uD83E\uDE90 ${planetCount} Planeten | ${moonCount} Monde` : `\uD83E\uDE90 ${planetCount} Himmelskörper`;
+  }
+  if (factionEl) {
+    if (factionName) {
+      factionEl.innerText = `\uD83D\uDEE1️ ${factionName}`;
+      factionEl.style.display = "inline-flex";
+    } else {
+      factionEl.innerText = `\uD83C\uDF0C Unerschlossener Raum`;
+      factionEl.style.display = "inline-flex";
+    }
+  }
+  banner.classList.remove("banner-exit");
+  banner.style.display = "flex";
+  arrivalBannerTimeout = setTimeout(() => {
+    banner.classList.add("banner-exit");
+    setTimeout(() => {
+      banner.style.display = "none";
+      banner.classList.remove("banner-exit");
+    }, 800);
+  }, 4500);
 }
 
 // src/systems/fleet.ts
@@ -37657,6 +37686,7 @@ function setupTargetRaycasting() {
 function setLockedTarget(target) {
   if (!target)
     return;
+  resetDismissedScanner();
   STATE.lockedTarget = target;
   playLockOnSound();
   const typeLabel = target.isMoon ? `Mond (${target.type})` : target.type;

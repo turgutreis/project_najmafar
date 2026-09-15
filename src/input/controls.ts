@@ -3,7 +3,7 @@ import { STATE, activePlanets } from '../core/state';
 import { camera, renderer } from '../engine/scene';
 import { playLockOnSound, setThrusterSound, toggleMusic, isMusicPlaying, isMusicUserMuted, nextTrack, getCurrentTrack } from '../engine/audio';
 import { toggleGalaxyMap, isMapOpen } from '../systems/galaxy-map';
-import { triggerScanStart } from '../systems/scanner';
+import { triggerScanStart, resetDismissedScanner } from '../systems/scanner';
 import { triggerHarvestStart } from '../systems/harvesting';
 import { triggerAbductStart } from '../systems/abduction';
 import { triggerBioDischarge, salvageNearestWreck } from '../systems/fleet';
@@ -232,6 +232,7 @@ export function setupTargetRaycasting() {
 
 export function setLockedTarget(target: any) {
     if (!target) return;
+    resetDismissedScanner();
     STATE.lockedTarget = target;
     playLockOnSound();
     const typeLabel = target.isMoon ? `Mond (${target.type})` : target.type;

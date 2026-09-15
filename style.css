@@ -248,7 +248,7 @@ html {
 .hud-scanner-card {
     position: absolute;
     top: 72px;
-    left: 246px;
+    left: 16px;
     width: 290px;
     max-height: calc(100vh - 160px);
     overflow-y: auto;
@@ -3880,7 +3880,7 @@ body.game-started .hud-left {
 
 .hud-party-grid {
     position: absolute;
-    top: 76px;
+    top: 360px;
     left: 16px;
     width: 218px;
     display: flex;
