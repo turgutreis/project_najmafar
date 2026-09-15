@@ -32730,6 +32730,187 @@ function playWarpSnapSound() {
   impactOsc.stop(time + 0.4);
 }
 
+// src/ui/party-grid.ts
+var lastRenderedCrewIds = "";
+function updatePartyGrid() {
+  const container = document.getElementById("hud-party-grid");
+  if (!container)
+    return;
+  const crew = STATE.crew;
+  if (!crew || crew.length === 0) {
+    if (container.innerHTML !== "") {
+      container.innerHTML = "";
+      lastRenderedCrewIds = "";
+    }
+    return;
+  }
+  const currentCrewIds = crew.map((c) => `${c.id}_${c.ageCategory}`).join("|");
+  const structureChanged = currentCrewIds !== lastRenderedCrewIds;
+  if (structureChanged) {
+    lastRenderedCrewIds = currentCrewIds;
+    container.innerHTML = crew.map((c) => renderPartyCard(c)).join("");
+    attachPartyGridEvents();
+  } else {
+    crew.forEach((c) => {
+      const card = document.getElementById(`party-card-${c.id}`);
+      if (!card)
+        return;
+      const maxLife = c.maxLifespan || 540;
+      const currentAge = Math.min(maxLife, Math.floor(c.age || 0));
+      const lifePercent = Math.max(0, Math.min(100, Math.round((1 - currentAge / maxLife) * 100)));
+      let barColor = "#10b981";
+      if (lifePercent < 15)
+        barColor = "#ef4444";
+      else if (lifePercent < 45)
+        barColor = "#f59e0b";
+      const ageBar = card.querySelector(".party-age-fill");
+      if (ageBar) {
+        ageBar.style.width = `${lifePercent}%`;
+        ageBar.style.backgroundColor = barColor;
+      }
+      const ageText = card.querySelector(".party-age-val");
+      if (ageText) {
+        ageText.innerText = `${lifePercent}%`;
+        ageText.style.color = barColor;
+      }
+      const stressBar = card.querySelector(".party-stress-fill");
+      if (stressBar) {
+        stressBar.style.width = `${Math.min(100, Math.round(c.stress))}%`;
+      }
+      const stabilityBar = card.querySelector(".party-stability-fill");
+      if (stabilityBar) {
+        stabilityBar.style.width = `${Math.min(100, Math.round(c.illusionStability))}%`;
+      }
+      if (lifePercent <= 10 || c.ageCategory === "critical") {
+        if (!card.classList.contains("critical-pulse")) {
+          card.classList.add("critical-pulse");
+        }
+      } else {
+        card.classList.remove("critical-pulse");
+      }
+    });
+  }
+}
+function renderPartyCard(c) {
+  const maxLife = c.maxLifespan || 540;
+  const currentAge = Math.min(maxLife, Math.floor(c.age || 0));
+  const lifePercent = Math.max(0, Math.min(100, Math.round((1 - currentAge / maxLife) * 100)));
+  let barColor = "#10b981";
+  if (lifePercent < 15)
+    barColor = "#ef4444";
+  else if (lifePercent < 45)
+    barColor = "#f59e0b";
+  const isCritical = lifePercent <= 10 || c.ageCategory === "critical";
+  const speciesColor = c.speciesColor || "#38bdf8";
+  const avatar = c.avatarIcon || "\uD83D\uDC64";
+  const station = c.stationName || c.roleName || c.role;
+  const traitText = c.trait ? `${c.trait.name}: ${c.trait.desc}` : c.perk || c.buffDesc;
+  return `
+        <div id="party-card-${c.id}" class="party-card glass-panel ${isCritical ? "critical-pulse" : ""}" data-crew-id="${c.id}">
+            <!-- Left Portrait Badge -->
+            <div class="party-portrait" style="--species-glow: ${speciesColor}">
+                <div class="party-avatar-ring">
+                    <span class="party-avatar-icon">${avatar}</span>
+                </div>
+                <div class="party-station-icon" title="${station}">${c.roleIcon || "⚙️"}</div>
+            </div>
+
+            <!-- Card Body / Vital Details -->
+            <div class="party-details">
+                <div class="party-top-row">
+                    <span class="party-name" title="${c.name} (${c.species})">${c.name}</span>
+                    <button class="party-rejuv-btn" data-rejuv-id="${c.id}" title="Zell-Verjüngung (-35% Alter, Kosten: 20 Bio / 10 Biomasse)">\uD83D\uDC89</button>
+                </div>
+                <div class="party-station-label">${station}</div>
+
+                <!-- Lifespan Bar -->
+                <div class="party-meter-row" title="Biologische Vitalität / Restlebensspanne">
+                    <span class="party-meter-label">⏳</span>
+                    <div class="party-meter-track">
+                        <div class="party-age-fill" style="width: ${lifePercent}%; background-color: ${barColor};"></div>
+                    </div>
+                    <span class="party-age-val" style="color: ${barColor};">${lifePercent}%</span>
+                </div>
+
+                <!-- Dual Micro Meters: Stability & Stress -->
+                <div class="party-micro-meters">
+                    <div class="micro-meter" title="Traum-Stabilität: ${Math.round(c.illusionStability)}%">
+                        <span class="micro-label">\uD83D\uDD2E</span>
+                        <div class="micro-track">
+                            <div class="party-stability-fill" style="width: ${Math.round(c.illusionStability)}%;"></div>
+                        </div>
+                    </div>
+                    <div class="micro-meter" title="Stress: ${Math.round(c.stress)}%">
+                        <span class="micro-label">⚡</span>
+                        <div class="micro-track">
+                            <div class="party-stress-fill" style="width: ${Math.round(c.stress)}%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rich Tooltip on Hover -->
+            <div class="party-card-tooltip">
+                <div class="tooltip-header">
+                    <strong>${c.name}</strong>
+                    <span style="color: ${speciesColor}; font-size: 0.7rem;">${c.species}</span>
+                </div>
+                <div class="tooltip-row"><strong>Station:</strong> ${station}</div>
+                <div class="tooltip-row"><strong>Eigenschaft:</strong> ${traitText}</div>
+                <div class="tooltip-row"><strong>Alter:</strong> ${Math.floor(currentAge / 60)}:${String(currentAge % 60).padStart(2, "0")} / ${Math.floor(maxLife / 60)}:00 Min.</div>
+                <div class="tooltip-thought">\uD83D\uDCAD <em>"${c.thought}"</em></div>
+            </div>
+        </div>
+    `;
+}
+function attachPartyGridEvents() {
+  const rejuvBtns = document.querySelectorAll(".party-rejuv-btn");
+  rejuvBtns.forEach((btn) => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const id = Number(btn.getAttribute("data-rejuv-id"));
+      if (id) {
+        rejuvenateCrewMember(id);
+        updatePartyGrid();
+      }
+    };
+  });
+}
+function triggerCrewDeathNotification(name, species, avatar = "\uD83D\uDC64") {
+  const container = document.getElementById("crew-death-toast-container");
+  if (!container)
+    return;
+  const toast = document.createElement("div");
+  toast.className = "crew-death-toast";
+  toast.innerHTML = `
+        <div class="death-toast-left">
+            <span class="death-avatar">${avatar}</span>
+            <div class="death-aura-circle"></div>
+        </div>
+        <div class="death-toast-content">
+            <div class="death-kicker">⚰️ BIOLOGISCHER ZELLTOD & RESORPTION</div>
+            <div class="death-title">${name}</div>
+            <div class="death-meta">${species} ist friedlich in den Nährstoffkreislauf des Rumpfes übergegangen.</div>
+            <div class="death-resorption-badge">+45 Bio-Energie resorbiert</div>
+        </div>
+        <button class="death-toast-dismiss" title="Schließen">✕</button>
+    `;
+  const dismissBtn = toast.querySelector(".death-toast-dismiss");
+  if (dismissBtn) {
+    dismissBtn.addEventListener("click", () => {
+      toast.classList.add("dissolve-out");
+      setTimeout(() => toast.remove(), 400);
+    });
+  }
+  container.appendChild(toast);
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.classList.add("dissolve-out");
+      setTimeout(() => toast.remove(), 400);
+    }
+  }, 7000);
+}
+
 // src/systems/crew.ts
 function calculateCrewBuffs() {
   let thrustMult = 1;
@@ -32753,6 +32934,18 @@ function calculateCrewBuffs() {
       stressDamp *= 1 - 0.4 * hiveBonus * agePenalty;
     if (c.role === "cryptologist")
       psioBonus += 30 * hiveBonus * agePenalty;
+    if (c.trait) {
+      if (c.trait.type === "bio")
+        bioMult += 0.2 * hiveBonus * agePenalty;
+      if (c.trait.type === "speed")
+        thrustMult += 0.15 * hiveBonus * agePenalty;
+      if (c.trait.type === "repair")
+        repair += 0.4 * hiveBonus * agePenalty;
+      if (c.trait.type === "stress")
+        stressDamp *= 1 - 0.15 * hiveBonus * agePenalty;
+      if (c.trait.type === "psionic")
+        psioBonus += 25 * hiveBonus * agePenalty;
+    }
   });
   STATE.crewBuffs = {
     thrust: thrustMult,
@@ -32834,19 +33027,26 @@ function updateCrewSimulation(dt) {
     c.age = (c.age || 0) + dt;
     const maxLife = c.maxLifespan || 540;
     const lifeRatio = Math.min(1, c.age / maxLife);
-    if (lifeRatio < 0.55) {
+    if (lifeRatio < 0.5) {
       c.ageCategory = "vital";
-    } else if (lifeRatio < 0.85) {
+    } else if (lifeRatio < 0.75) {
       c.ageCategory = "mature";
       c.stress = Math.min(100, c.stress + 0.35 * dt);
-    } else if (lifeRatio < 0.95) {
+    } else if (lifeRatio < 0.9) {
       c.ageCategory = "senescent";
       c.stress = Math.min(100, c.stress + 0.9 * dt);
     } else {
       c.ageCategory = "critical";
       c.stress = Math.min(100, c.stress + 1.8 * dt);
     }
+    if (lifeRatio >= 0.9 || c.ageCategory === "critical") {
+      if (!c.criticalAlertTriggered) {
+        c.criticalAlertTriggered = true;
+        addLogEntry("CREW", `⚠️ KRITISCHE SENESZENZ: ${c.name} (${c.species}) erreicht das Ende der natürlichen Lebensspanne! Nutze [\uD83D\uDC89] im Party-HUD vor dem Zelltod!`);
+      }
+    }
     if (c.age >= maxLife) {
+      triggerCrewDeathNotification(c.name, c.species, c.avatarIcon || "\uD83D\uDC64");
       addLogEntry("SYSTEM", `⚰️ BIOLOGISCHER ZELLTOD: ${c.name} (${c.species}) ist an Altersschwäche gestorben. Biomasse resorbiert (+45 Bio-Energie).`);
       STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 45);
       STATE.loneliness = Math.min(100, STATE.loneliness + 20);
@@ -32931,6 +33131,9 @@ function rejuvenateCrewMember(id) {
   STATE.bioRes = Math.max(0, STATE.bioRes - 10);
   const maxLife = member.maxLifespan || 540;
   member.age = Math.max(0, member.age - maxLife * 0.35);
+  if (member.age / maxLife < 0.85) {
+    member.criticalAlertTriggered = false;
+  }
   member.stress = Math.max(0, member.stress - 25);
   member.rejuvenationCount = (member.rejuvenationCount || 0) + 1;
   playBioHarvestSound();
@@ -34172,6 +34375,188 @@ function closeDiplomacyComms() {
   STATE.activeDiplomacyPlanet = null;
 }
 
+// src/systems/crew-generation.ts
+var SPECIES_ARCHETYPES = [
+  {
+    speciesName: "Myzel-Symbiont",
+    speciesType: "ephemeral",
+    avatarIcon: "\uD83C\uDF44",
+    speciesColor: "#10b981",
+    names: ["Thal", "Zhirr", "Oona", "Vael", "Kael", "Myco", "Sula", "Spore-7", "Phael", "Nyra"],
+    titles: ["Bio-Architekt", "Sporen-Priester", "Membran-Wächter", "Kokon-Flechter", "Xenobotaniker"],
+    origins: ["den Phosphor-Höhlen", "dem Myzel-Gürtel", "den Flechten-Ozeanen", "den Sporen-Nebeln"],
+    preferredRoles: ["biologist", "engineer"],
+    traits: [
+      { name: "Biolumineszent", desc: "+25% Biomasse-Metabolismus im Kokon", type: "bio" },
+      { name: "Sporen-Empathie", desc: "Beruhigt benachbarte Gefangene im Raumschiff", type: "stress" },
+      { name: "Schnell-Zellerneuerung", desc: "Hohe Regeneration, jedoch rascher Alterungsprozess", type: "quirk" }
+    ]
+  },
+  {
+    speciesName: "Cyborg-Synthet",
+    speciesType: "longlived",
+    avatarIcon: "\uD83E\uDD16",
+    speciesColor: "#38bdf8",
+    names: ["Dax-04", "Rex-Sigma", "Cipher-9", "Unit-77", "Nexus-V", "Kinet-8", "Proxy-Zero", "Vectis", "Null-1"],
+    titles: ["Naniten-Meister", "Kybernetiker", "Subraum-Logiker", "Quanten-Mechaniker", "Reaktor-Pfleger"],
+    origins: ["der Silizium-Schmiede", "dem Schaltkreis-Archipel", "den Titan-Minen", "den Daten-Gürteln"],
+    preferredRoles: ["engineer", "pilot"],
+    traits: [
+      { name: "Maschinen-Synästhesie", desc: "+0.4 HP/s Naniten-Schiffshüllenreparatur", type: "repair" },
+      { name: "Emotionsloser Stoizismus", desc: "Immun gegen leichten Panikstress bei Hüllenschäden", type: "stress" },
+      { name: "Optische Übertaktung", desc: "+15% Manövrierbarkeit beim Flug", type: "speed" }
+    ]
+  },
+  {
+    speciesName: "Olyndar-Empath",
+    speciesType: "ancient",
+    avatarIcon: "\uD83E\uDDDD",
+    speciesColor: "#a855f7",
+    names: ["Astraea", "Maya", "Solas", "Elyon", "Kaelen", "Lyra", "Seraph", "Zephyra", "Olynn", "Val-Marek"],
+    titles: ["Gedanken-Diplomat", "Astromant", "Resonanz-Weber", "Seelen-Navigator", "Traum-Hüter"],
+    origins: ["den schwebenden Kristallsphären", "dem Äther-Konsens", "den Saphir-Tempeln", "den Ringwäldern"],
+    preferredRoles: ["psychologist", "pilot"],
+    traits: [
+      { name: "Resonanz-Träumer", desc: "Senkt kosmische Einsamkeit des Schiffs um weitere 15%", type: "psionic" },
+      { name: "Telepathischer Anker", desc: "Verlangsamt Illusion-Decay aller Kokon-Wirte", type: "stress" },
+      { name: "Zeitloser Geist", desc: "Enorme biologische Langlebigkeit (über 20 Minuten)", type: "quirk" }
+    ]
+  },
+  {
+    speciesName: "Tiefsee-Oktanoide",
+    speciesType: "mortal",
+    avatarIcon: "\uD83D\uDC19",
+    speciesColor: "#06b6d4",
+    names: ["Kraal", "Triton", "Nautis", "Cala", "Mael", "Hydros", "Pelagos", "Vell", "Moros"],
+    titles: ["Druckwellen-Lotse", "Hydro-Ingenieur", "Kiemen-Navigator", "Tiefen-Echoforscher"],
+    origins: ["den Methan-Gräben", "den Abyssal-Schloten", "den Salzwasser-Kernen", "den Gezeiten-Riffen"],
+    preferredRoles: ["pilot", "biologist"],
+    traits: [
+      { name: "Druckresistenz", desc: "+20% Hüllendämpfung bei Gravitations-Stößen", type: "repair" },
+      { name: "Fluid-Schub", desc: "+20% Beschleunigung bei interstellarem Flug", type: "speed" },
+      { name: "Hydro-Synthese", desc: "Wandelt kinetische Energie langsam in Bio-Ressourcen um", type: "bio" }
+    ]
+  },
+  {
+    speciesName: "Kristalliner Lithoid",
+    speciesType: "longlived",
+    avatarIcon: "\uD83D\uDCA0",
+    speciesColor: "#f59e0b",
+    names: ["Quarz-9", "Obsid", "Pyrit", "Beryll", "Granat", "Feldspat", "Zirkon", "Silikat-Rho"],
+    titles: ["Kristall-Geologe", "Prismen-Harmoniker", "Seismologe", "Kern-Resonator"],
+    origins: ["den Obsidian-Stollen", "den Geoden-Schluchten", "den tektonischen Falten", "den Basalt-Hochebenen"],
+    preferredRoles: ["engineer", "psychologist"],
+    traits: [
+      { name: "Silizium-Katalysator", desc: "Reduziert Silizium-Verbrauch bei Naniten-Reparaturen", type: "repair" },
+      { name: "Refraktions-Matrix", desc: "+35 psionische Reichweite für Schiffssensoren", type: "psionic" },
+      { name: "Träge Zellteilung", desc: "Sehr langsame Alterung, benötigt selten Verjüngung", type: "quirk" }
+    ]
+  },
+  {
+    speciesName: "Terranischer Pionier",
+    speciesType: "mortal",
+    avatarIcon: "\uD83E\uDDD1‍\uD83D\uDE80",
+    speciesColor: "#3b82f6",
+    names: ["Capt. Miller", "Dr. Song", "Valeria", "Jamal", "Elena", "Vance", "Chen", "Thorne", "Sarah", "Aris"],
+    titles: ["Astral-Pilot", "Kolonie-Scout", "System-Astrophysiker", "Missions-Chirurg", "Überlebens-Experte"],
+    origins: ["der Orbital-Station Alpha", "dem Kolonieschiff Exodus", "den Mars-Glaskuppeln", "den Mond-Außenposten"],
+    preferredRoles: ["pilot", "engineer", "biologist"],
+    traits: [
+      { name: "Unbeugsamer Wille", desc: "+25% Triebwerkschub bei kritischer Schiffs-Energie", type: "speed" },
+      { name: "Wissenschaftlicher Eifer", desc: "+30% Forschungs- & Telemetriegewinn beim Scannen", type: "psionic" },
+      { name: "Kollaborations-Drang", desc: "Verstärkt die Synergieeffekte anderer Crew-Mitglieder", type: "quirk" }
+    ]
+  }
+];
+var ROLE_DEFINITIONS = {
+  pilot: {
+    roleName: "\uD83D\uDEF8 Astral-Pilot",
+    roleIcon: "\uD83D\uDEF8",
+    station: "nervous_system",
+    stationName: "\uD83E\uDDE0 Nervenknoten-Kern",
+    buffDesc: "+30% Schubkraft & Manövrierbarkeit",
+    baseStressRate: 0.18
+  },
+  biologist: {
+    roleName: "\uD83C\uDF31 Bio-Architekt",
+    roleIcon: "\uD83C\uDF31",
+    station: "metabolism_chamber",
+    stationName: "\uD83E\uDDEC Verdauungs-Membran",
+    buffDesc: "+45% Biomasse-Ertrag beim Ernten",
+    baseStressRate: 0.15
+  },
+  engineer: {
+    roleName: "\uD83D\uDD27 Naniten-Meister",
+    roleIcon: "\uD83D\uDD27",
+    station: "nanite_forge",
+    stationName: "⚙️ Naniten-Schmiede",
+    buffDesc: "+0.6 HP/s Naniten-Reparatur",
+    baseStressRate: 0.2
+  },
+  psychologist: {
+    roleName: "\uD83E\uDDD8 Gedanken-Diplomat",
+    roleIcon: "\uD83E\uDDD8",
+    station: "psi_resonator",
+    stationName: "\uD83D\uDD2E Psionischer Resonator",
+    buffDesc: "-40% Crew-Stressaufbau & Psi-Fokus",
+    baseStressRate: 0.12
+  }
+};
+var LIFESPAN_PRESETS = {
+  ephemeral: { base: 280, variance: 80 },
+  mortal: { base: 560, variance: 120 },
+  longlived: { base: 950, variance: 200 },
+  ancient: { base: 1400, variance: 300 }
+};
+function generateProceduralCandidates(seedHash, count = 2) {
+  const candidates = [];
+  const roles = ["pilot", "biologist", "engineer", "psychologist"];
+  for (let i = 0;i < count; i++) {
+    const itemHash = seedHash * 31 + i * 179 + 42 >>> 0;
+    const arch = SPECIES_ARCHETYPES[itemHash % SPECIES_ARCHETYPES.length];
+    let role = roles[(itemHash + i) % roles.length];
+    if (arch.preferredRoles && arch.preferredRoles.length > 0 && itemHash % 3 !== 0) {
+      role = arch.preferredRoles[itemHash % arch.preferredRoles.length];
+    }
+    const roleDef = ROLE_DEFINITIONS[role];
+    const firstName = arch.names[(itemHash + i * 3) % arch.names.length];
+    const title = arch.titles[(itemHash + i * 5) % arch.titles.length];
+    const origin = arch.origins[(itemHash + i * 7) % arch.origins.length];
+    const fullName = `${title} ${firstName}`;
+    const trait = arch.traits[(itemHash + i) % arch.traits.length];
+    const preset = LIFESPAN_PRESETS[arch.speciesType];
+    const lifespan = preset.base + itemHash % 100 / 100 * preset.variance;
+    const initialAge = lifespan * (0.05 + itemHash % 20 / 100);
+    candidates.push({
+      id: Date.now() + Math.floor(Math.random() * 1e5) + i,
+      name: fullName,
+      species: `${arch.speciesName} (${origin})`,
+      speciesType: arch.speciesType,
+      role,
+      roleName: roleDef.roleName,
+      roleIcon: roleDef.roleIcon,
+      station: roleDef.station,
+      stationName: roleDef.stationName,
+      buffDesc: roleDef.buffDesc,
+      perk: trait.desc,
+      trait,
+      avatarIcon: arch.avatarIcon,
+      speciesColor: arch.speciesColor,
+      stress: 15 + itemHash % 15,
+      baseStressRate: roleDef.baseStressRate,
+      illusionStability: 100,
+      status: "Harmonisch",
+      thought: `Wartet im Kokon... Träumt von ${origin}.`,
+      age: initialAge,
+      maxLifespan: Math.round(lifespan),
+      ageCategory: "vital",
+      rejuvenationCount: 0,
+      criticalAlertTriggered: false
+    });
+  }
+  return candidates;
+}
+
 // src/systems/scanner.ts
 function generatePlanetAttributes(p) {
   if (p.atmos && p.temp && p.bio && p.res && (p.type !== "Habitable" || p.species && p.species.candidates && p.species.candidates.length > 0)) {
@@ -34190,68 +34575,7 @@ function generatePlanetAttributes(p) {
     temp = 15 + hash % 15 + "°C";
     bio = hash % 3 === 0 ? "Biolumineszierende Flora" : hash % 3 === 1 ? "Mikrobielle Kolonien" : "Komplexes Ökosystem";
     res = "Reich an Biomasse, Kohlenstoff & O2";
-    const candidatePool = [
-      {
-        name: "Navigator Elian",
-        species: "Menschlicher Kolonist",
-        speciesType: "mortal",
-        role: "pilot",
-        roleName: "\uD83D\uDEF8 Astral-Pilot",
-        buffDesc: "+30% Schubkraft & Manövrierbarkeit",
-        baseStressRate: 0.18,
-        age: 60,
-        maxLifespan: 540,
-        ageCategory: "vital",
-        rejuvenationCount: 0
-      },
-      {
-        name: "Dr. Vaelen",
-        species: "Myzel-Botaniker",
-        speciesType: "ephemeral",
-        role: "biologist",
-        roleName: "\uD83C\uDF31 Bio-Architekt",
-        buffDesc: "+45% Biomasse-Ertrag beim Ernten",
-        baseStressRate: 0.15,
-        age: 30,
-        maxLifespan: 260,
-        ageCategory: "vital",
-        rejuvenationCount: 0
-      },
-      {
-        name: "Cyber-Adept Rex",
-        species: "Cyborg-Synthet",
-        speciesType: "longlived",
-        role: "engineer",
-        roleName: "\uD83D\uDD27 Naniten-Meister",
-        buffDesc: "+0.6 HP/s Naniten-Reparatur",
-        baseStressRate: 0.2,
-        age: 100,
-        maxLifespan: 900,
-        ageCategory: "vital",
-        rejuvenationCount: 0
-      },
-      {
-        name: "Gesandte Maya",
-        species: "Olyndar-Empathin",
-        speciesType: "ancient",
-        role: "psychologist",
-        roleName: "\uD83E\uDDD8 Gedanken-Diplomatin",
-        buffDesc: "-40% Crew-Stressaufbau & Psi-Fokus",
-        baseStressRate: 0.12,
-        age: 120,
-        maxLifespan: 1200,
-        ageCategory: "vital",
-        rejuvenationCount: 0
-      }
-    ];
-    const c1 = candidatePool[hash % candidatePool.length];
-    const c2 = candidatePool[(hash + 3) % candidatePool.length];
-    const pool = [
-      { ...c1, id: Date.now() + Math.random(), stress: 15, illusionStability: 100, status: "Friedlich", thought: "Arbeitet auf der Forschungsstation..." }
-    ];
-    if (hash % 2 === 0) {
-      pool.push({ ...c2, id: Date.now() + Math.random() + 1, stress: 25, illusionStability: 100, status: "Friedlich", thought: "Führt Atmosphärenmessungen durch..." });
-    }
+    const pool = generateProceduralCandidates(hash, hash % 2 === 0 ? 2 : 1);
     const qCiv = collapseQuantumCivilization(STATE.currentSystemId, hash % 8, hash);
     const faction = getFaction(qCiv.factionId);
     species = {
@@ -38149,6 +38473,7 @@ function animate(time) {
     updateAbduction(dt);
     updateFleet(dt);
     updateCrewSimulation(dt);
+    updatePartyGrid();
     updateSonarWave(dt);
     updateExplosionEffects(dt);
     updateTrajectory();

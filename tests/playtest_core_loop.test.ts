@@ -94,6 +94,8 @@ import { AUDIO_SETTINGS } from '../src/engine/audio';
 import { initiateSystemArrival, initiateSystemDeparture } from '../src/systems/universe';
 import { clearJumpGates, activeJumpGates } from '../src/procedural/meshes';
 import { updatePhysics } from '../src/engine/physics';
+import { generateProceduralCandidates, getCrewReactiveThought } from '../src/systems/crew-generation';
+import { calculateCrewBuffs, updateCrewSimulation, rejuvenateCrewMember } from '../src/systems/crew';
 
 describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
     let mockPlanet: any;
@@ -373,4 +375,65 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         expect(STATE.systemArrivalActive).toBe(true);
         expect(STATE.currentSystemId).toBe(2);
     });
+
+    test("12. Procedural abduction candidates generate diverse archetypes, unique names, bio-stations and traits", () => {
+        const poolA = generateProceduralCandidates(1337, 4);
+        const poolB = generateProceduralCandidates(9999, 4);
+
+        expect(poolA.length).toBe(4);
+        expect(poolB.length).toBe(4);
+
+        // Verify names are not identical
+        const namesA = poolA.map(c => c.name);
+        const namesB = poolB.map(c => c.name);
+        expect(namesA).not.toEqual(namesB);
+
+        // Verify all entities have valid stations, traits, and avatar icons
+        poolA.forEach(c => {
+            expect(c.station).toBeDefined();
+            expect(c.stationName).toBeDefined();
+            expect(c.trait).toBeDefined();
+            expect(c.trait.name).toBeDefined();
+            expect(c.avatarIcon).toBeDefined();
+            expect(c.speciesColor).toBeDefined();
+            expect(c.maxLifespan).toBeGreaterThan(100);
+            expect(c.ageCategory).toBe('vital');
+        });
+
+        // Test reactive thoughts
+        const thoughtWarp = getCrewReactiveThought(poolA[0], 'warp_start');
+        expect(thoughtWarp).toBeDefined();
+        expect(thoughtWarp.length).toBeGreaterThan(10);
+    });
+
+    test("13. Crew aging triggers critical alert at 90% lifespan and rejuvenation resets state", () => {
+        const candidates = generateProceduralCandidates(4242, 1);
+        const member = candidates[0];
+        member.maxLifespan = 200;
+        member.age = 175; // 87.5% life ratio
+        member.criticalAlertTriggered = false;
+
+        STATE.crew = [member];
+        calculateCrewBuffs();
+
+        // Simulate 6 seconds (age becomes 181 / 200 = 90.5% -> Critical threshold)
+        updateCrewSimulation(6.0);
+
+        expect(member.ageCategory).toBe('critical');
+        expect(member.criticalAlertTriggered).toBe(true);
+
+        // Verify trait buffs in crewBuffs
+        expect(STATE.crewBuffs).toBeDefined();
+
+        // Perform rejuvenation
+        STATE.bioEnergy = 50;
+        STATE.bioRes = 50;
+        rejuvenateCrewMember(member.id);
+
+        // Age should be reduced by 35% of maxLifespan (70s), dropping below 85%
+        expect(member.age).toBeLessThan(140);
+        expect(member.criticalAlertTriggered).toBe(false);
+        expect(member.rejuvenationCount).toBe(1);
+    });
 });
+

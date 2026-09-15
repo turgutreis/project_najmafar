@@ -3,6 +3,7 @@ import { addLogEntry } from '../ui/hud';
 import { toggleTelepathy } from '../input/controls';
 import { playBioHarvestSound, playCrashSound } from '../engine/audio';
 import { CrewMember } from '../types/game';
+import { triggerCrewDeathNotification } from '../ui/party-grid';
 
 export function calculateCrewBuffs() {
     let thrustMult = 1.0;
@@ -26,6 +27,15 @@ export function calculateCrewBuffs() {
         if (c.role === 'engineer') repair += 0.6 * hiveBonus * agePenalty;
         if (c.role === 'psychologist') stressDamp *= (1.0 - 0.40 * hiveBonus * agePenalty);
         if (c.role === 'cryptologist') psioBonus += 30 * hiveBonus * agePenalty;
+
+        // Specialized biological trait buffs
+        if (c.trait) {
+            if (c.trait.type === 'bio') bioMult += 0.20 * hiveBonus * agePenalty;
+            if (c.trait.type === 'speed') thrustMult += 0.15 * hiveBonus * agePenalty;
+            if (c.trait.type === 'repair') repair += 0.40 * hiveBonus * agePenalty;
+            if (c.trait.type === 'stress') stressDamp *= (1.0 - 0.15 * hiveBonus * agePenalty);
+            if (c.trait.type === 'psionic') psioBonus += 25 * hiveBonus * agePenalty;
+        }
     });
 
     STATE.crewBuffs = {
@@ -123,12 +133,12 @@ export function updateCrewSimulation(dt: number) {
         const maxLife = c.maxLifespan || 540;
         const lifeRatio = Math.min(1.0, c.age / maxLife);
 
-        if (lifeRatio < 0.55) {
+        if (lifeRatio < 0.50) {
             c.ageCategory = 'vital';
-        } else if (lifeRatio < 0.85) {
+        } else if (lifeRatio < 0.75) {
             c.ageCategory = 'mature';
             c.stress = Math.min(100, c.stress + 0.35 * dt);
-        } else if (lifeRatio < 0.95) {
+        } else if (lifeRatio < 0.90) {
             c.ageCategory = 'senescent';
             c.stress = Math.min(100, c.stress + 0.9 * dt);
         } else {
@@ -136,8 +146,17 @@ export function updateCrewSimulation(dt: number) {
             c.stress = Math.min(100, c.stress + 1.8 * dt);
         }
 
+        // Critical senescence warning trigger (< 10% life left)
+        if (lifeRatio >= 0.90 || c.ageCategory === 'critical') {
+            if (!c.criticalAlertTriggered) {
+                c.criticalAlertTriggered = true;
+                addLogEntry("CREW", `⚠️ KRITISCHE SENESZENZ: ${c.name} (${c.species}) erreicht das Ende der natürlichen Lebensspanne! Nutze [💉] im Party-HUD vor dem Zelltod!`);
+            }
+        }
+
         // Biological Death from Old Age
         if (c.age >= maxLife) {
+            triggerCrewDeathNotification(c.name, c.species, c.avatarIcon || '👤');
             addLogEntry("SYSTEM", `⚰️ BIOLOGISCHER ZELLTOD: ${c.name} (${c.species}) ist an Altersschwäche gestorben. Biomasse resorbiert (+45 Bio-Energie).`);
             STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 45);
             STATE.loneliness = Math.min(100, STATE.loneliness + 20);
@@ -241,6 +260,9 @@ export function rejuvenateCrewMember(id: number) {
 
     const maxLife = member.maxLifespan || 540;
     member.age = Math.max(0, member.age - maxLife * 0.35);
+    if (member.age / maxLife < 0.85) {
+        member.criticalAlertTriggered = false;
+    }
     member.stress = Math.max(0, member.stress - 25);
     member.rejuvenationCount = (member.rejuvenationCount || 0) + 1;
 

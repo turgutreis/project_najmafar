@@ -6,6 +6,7 @@ import { getFaction } from '../systems/factions';
 import { openDiplomacyComms } from '../systems/diplomacy';
 import { createScanVisuals, updateScanVisuals, removeScanVisuals } from '../procedural/meshes';
 import { SpeciesData, PlanetAttributes } from '../types/game';
+import { generateProceduralCandidates } from './crew-generation';
 
 export function generatePlanetAttributes(p: any) {
     if (p.atmos && p.temp && p.bio && p.res && (p.type !== 'Habitable' || (p.species && p.species.candidates && p.species.candidates.length > 0))) {
@@ -27,69 +28,7 @@ export function generatePlanetAttributes(p: any) {
         bio = hash % 3 === 0 ? "Biolumineszierende Flora" : (hash % 3 === 1 ? "Mikrobielle Kolonien" : "Komplexes Ökosystem");
         res = "Reich an Biomasse, Kohlenstoff & O2";
 
-        const candidatePool = [
-            {
-                name: "Navigator Elian",
-                species: "Menschlicher Kolonist",
-                speciesType: 'mortal' as const,
-                role: "pilot",
-                roleName: "🛸 Astral-Pilot",
-                buffDesc: "+30% Schubkraft & Manövrierbarkeit",
-                baseStressRate: 0.18,
-                age: 60,
-                maxLifespan: 540, // 9 Min.
-                ageCategory: 'vital' as const,
-                rejuvenationCount: 0
-            },
-            {
-                name: "Dr. Vaelen",
-                species: "Myzel-Botaniker",
-                speciesType: 'ephemeral' as const,
-                role: "biologist",
-                roleName: "🌱 Bio-Architekt",
-                buffDesc: "+45% Biomasse-Ertrag beim Ernten",
-                baseStressRate: 0.15,
-                age: 30,
-                maxLifespan: 260, // 4.3 Min. (Kurzlebig / Stark)
-                ageCategory: 'vital' as const,
-                rejuvenationCount: 0
-            },
-            {
-                name: "Cyber-Adept Rex",
-                species: "Cyborg-Synthet",
-                speciesType: 'longlived' as const,
-                role: "engineer",
-                roleName: "🔧 Naniten-Meister",
-                buffDesc: "+0.6 HP/s Naniten-Reparatur",
-                baseStressRate: 0.20,
-                age: 100,
-                maxLifespan: 900, // 15 Min.
-                ageCategory: 'vital' as const,
-                rejuvenationCount: 0
-            },
-            {
-                name: "Gesandte Maya",
-                species: "Olyndar-Empathin",
-                speciesType: 'ancient' as const,
-                role: "psychologist",
-                roleName: "🧘 Gedanken-Diplomatin",
-                buffDesc: "-40% Crew-Stressaufbau & Psi-Fokus",
-                baseStressRate: 0.12,
-                age: 120,
-                maxLifespan: 1200, // 20 Min.
-                ageCategory: 'vital' as const,
-                rejuvenationCount: 0
-            }
-        ];
-
-        const c1 = candidatePool[hash % candidatePool.length];
-        const c2 = candidatePool[(hash + 3) % candidatePool.length];
-        const pool = [
-            { ...c1, id: Date.now() + Math.random(), stress: 15, illusionStability: 100, status: "Friedlich", thought: "Arbeitet auf der Forschungsstation..." }
-        ];
-        if (hash % 2 === 0) {
-            pool.push({ ...c2, id: Date.now() + Math.random() + 1, stress: 25, illusionStability: 100, status: "Friedlich", thought: "Führt Atmosphärenmessungen durch..." });
-        }
+        const pool = generateProceduralCandidates(hash, hash % 2 === 0 ? 2 : 1);
 
         const qCiv = collapseQuantumCivilization(STATE.currentSystemId, hash % 8, hash);
         const faction = getFaction(qCiv.factionId);

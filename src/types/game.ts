@@ -70,6 +70,18 @@ export interface CrewMember {
     maxLifespan: number; // Max lifespan in seconds
     ageCategory?: 'vital' | 'mature' | 'senescent' | 'critical';
     rejuvenationCount?: number;
+
+    // Party-Grid & Ship-Interior Empathy
+    trait?: {
+        name: string;
+        desc: string;
+        type: 'bio' | 'stress' | 'speed' | 'repair' | 'psionic' | 'quirk';
+    };
+    station?: 'nervous_system' | 'metabolism_chamber' | 'nanite_forge' | 'psi_resonator';
+    stationName?: string;
+    avatarIcon?: string;
+    criticalAlertTriggered?: boolean;
+    speciesColor?: string;
 }
 
 export interface SpeciesData {
