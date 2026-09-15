@@ -36280,6 +36280,7 @@ function warpToSystem(systemId) {
 
 // src/systems/harvesting.ts
 var harvestOsc = null;
+var harvestHarmonicOsc = null;
 var harvestGain = null;
 var harvestFilter = null;
 function triggerHarvestStart() {
@@ -36334,6 +36335,7 @@ function updateHarvesting(dt) {
   }
   updateHarvestBeam(STATE.playerPosition, STATE.extractingPlanet.mesh.position);
   STATE.harvestProgress += dt * 30;
+  updateHarvestSound(STATE.harvestProgress);
   const bar = document.getElementById("harvest-progress-bar");
   const text = document.getElementById("harvest-progress-text");
   if (bar)
@@ -36357,6 +36359,10 @@ function cancelHarvesting(reason) {
 function completeHarvesting() {
   stopHarvestSound();
   removeHarvestBeam();
+  playBioHarvestSound();
+  setTimeout(() => {
+    playBioCollectSound();
+  }, 140);
   const progContainer = document.getElementById("harvest-progress-container");
   if (progContainer)
     progContainer.style.display = "none";
@@ -36385,19 +36391,34 @@ function startHarvestSound() {
   if (!ctx)
     return;
   harvestOsc = ctx.createOscillator();
+  harvestHarmonicOsc = ctx.createOscillator();
   harvestGain = ctx.createGain();
   harvestFilter = ctx.createBiquadFilter();
   harvestOsc.type = "triangle";
-  harvestOsc.frequency.setValueAtTime(95, ctx.currentTime);
+  harvestOsc.frequency.setValueAtTime(160, ctx.currentTime);
+  harvestHarmonicOsc.type = "sine";
+  harvestHarmonicOsc.frequency.setValueAtTime(240, ctx.currentTime);
   harvestFilter.type = "lowpass";
-  harvestFilter.frequency.setValueAtTime(280, ctx.currentTime);
-  harvestFilter.Q.setValueAtTime(1.2, ctx.currentTime);
+  harvestFilter.frequency.setValueAtTime(650, ctx.currentTime);
+  harvestFilter.Q.setValueAtTime(1.5, ctx.currentTime);
   harvestGain.gain.setValueAtTime(0, ctx.currentTime);
-  harvestGain.gain.linearRampToValueAtTime(0.045, ctx.currentTime + 0.3);
+  harvestGain.gain.linearRampToValueAtTime(0.09, ctx.currentTime + 0.25);
   harvestOsc.connect(harvestFilter);
+  harvestHarmonicOsc.connect(harvestFilter);
   harvestFilter.connect(harvestGain);
   harvestGain.connect(ctx.destination);
   harvestOsc.start();
+  harvestHarmonicOsc.start();
+}
+function updateHarvestSound(progressPct) {
+  if (harvestOsc && harvestHarmonicOsc) {
+    const ctx = getAudioContext();
+    if (!ctx)
+      return;
+    const baseFreq = 160 + progressPct / 100 * 70;
+    harvestOsc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
+    harvestHarmonicOsc.frequency.setValueAtTime(baseFreq * 1.5, ctx.currentTime);
+  }
 }
 function stopHarvestSound() {
   if (harvestOsc) {
@@ -36407,11 +36428,16 @@ function stopHarvestSound() {
       harvestGain.gain.cancelScheduledValues(time);
       harvestGain.gain.setValueAtTime(harvestGain.gain.value, time);
       harvestGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-      harvestOsc.stop(time + 0.2);
+      harvestOsc.stop(time + 0.18);
+      if (harvestHarmonicOsc)
+        harvestHarmonicOsc.stop(time + 0.18);
     } else {
       harvestOsc.stop();
+      if (harvestHarmonicOsc)
+        harvestHarmonicOsc.stop();
     }
     harvestOsc = null;
+    harvestHarmonicOsc = null;
     harvestGain = null;
     harvestFilter = null;
   }

@@ -1,10 +1,11 @@
 import { STATE } from '../core/state';
 import { createHarvestBeam, removeHarvestBeam, updateHarvestBeam } from '../procedural/meshes';
-import { getAudioContext } from '../engine/audio';
+import { getAudioContext, playBioHarvestSound, playBioCollectSound } from '../engine/audio';
 import { addLogEntry } from '../ui/hud';
 import { updateMutationUI } from '../ui/deck';
 
 let harvestOsc: OscillatorNode | null = null;
+let harvestHarmonicOsc: OscillatorNode | null = null;
 let harvestGain: GainNode | null = null;
 let harvestFilter: BiquadFilterNode | null = null;
 
@@ -76,6 +77,8 @@ export function updateHarvesting(dt: number) {
     updateHarvestBeam(STATE.playerPosition, STATE.extractingPlanet.mesh.position);
 
     STATE.harvestProgress += dt * 30; // 3.3s to harvest
+    updateHarvestSound(STATE.harvestProgress);
+
     const bar = document.getElementById('harvest-progress-bar');
     const text = document.getElementById('harvest-progress-text');
     if (bar) bar.style.width = `${STATE.harvestProgress}%`;
@@ -99,6 +102,12 @@ export function cancelHarvesting(reason: string) {
 export function completeHarvesting() {
     stopHarvestSound();
     removeHarvestBeam();
+
+    // Satisfying acoustic completion feedback
+    playBioHarvestSound();
+    setTimeout(() => {
+        playBioCollectSound();
+    }, 140);
 
     const progContainer = document.getElementById('harvest-progress-container');
     if (progContainer) progContainer.style.display = 'none';
@@ -132,25 +141,44 @@ export function startHarvestSound() {
     if (!ctx) return;
 
     harvestOsc = ctx.createOscillator();
+    harvestHarmonicOsc = ctx.createOscillator();
     harvestGain = ctx.createGain();
     harvestFilter = ctx.createBiquadFilter();
 
-    // Gentle, warm triangle waveform with lowpass filtering
+    // Warm, audible organic thrum: 160Hz triangle fundamental + 240Hz sine overtone
     harvestOsc.type = 'triangle';
-    harvestOsc.frequency.setValueAtTime(95, ctx.currentTime);
+    harvestOsc.frequency.setValueAtTime(160, ctx.currentTime);
 
+    harvestHarmonicOsc.type = 'sine';
+    harvestHarmonicOsc.frequency.setValueAtTime(240, ctx.currentTime);
+
+    // Warm lowpass filter to remove harsh digital buzzing
     harvestFilter.type = 'lowpass';
-    harvestFilter.frequency.setValueAtTime(280, ctx.currentTime);
-    harvestFilter.Q.setValueAtTime(1.2, ctx.currentTime);
+    harvestFilter.frequency.setValueAtTime(650, ctx.currentTime);
+    harvestFilter.Q.setValueAtTime(1.5, ctx.currentTime);
 
-    // Soft, pleasant gain (0.045 instead of 0.12)
+    // Clearly audible and comfortable volume (0.09)
     harvestGain.gain.setValueAtTime(0, ctx.currentTime);
-    harvestGain.gain.linearRampToValueAtTime(0.045, ctx.currentTime + 0.3);
+    harvestGain.gain.linearRampToValueAtTime(0.09, ctx.currentTime + 0.25);
 
     harvestOsc.connect(harvestFilter);
+    harvestHarmonicOsc.connect(harvestFilter);
     harvestFilter.connect(harvestGain);
     harvestGain.connect(ctx.destination);
+
     harvestOsc.start();
+    harvestHarmonicOsc.start();
+}
+
+export function updateHarvestSound(progressPct: number) {
+    if (harvestOsc && harvestHarmonicOsc) {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        // Pitch gently rises as planetary resources flow into the ship (160Hz -> 230Hz)
+        const baseFreq = 160 + (progressPct / 100.0) * 70;
+        harvestOsc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
+        harvestHarmonicOsc.frequency.setValueAtTime(baseFreq * 1.5, ctx.currentTime);
+    }
 }
 
 export function stopHarvestSound() {
@@ -161,11 +189,14 @@ export function stopHarvestSound() {
             harvestGain.gain.cancelScheduledValues(time);
             harvestGain.gain.setValueAtTime(harvestGain.gain.value, time);
             harvestGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-            harvestOsc.stop(time + 0.2);
+            harvestOsc.stop(time + 0.18);
+            if (harvestHarmonicOsc) harvestHarmonicOsc.stop(time + 0.18);
         } else {
             harvestOsc.stop();
+            if (harvestHarmonicOsc) harvestHarmonicOsc.stop();
         }
         harvestOsc = null;
+        harvestHarmonicOsc = null;
         harvestGain = null;
         harvestFilter = null;
     }
