@@ -36523,29 +36523,25 @@ function warpToSystem(systemId) {
   if (!STATE.visitedSystemIds.includes(targetSys.id)) {
     STATE.visitedSystemIds.push(targetSys.id);
   }
-  const warpOverlay = document.getElementById("warp-overlay");
-  if (warpOverlay) {
-    warpOverlay.style.display = "block";
-    warpOverlay.style.opacity = "1";
+  if (mapOpen) {
+    toggleGalaxyMap();
+  }
+  const warpFlash = document.getElementById("warp-flash");
+  if (warpFlash) {
+    warpFlash.style.display = "block";
+    warpFlash.style.opacity = "0.9";
+    setTimeout(() => {
+      warpFlash.style.opacity = "0";
+      setTimeout(() => {
+        warpFlash.style.display = "none";
+      }, 350);
+    }, 60);
   }
   playSiliconCollectSound();
-  setThrusterSound(true);
   addLogEntry("SYSTEM", `\uD83C\uDF0C RAUMZEIT GEFALTET: Transit nach ${targetSys.name} (${targetSys.sectorName || "Sektor"}). -${warpCost}% Bio-Energie.`);
-  setTimeout(() => {
-    clearActiveSystem();
-    spawnPlanetsAndAsteroids();
-    initiateSystemArrival(currentSys, targetSys);
-    if (warpOverlay) {
-      warpOverlay.style.opacity = "0";
-      setTimeout(() => {
-        warpOverlay.style.display = "none";
-      }, 600);
-    }
-    setThrusterSound(false);
-    if (mapOpen) {
-      toggleGalaxyMap();
-    }
-  }, 1200);
+  clearActiveSystem();
+  spawnPlanetsAndAsteroids();
+  initiateSystemArrival(currentSys, targetSys);
 }
 
 // src/systems/harvesting.ts

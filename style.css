@@ -2015,107 +2015,20 @@ body.game-started .hud-left {
     flex-shrink: 0;
 }
 
-/* --- WARP SCREEN OVERLAY --- */
-.warp-overlay {
-    position: absolute;
+/* --- CINEMATIC WARP FLASH OVERLAY --- */
+.warp-flash {
+    position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background: #000000;
+    width: 100vw;
+    height: 100vh;
+    background: radial-gradient(circle at center, rgba(168, 85, 247, 0.7) 0%, rgba(56, 189, 248, 0.4) 40%, rgba(6, 11, 25, 0.92) 100%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     z-index: 9999;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-}
-
-.warp-grid-effect {
-    position: absolute;
-    width: 200%;
-    height: 200%;
-    background-image:
-        radial-gradient(circle at center, rgba(168, 85, 247, 0.15) 0%, transparent 70%),
-        linear-gradient(rgba(255, 255, 255, 0.01) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
-    background-size: 100% 100%, 30px 30px, 30px 30px;
-    background-position: center;
-    animation: warpGridSpin 10s infinite linear;
-}
-
-@keyframes warpGridSpin {
-    0% {
-        transform: translate(-25%, -25%) rotate(0deg) scale(1.0);
-    }
-
-    50% {
-        transform: translate(-25%, -25%) rotate(180deg) scale(1.5);
-    }
-
-    100% {
-        transform: translate(-25%, -25%) rotate(360deg) scale(1.0);
-    }
-}
-
-.warp-vortex {
-    position: absolute;
-    width: 600px;
-    height: 600px;
-    border-radius: 50%;
-    background: radial-gradient(circle, transparent 20%, rgba(168, 85, 247, 0.3) 50%, rgba(6, 182, 212, 0.6) 80%, transparent 100%);
-    filter: blur(20px);
-    animation: vortexPulse 1.2s infinite alternate ease-in-out;
-}
-
-@keyframes vortexPulse {
-    from {
-        transform: scale(0.6) rotate(0deg);
-        opacity: 0.5;
-    }
-
-    to {
-        transform: scale(1.3) rotate(180deg);
-        opacity: 0.95;
-    }
-}
-
-.warp-text-container {
-    text-align: center;
-    position: relative;
-    z-index: 100;
-}
-
-.warp-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 3rem;
-    font-weight: 900;
-    letter-spacing: 1.2rem;
-    margin: 0;
-    color: #ffffff;
-    text-shadow: 0 0 30px rgba(168, 85, 247, 0.8), 0 0 10px rgba(6, 182, 212, 0.6);
-    animation: textFlash 0.5s infinite alternate;
-}
-
-@keyframes textFlash {
-    0% {
-        opacity: 0.7;
-        transform: scale(0.98);
-    }
-
-    100% {
-        opacity: 1;
-        transform: scale(1.02);
-    }
-}
-
-.warp-status {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #06b6d4;
-    margin-top: 1rem;
-    letter-spacing: 0.3rem;
-    text-transform: uppercase;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* --- PLANETARY SCANNER (LEFT HUD) --- */

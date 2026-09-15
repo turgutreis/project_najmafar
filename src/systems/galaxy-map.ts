@@ -930,34 +930,30 @@ export function warpToSystem(systemId: number) {
         STATE.visitedSystemIds.push(targetSys.id);
     }
 
-    // Trigger Warp VFX overlay
-    const warpOverlay = document.getElementById('warp-overlay');
-    if (warpOverlay) {
-        warpOverlay.style.display = 'block';
-        warpOverlay.style.opacity = '1';
+    // Close Galaxy Map immediately so player enters full 3D space
+    if (mapOpen) {
+        toggleGalaxyMap();
     }
 
-    // Audio cues
-    playSiliconCollectSound();
-    setThrusterSound(true);
+    // Trigger subtle, cinematic hyperspace flash transition (Option A - No text window)
+    const warpFlash = document.getElementById('warp-flash');
+    if (warpFlash) {
+        warpFlash.style.display = 'block';
+        warpFlash.style.opacity = '0.9';
+        setTimeout(() => {
+            warpFlash.style.opacity = '0';
+            setTimeout(() => {
+                warpFlash.style.display = 'none';
+            }, 350);
+        }, 60);
+    }
 
+    // Audio cue & Log
+    playSiliconCollectSound();
     addLogEntry("SYSTEM", `🌌 RAUMZEIT GEFALTET: Transit nach ${targetSys.name} (${targetSys.sectorName || 'Sektor'}). -${warpCost}% Bio-Energie.`);
 
-    setTimeout(() => {
-        clearActiveSystem();
-        spawnPlanetsAndAsteroids();
-        initiateSystemArrival(currentSys, targetSys);
-
-        if (warpOverlay) {
-            warpOverlay.style.opacity = '0';
-            setTimeout(() => {
-                warpOverlay.style.display = 'none';
-            }, 600);
-        }
-        setThrusterSound(false);
-
-        if (mapOpen) {
-            toggleGalaxyMap();
-        }
-    }, 1200);
+    // Immediate seamless transition: clear old system, spawn new system, trigger arrival sequence!
+    clearActiveSystem();
+    spawnPlanetsAndAsteroids();
+    initiateSystemArrival(currentSys, targetSys);
 }
