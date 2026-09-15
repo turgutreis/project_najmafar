@@ -29426,6 +29426,7 @@ var STATE = {
   scannedPlanets: {},
   extractingPlanet: null,
   harvestProgress: 0,
+  depletedPlanets: {},
   abductActive: false,
   abductTarget: null,
   abductProgress: 0,
@@ -30503,7 +30504,7 @@ function createRealisticStarfield() {
 }
 
 // src/engine/scene.ts
-var scene;
+var scene = new Scene;
 var camera;
 var renderer;
 var starfieldController = null;
@@ -31579,35 +31580,80 @@ function createGravityRing(x, z, radius, color, baseOpacity = 0.12) {
   });
   return ring;
 }
+var reticleBracketMaterial = null;
+var reticleInnerMaterial = null;
 function createTargetReticle() {
   if (targetReticleGroup)
     return;
   targetReticleGroup = new Group;
-  const ringGeo = new RingGeometry(1.2, 1.4, 32);
-  ringGeo.rotateX(Math.PI / 2);
-  const ringMat = new MeshBasicMaterial({
-    color: 3718648,
+  const bracketPoints = [];
+  const numSegmentsPerCorner = 10;
+  const baseR = 1.25;
+  for (let c = 0;c < 4; c++) {
+    const centerAngle = c * Math.PI / 2 + Math.PI / 4;
+    const startAngle = centerAngle - 0.28;
+    const endAngle = centerAngle + 0.28;
+    const step = (endAngle - startAngle) / numSegmentsPerCorner;
+    for (let i = 0;i < numSegmentsPerCorner; i++) {
+      const a1 = startAngle + i * step;
+      const a2 = startAngle + (i + 1) * step;
+      bracketPoints.push(new Vector3(baseR * Math.cos(a1), 0, baseR * Math.sin(a1)), new Vector3(baseR * Math.cos(a2), 0, baseR * Math.sin(a2)));
+    }
+    const tickR1 = baseR;
+    const tickR2 = baseR + 0.16;
+    bracketPoints.push(new Vector3(tickR1 * Math.cos(centerAngle), 0, tickR1 * Math.sin(centerAngle)), new Vector3(tickR2 * Math.cos(centerAngle), 0, tickR2 * Math.sin(centerAngle)));
+  }
+  for (let c = 0;c < 4; c++) {
+    const angle = c * Math.PI / 2;
+    bracketPoints.push(new Vector3((baseR - 0.14) * Math.cos(angle), 0, (baseR - 0.14) * Math.sin(angle)), new Vector3((baseR + 0.08) * Math.cos(angle), 0, (baseR + 0.08) * Math.sin(angle)));
+  }
+  const bracketGeo = new BufferGeometry().setFromPoints(bracketPoints);
+  reticleBracketMaterial = new LineBasicMaterial({
+    color: 16096779,
+    linewidth: 2,
     transparent: true,
     opacity: 0.85,
-    side: DoubleSide,
     blending: AdditiveBlending
   });
-  const ringMesh = new Mesh(ringGeo, ringMat);
-  targetReticleGroup.add(ringMesh);
-  const boxGeo = new RingGeometry(1.55, 1.7, 4);
-  boxGeo.rotateX(Math.PI / 2);
-  boxGeo.rotateY(Math.PI / 4);
-  const boxMat = new MeshBasicMaterial({
-    color: 14239471,
+  const bracketMesh = new LineSegments(bracketGeo, reticleBracketMaterial);
+  targetReticleGroup.add(bracketMesh);
+  const innerRingGeo = new RingGeometry(baseR * 0.86, baseR * 0.88, 48);
+  innerRingGeo.rotateX(Math.PI / 2);
+  reticleInnerMaterial = new MeshBasicMaterial({
+    color: 16096779,
     transparent: true,
-    opacity: 0.75,
+    opacity: 0.35,
     side: DoubleSide,
     blending: AdditiveBlending
   });
-  const boxMesh = new Mesh(boxGeo, boxMat);
-  targetReticleGroup.add(boxMesh);
+  const innerRing = new Mesh(innerRingGeo, reticleInnerMaterial);
+  targetReticleGroup.add(innerRing);
   targetReticleGroup.visible = false;
   scene.add(targetReticleGroup);
+}
+function updateTargetReticleState(target, dt) {
+  if (!targetReticleGroup || !target)
+    return;
+  const isScanned = target.scanned || STATE.scannedPlanets && STATE.scannedPlanets[target.name];
+  const isDepleted = target.depleted || target.harvested || STATE.depletedPlanets && STATE.depletedPlanets[target.name];
+  let targetHex = 16096779;
+  let targetOpacity = 0.85;
+  if (isDepleted) {
+    targetHex = 6583435;
+    targetOpacity = 0.45;
+  } else if (isScanned) {
+    targetHex = 440020;
+    targetOpacity = 0.9;
+  }
+  if (reticleBracketMaterial) {
+    reticleBracketMaterial.color.setHex(targetHex);
+    reticleBracketMaterial.opacity = targetOpacity;
+  }
+  if (reticleInnerMaterial) {
+    reticleInnerMaterial.color.setHex(targetHex);
+    reticleInnerMaterial.opacity = targetOpacity * 0.4;
+  }
+  targetReticleGroup.rotation.y += dt * 0.45;
 }
 function createAbductBeam(startPos, targetPos) {
   if (abductBeamMesh) {
@@ -31707,17 +31753,15 @@ function createScanVisuals(startPos, targetPos, targetSize = 3) {
   });
   scanBeamMesh = new LineSegments(geo, mat);
   scene.add(scanBeamMesh);
-  const ringGeo = new RingGeometry(targetSize * 1.05, targetSize * 1.35, 48);
-  ringGeo.rotateX(Math.PI / 2);
-  const ringMat = new MeshBasicMaterial({
+  const scanGeo = new SphereGeometry(targetSize * 1.15, 24, 16);
+  const scanMat = new MeshBasicMaterial({
     color: 440020,
     transparent: true,
-    opacity: 0.75,
-    side: DoubleSide,
-    blending: AdditiveBlending,
-    wireframe: true
+    opacity: 0.35,
+    wireframe: true,
+    blending: AdditiveBlending
   });
-  scanPlanetRingMesh = new Mesh(ringGeo, ringMat);
+  scanPlanetRingMesh = new Mesh(scanGeo, scanMat);
   scanPlanetRingMesh.position.copy(targetPos);
   scene.add(scanPlanetRingMesh);
 }
@@ -31741,9 +31785,10 @@ function updateScanVisuals(startPos, targetPos) {
   }
   if (scanPlanetRingMesh) {
     scanPlanetRingMesh.position.copy(targetPos);
-    scanPlanetRingMesh.position.y = Math.sin(Date.now() * 0.008) * 1.5;
-    scanPlanetRingMesh.rotation.y += 0.04;
-    scanPlanetRingMesh.material.opacity = 0.5 + Math.sin(Date.now() * 0.02) * 0.4;
+    scanPlanetRingMesh.rotation.y += 0.02;
+    const pulse = 1 + Math.sin(Date.now() * 0.008) * 0.03;
+    scanPlanetRingMesh.scale.set(pulse, pulse, pulse);
+    scanPlanetRingMesh.material.opacity = 0.25 + Math.sin(Date.now() * 0.015) * 0.15;
   }
 }
 function removeScanVisuals() {
@@ -31950,7 +31995,7 @@ function setupAudioNode(key, buffer, playerGroup) {
   } else if (key === "ignite") {
     shipIgniteSound = new PositionalAudio(audioListener);
     shipIgniteSound.setBuffer(buffer);
-    shipIgniteSound.setVolume(0.65);
+    shipIgniteSound.setVolume(0.22);
     shipIgniteSound.setRefDistance(20);
     if (playerGroup)
       playerGroup.add(shipIgniteSound);
@@ -31970,11 +32015,11 @@ function setupAudioNode(key, buffer, playerGroup) {
   } else if (key === "scan_complete") {
     scanCompleteSound = new Audio2(audioListener);
     scanCompleteSound.setBuffer(buffer);
-    scanCompleteSound.setVolume(0.65);
+    scanCompleteSound.setVolume(0.22);
   } else if (key === "sonar") {
     sonarSound = new Audio2(audioListener);
     sonarSound.setBuffer(buffer);
-    sonarSound.setVolume(0.7);
+    sonarSound.setVolume(0.2);
   }
 }
 var audioCtx = null;
@@ -32002,15 +32047,19 @@ function playBioHarvestSound() {
     return;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
-  osc.type = "sine";
-  osc.frequency.setValueAtTime(220, ctx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3);
-  gain.gain.setValueAtTime(0.15, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-  osc.connect(gain);
+  const filter = ctx.createBiquadFilter();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(180, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(540, ctx.currentTime + 0.25);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(800, ctx.currentTime);
+  gain.gain.setValueAtTime(0.06, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(ctx.destination);
   osc.start();
-  osc.stop(ctx.currentTime + 0.3);
+  osc.stop(ctx.currentTime + 0.26);
 }
 function playEmpChargeSound() {
   const ctx = getAudioContext();
@@ -32018,16 +32067,20 @@ function playEmpChargeSound() {
     return;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
   osc.type = "sawtooth";
-  osc.frequency.setValueAtTime(180, ctx.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(1400, ctx.currentTime + 0.45);
-  gain.gain.setValueAtTime(0.01, ctx.currentTime);
-  gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.35);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-  osc.connect(gain);
+  osc.frequency.setValueAtTime(140, ctx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(950, ctx.currentTime + 0.4);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(700, ctx.currentTime);
+  gain.gain.setValueAtTime(0.005, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.06, ctx.currentTime + 0.3);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(ctx.destination);
   osc.start();
-  osc.stop(ctx.currentTime + 0.46);
+  osc.stop(ctx.currentTime + 0.42);
 }
 function playBioCollectSound() {
   const ctx = getAudioContext();
@@ -32035,13 +32088,17 @@ function playBioCollectSound() {
     return;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
   osc.type = "sine";
   osc.frequency.setValueAtTime(160, ctx.currentTime);
   osc.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.12);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(750, ctx.currentTime);
   gain.gain.setValueAtTime(0, ctx.currentTime);
-  gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+  gain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
-  osc.connect(gain);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(ctx.destination);
   osc.start();
   osc.stop(ctx.currentTime + 0.2);
@@ -32052,17 +32109,21 @@ function playSiliconCollectSound() {
     return;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
   osc.type = "triangle";
-  osc.frequency.setValueAtTime(660, ctx.currentTime);
-  osc.frequency.setValueAtTime(880, ctx.currentTime + 0.07);
-  osc.frequency.setValueAtTime(1174, ctx.currentTime + 0.14);
+  osc.frequency.setValueAtTime(550, ctx.currentTime);
+  osc.frequency.setValueAtTime(740, ctx.currentTime + 0.07);
+  osc.frequency.setValueAtTime(980, ctx.currentTime + 0.14);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1100, ctx.currentTime);
   gain.gain.setValueAtTime(0, ctx.currentTime);
-  gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
-  osc.connect(gain);
+  gain.gain.linearRampToValueAtTime(0.07, ctx.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.24);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(ctx.destination);
   osc.start();
-  osc.stop(ctx.currentTime + 0.3);
+  osc.stop(ctx.currentTime + 0.26);
 }
 function playCrashSound() {
   const ctx = getAudioContext();
@@ -32071,7 +32132,7 @@ function playCrashSound() {
   const osc = ctx.createOscillator();
   const gainNode = ctx.createGain();
   const filter = ctx.createBiquadFilter();
-  const bufferSize = ctx.sampleRate * 0.5;
+  const bufferSize = ctx.sampleRate * 0.4;
   const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
   const data = buffer.getChannelData(0);
   for (let i = 0;i < bufferSize; i++) {
@@ -32080,18 +32141,18 @@ function playCrashSound() {
   const noise = ctx.createBufferSource();
   noise.buffer = buffer;
   filter.type = "lowpass";
-  filter.frequency.setValueAtTime(250, ctx.currentTime);
-  filter.frequency.exponentialRampToValueAtTime(20, ctx.currentTime + 0.45);
-  gainNode.gain.setValueAtTime(0.35, ctx.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+  filter.frequency.setValueAtTime(200, ctx.currentTime);
+  filter.frequency.exponentialRampToValueAtTime(20, ctx.currentTime + 0.35);
+  gainNode.gain.setValueAtTime(0.12, ctx.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
   osc.connect(filter);
   noise.connect(filter);
   filter.connect(gainNode);
   gainNode.connect(ctx.destination);
   osc.start();
-  osc.stop(ctx.currentTime + 0.5);
+  osc.stop(ctx.currentTime + 0.4);
   noise.start();
-  noise.stop(ctx.currentTime + 0.5);
+  noise.stop(ctx.currentTime + 0.4);
 }
 function playLockOnSound() {
   const ctx = getAudioContext();
@@ -32100,16 +32161,20 @@ function playLockOnSound() {
   const time = ctx.currentTime;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
   osc.type = "sine";
-  osc.frequency.setValueAtTime(880, time);
-  osc.frequency.exponentialRampToValueAtTime(1760, time + 0.12);
+  osc.frequency.setValueAtTime(740, time);
+  osc.frequency.exponentialRampToValueAtTime(1480, time + 0.12);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(1600, time);
   gain.gain.setValueAtTime(0, time);
-  gain.gain.linearRampToValueAtTime(0.18, time + 0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
-  osc.connect(gain);
+  gain.gain.linearRampToValueAtTime(0.07, time + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(ctx.destination);
   osc.start(time);
-  osc.stop(time + 0.2);
+  osc.stop(time + 0.18);
 }
 function playSonarChime() {
   if (sonarSound && sonarSound.buffer) {
@@ -32124,17 +32189,21 @@ function playSonarChime() {
   const time = ctx.currentTime;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
+  const filter = ctx.createBiquadFilter();
   osc.type = "sine";
-  osc.frequency.setValueAtTime(587.33, time);
-  osc.frequency.exponentialRampToValueAtTime(880, time + 0.3);
-  osc.frequency.exponentialRampToValueAtTime(1174.66, time + 0.6);
+  osc.frequency.setValueAtTime(440, time);
+  osc.frequency.exponentialRampToValueAtTime(660, time + 0.25);
+  osc.frequency.exponentialRampToValueAtTime(880, time + 0.5);
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(900, time);
   gain.gain.setValueAtTime(0, time);
-  gain.gain.linearRampToValueAtTime(0.2, time + 0.05);
-  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.9);
-  osc.connect(gain);
+  gain.gain.linearRampToValueAtTime(0.08, time + 0.04);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.7);
+  osc.connect(filter);
+  filter.connect(gain);
   gain.connect(ctx.destination);
   osc.start(time);
-  osc.stop(time + 0.95);
+  osc.stop(time + 0.75);
 }
 function playExplosionSound() {
   const ctx = getAudioContext();
@@ -32154,7 +32223,7 @@ function playExplosionSound() {
   noiseFilter.frequency.setValueAtTime(900, time);
   noiseFilter.frequency.exponentialRampToValueAtTime(30, time + 1.4);
   const noiseGain = ctx.createGain();
-  noiseGain.gain.setValueAtTime(0.6, time);
+  noiseGain.gain.setValueAtTime(0.15, time);
   noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 1.4);
   noise.connect(noiseFilter);
   noiseFilter.connect(noiseGain);
@@ -32164,7 +32233,7 @@ function playExplosionSound() {
   subOsc.type = "sawtooth";
   subOsc.frequency.setValueAtTime(140, time);
   subOsc.frequency.exponentialRampToValueAtTime(25, time + 1.3);
-  subGain.gain.setValueAtTime(0.7, time);
+  subGain.gain.setValueAtTime(0.18, time);
   subGain.gain.exponentialRampToValueAtTime(0.001, time + 1.5);
   subOsc.connect(subGain);
   subGain.connect(ctx.destination);
@@ -32176,16 +32245,16 @@ function playExplosionSound() {
 function startQuantumScanSound() {
   if (scanStreamSound && scanStreamSound.buffer) {
     scanStreamSound.setPlaybackRate(0.95);
-    scanStreamSound.setVolume(0.48);
+    scanStreamSound.setVolume(0.18);
     if (!scanStreamSound.isPlaying)
       scanStreamSound.play();
   }
 }
 function updateQuantumScanSound(progressPct) {
   if (scanStreamSound && scanStreamSound.isPlaying) {
-    const rate = 0.95 + progressPct / 100 * 0.65;
+    const rate = 0.95 + progressPct / 100 * 0.45;
     scanStreamSound.setPlaybackRate(rate);
-    scanStreamSound.setVolume(0.48 + progressPct / 100 * 0.15);
+    scanStreamSound.setVolume(0.18 + progressPct / 100 * 0.08);
   }
 }
 function stopQuantumScanSound(wasCompleted = false) {
@@ -32199,15 +32268,15 @@ function stopQuantumScanSound(wasCompleted = false) {
   }
 }
 var AUDIO_SETTINGS = {
-  masterVolume: 0.8,
-  musicVolume: 0.5,
-  sfxVolume: 0.7,
-  thrusterVolume: 0.65,
+  masterVolume: 0.65,
+  musicVolume: 0.45,
+  sfxVolume: 0.45,
+  thrusterVolume: 0.45,
   spatialAudio: true
 };
 function loadAudioSettings() {
   try {
-    const saved = localStorage.getItem("najmafar_audio_settings");
+    const saved = typeof localStorage !== "undefined" ? localStorage.getItem("najmafar_audio_settings") : null;
     if (saved) {
       const parsed = JSON.parse(saved);
       if (typeof parsed.masterVolume === "number")
@@ -34189,7 +34258,17 @@ function updateScannerUI(planet, dist) {
       commsBtn.onclick = () => openDiplomacyComms(planet);
     }
     if (harvestBtn) {
+      const isDepleted = planet.depleted || planet.harvested || STATE.depletedPlanets && STATE.depletedPlanets[planet.name];
       harvestBtn.style.display = inRange && !STATE.extractingPlanet && !STATE.abductActive ? "block" : "none";
+      if (isDepleted) {
+        harvestBtn.disabled = true;
+        harvestBtn.innerText = "Ressourcen erschöpft ✕";
+        harvestBtn.style.opacity = "0.5";
+      } else {
+        harvestBtn.disabled = false;
+        harvestBtn.innerText = "Bio-Siphon aktivieren [E]";
+        harvestBtn.style.opacity = "1.0";
+      }
     }
     if (abductBtn) {
       abductBtn.style.display = inRange && hasSentient && !STATE.abductActive && !STATE.extractingPlanet ? "block" : "none";
@@ -36204,23 +36283,42 @@ var harvestOsc = null;
 var harvestGain = null;
 var harvestFilter = null;
 function triggerHarvestStart() {
-  if (!STATE.gameStarted || STATE.extractingPlanet || STATE.scanningPlanet || STATE.abductActive || !STATE.nearestPlanet)
+  const target = STATE.orbitLevel === "moon" && STATE.activeMoonOrbit ? STATE.activeMoonOrbit : STATE.lockedTarget || STATE.nearestPlanet;
+  if (!STATE.gameStarted || STATE.extractingPlanet || STATE.scanningPlanet || STATE.abductActive || !target || !target.mesh)
     return;
-  const meshScale = STATE.nearestPlanet.mesh ? STATE.nearestPlanet.mesh.scale.x : 1;
-  const maxHarvestDist = Math.max(25, (STATE.nearestPlanet.size || 2.5) * meshScale * 3.8);
-  const dx = STATE.playerPosition.x - STATE.nearestPlanet.mesh.position.x;
-  const dz = STATE.playerPosition.z - STATE.nearestPlanet.mesh.position.z;
+  const isScanned = target.scanned || STATE.scannedPlanets && STATE.scannedPlanets[target.name];
+  if (!isScanned) {
+    addLogEntry("WARNUNG", `Scan erforderlich [F]! Vor der Bio-Extraktion muss ${target.name} spektralanalysiert werden.`);
+    return;
+  }
+  const isDepleted = target.depleted || target.harvested || STATE.depletedPlanets && STATE.depletedPlanets[target.name];
+  if (isDepleted) {
+    addLogEntry("SYSTEM", `${target.isMoon ? "Mond" : "Planet"} ${target.name}: Planetare Ressourcen erschöpft. Keine extrahierbare Biomasse.`);
+    return;
+  }
+  const siphonEnergyCost = 10;
+  if (STATE.bioEnergy < siphonEnergyCost) {
+    addLogEntry("WARNUNG", `Unzureichende Bio-Energie (${Math.round(STATE.bioEnergy)}/${siphonEnergyCost}) für Siphon-Kanalisierung.`);
+    return;
+  }
+  const meshScale = target.mesh ? target.mesh.scale.x : 1;
+  const maxHarvestDist = Math.max(25, (target.size || 2.5) * meshScale * 3.8);
+  const dx = STATE.playerPosition.x - target.mesh.position.x;
+  const dz = STATE.playerPosition.z - target.mesh.position.z;
   const dist = Math.sqrt(dx * dx + dz * dz);
-  if (dist >= maxHarvestDist)
+  if (dist >= maxHarvestDist) {
+    addLogEntry("SYSTEM", `Außerhalb der Siphon-Reichweite (${Math.round(dist)} / ${Math.round(maxHarvestDist)} LJ).`);
     return;
-  STATE.extractingPlanet = STATE.nearestPlanet;
+  }
+  STATE.bioEnergy = Math.max(0, STATE.bioEnergy - siphonEnergyCost);
+  STATE.extractingPlanet = target;
   STATE.harvestProgress = 0;
   const progContainer = document.getElementById("harvest-progress-container");
   if (progContainer)
     progContainer.style.display = "block";
-  createHarvestBeam(STATE.playerPosition, STATE.nearestPlanet.mesh.position);
+  createHarvestBeam(STATE.playerPosition, target.mesh.position);
   startHarvestSound();
-  addLogEntry("SYSTEM", `Bio-Siphon aktiviert. Extrahiere planetare Ressourcen von ${STATE.extractingPlanet.name}...`);
+  addLogEntry("SYSTEM", `Bio-Siphon aktiviert. Extrahiere planetare Ressourcen von ${target.name}... (-10 Bio-Energie)`);
 }
 function updateHarvesting(dt) {
   if (!STATE.extractingPlanet)
@@ -36264,14 +36362,19 @@ function completeHarvesting() {
     progContainer.style.display = "none";
   const planet = STATE.extractingPlanet;
   if (planet) {
+    planet.depleted = true;
+    planet.harvested = true;
+    if (!STATE.depletedPlanets)
+      STATE.depletedPlanets = {};
+    STATE.depletedPlanets[planet.name] = true;
     const bioMult = STATE.crewBuffs ? STATE.crewBuffs.bioGain : 1;
-    const bioGain = Math.round((planet.type === "Habitable" ? 60 : planet.type === "Gas Giant" ? 30 : 20) * bioMult);
-    const silGain = Math.round((planet.type === "Rocky" || planet.isMoon ? 45 : 15) * bioMult);
+    const bioGain = Math.round((planet.type === "Habitable" ? 65 : planet.type === "Gas Giant" ? 35 : 25) * bioMult);
+    const silGain = Math.round((planet.type === "Rocky" || planet.isMoon ? 50 : 20) * bioMult);
     STATE.bioRes += bioGain;
     STATE.siliconRes += silGain;
-    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 35);
-    STATE.health = Math.min(STATE.maxHealth, STATE.health + 20);
-    addLogEntry("SYSTEM", `Assimilation von ${planet.name} abgeschlossen! +${bioGain} Biomasse | +${silGain} Silizium absorbiert.`);
+    STATE.bioEnergy = Math.min(STATE.maxBioEnergy, STATE.bioEnergy + 25);
+    STATE.health = Math.min(STATE.maxHealth, STATE.health + 15);
+    addLogEntry("SYSTEM", `Assimilation von ${planet.name} abgeschlossen! +${bioGain} Biomasse | +${silGain} Silizium absorbiert. Vorkommen erschöpft.`);
     updateMutationUI();
   }
   STATE.extractingPlanet = null;
@@ -36284,12 +36387,13 @@ function startHarvestSound() {
   harvestOsc = ctx.createOscillator();
   harvestGain = ctx.createGain();
   harvestFilter = ctx.createBiquadFilter();
-  harvestOsc.type = "sawtooth";
-  harvestOsc.frequency.setValueAtTime(110, ctx.currentTime);
+  harvestOsc.type = "triangle";
+  harvestOsc.frequency.setValueAtTime(95, ctx.currentTime);
   harvestFilter.type = "lowpass";
-  harvestFilter.frequency.setValueAtTime(400, ctx.currentTime);
+  harvestFilter.frequency.setValueAtTime(280, ctx.currentTime);
+  harvestFilter.Q.setValueAtTime(1.2, ctx.currentTime);
   harvestGain.gain.setValueAtTime(0, ctx.currentTime);
-  harvestGain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.2);
+  harvestGain.gain.linearRampToValueAtTime(0.045, ctx.currentTime + 0.3);
   harvestOsc.connect(harvestFilter);
   harvestFilter.connect(harvestGain);
   harvestGain.connect(ctx.destination);
@@ -37390,21 +37494,19 @@ function updatePhysics(dt) {
       s.mesh.rotation.z += s.rotSpeed.z * dt;
     }
   });
-  if (STATE.lockedTarget && STATE.lockedTarget.mesh) {
+  const focusTarget = STATE.lockedTarget || (STATE.orbitLevel === "moon" && STATE.activeMoonOrbit ? STATE.activeMoonOrbit : STATE.isInPlanetOrbit && STATE.orbitPlanet ? STATE.orbitPlanet : null);
+  if (focusTarget && focusTarget.mesh) {
     if (!targetReticleGroup)
       createTargetReticle();
     if (targetReticleGroup) {
       targetReticleGroup.visible = true;
-      targetReticleGroup.position.set(STATE.lockedTarget.mesh.position.x, 0.4, STATE.lockedTarget.mesh.position.z);
-      const curVisualScale = STATE.lockedTarget.mesh.scale.x || 1;
-      const baseSize = STATE.lockedTarget.size || 2.5;
-      const scale = baseSize * curVisualScale * 1.45;
-      const pulse = 1 + Math.sin(Date.now() * 0.008) * 0.08;
+      targetReticleGroup.position.set(focusTarget.mesh.position.x, 0.25, focusTarget.mesh.position.z);
+      const curVisualScale = focusTarget.mesh.scale.x || 1;
+      const baseSize = focusTarget.size || 2.5;
+      const scale = baseSize * curVisualScale * 1.28;
+      const pulse = 1 + Math.sin(Date.now() * 0.005) * 0.03;
       targetReticleGroup.scale.set(scale * pulse, scale * pulse, scale * pulse);
-      if (targetReticleGroup.children[0])
-        targetReticleGroup.children[0].rotation.z += dt * 1.2;
-      if (targetReticleGroup.children[1])
-        targetReticleGroup.children[1].rotation.z -= dt * 0.8;
+      updateTargetReticleState(focusTarget, dt);
     }
   } else {
     if (targetReticleGroup)
@@ -37516,9 +37618,12 @@ function updatePhysics(dt) {
     return;
   }
   updateCollisions(dt);
-  if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.15 && STATE.health < STATE.maxHealth) {
-    STATE.health = Math.min(STATE.maxHealth, STATE.health + STATE.crewBuffs.repairRate * dt);
-    STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.25 * dt);
+  const baseRepairRate = 0.25;
+  const engineerBonus = STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 ? STATE.crewBuffs.repairRate : 0;
+  const totalRepairRate = baseRepairRate + engineerBonus;
+  if (totalRepairRate > 0 && STATE.siliconRes >= 0.1 && STATE.health < STATE.maxHealth) {
+    STATE.health = Math.min(STATE.maxHealth, STATE.health + totalRepairRate * dt);
+    STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.2 * dt);
   }
 }
 function updateCollisions(dt) {

@@ -198,6 +198,8 @@ export interface PlanetEntry {
     isMoon: boolean;
     parentPlanet?: PlanetEntry | null;
     scanned: boolean;
+    depleted?: boolean;
+    harvested?: boolean;
     attributes: PlanetAttributes;
 }
 
@@ -324,6 +326,7 @@ export interface GameState {
     scanningPlanet: PlanetEntry | null;
     scanProgress: number;
     scannedPlanets: Record<string, boolean>;
+    depletedPlanets: Record<string, boolean>;
 
     extractingPlanet: PlanetEntry | null;
     harvestProgress: number;

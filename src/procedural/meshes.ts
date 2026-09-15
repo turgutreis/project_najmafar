@@ -69,37 +69,107 @@ export function createGravityRing(x: number, z: number, radius: number, color: n
     return ring;
 }
 
+export let reticleBracketMaterial: THREE.LineBasicMaterial | null = null;
+export let reticleInnerMaterial: THREE.MeshBasicMaterial | null = null;
+
 export function createTargetReticle() {
     if (targetReticleGroup) return;
     targetReticleGroup = new THREE.Group();
 
-    const ringGeo = new THREE.RingGeometry(1.2, 1.4, 32);
-    ringGeo.rotateX(Math.PI / 2);
-    const ringMat = new THREE.MeshBasicMaterial({
-        color: 0x38bdf8,
+    // 1. Sleek 4 Corner Brackets using LineSegments in X-Z plane
+    const bracketPoints: THREE.Vector3[] = [];
+    const numSegmentsPerCorner = 10;
+    const baseR = 1.25;
+
+    for (let c = 0; c < 4; c++) {
+        const centerAngle = (c * Math.PI / 2) + Math.PI / 4;
+        const startAngle = centerAngle - 0.28;
+        const endAngle = centerAngle + 0.28;
+        const step = (endAngle - startAngle) / numSegmentsPerCorner;
+
+        for (let i = 0; i < numSegmentsPerCorner; i++) {
+            const a1 = startAngle + i * step;
+            const a2 = startAngle + (i + 1) * step;
+            bracketPoints.push(
+                new THREE.Vector3(baseR * Math.cos(a1), 0, baseR * Math.sin(a1)),
+                new THREE.Vector3(baseR * Math.cos(a2), 0, baseR * Math.sin(a2))
+            );
+        }
+
+        // Corner accent tick pointing outward
+        const tickR1 = baseR;
+        const tickR2 = baseR + 0.16;
+        bracketPoints.push(
+            new THREE.Vector3(tickR1 * Math.cos(centerAngle), 0, tickR1 * Math.sin(centerAngle)),
+            new THREE.Vector3(tickR2 * Math.cos(centerAngle), 0, tickR2 * Math.sin(centerAngle))
+        );
+    }
+
+    // 2. Cardinal Precision Pips (N, S, E, W) pointing inward
+    for (let c = 0; c < 4; c++) {
+        const angle = c * Math.PI / 2;
+        bracketPoints.push(
+            new THREE.Vector3((baseR - 0.14) * Math.cos(angle), 0, (baseR - 0.14) * Math.sin(angle)),
+            new THREE.Vector3((baseR + 0.08) * Math.cos(angle), 0, (baseR + 0.08) * Math.sin(angle))
+        );
+    }
+
+    const bracketGeo = new THREE.BufferGeometry().setFromPoints(bracketPoints);
+    reticleBracketMaterial = new THREE.LineBasicMaterial({
+        color: 0xf59e0b, // Amber (Unscanned default)
+        linewidth: 2,
         transparent: true,
         opacity: 0.85,
-        side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending
     });
-    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-    targetReticleGroup.add(ringMesh);
+    const bracketMesh = new THREE.LineSegments(bracketGeo, reticleBracketMaterial);
+    targetReticleGroup.add(bracketMesh);
 
-    const boxGeo = new THREE.RingGeometry(1.55, 1.7, 4);
-    boxGeo.rotateX(Math.PI / 2);
-    boxGeo.rotateY(Math.PI / 4);
-    const boxMat = new THREE.MeshBasicMaterial({
-        color: 0xd946ef,
+    // 3. Subtle Inner Concentric Dashed Ring
+    const innerRingGeo = new THREE.RingGeometry(baseR * 0.86, baseR * 0.88, 48);
+    innerRingGeo.rotateX(Math.PI / 2);
+    reticleInnerMaterial = new THREE.MeshBasicMaterial({
+        color: 0xf59e0b,
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.35,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending
     });
-    const boxMesh = new THREE.Mesh(boxGeo, boxMat);
-    targetReticleGroup.add(boxMesh);
+    const innerRing = new THREE.Mesh(innerRingGeo, reticleInnerMaterial);
+    targetReticleGroup.add(innerRing);
 
     targetReticleGroup.visible = false;
     scene.add(targetReticleGroup);
+}
+
+export function updateTargetReticleState(target: any, dt: number) {
+    if (!targetReticleGroup || !target) return;
+
+    const isScanned = target.scanned || (STATE.scannedPlanets && STATE.scannedPlanets[target.name]);
+    const isDepleted = target.depleted || target.harvested || (STATE.depletedPlanets && STATE.depletedPlanets[target.name]);
+
+    let targetHex = 0xf59e0b; // Amber (Scan required)
+    let targetOpacity = 0.85;
+
+    if (isDepleted) {
+        targetHex = 0x64748b; // Slate Gray (Depleted)
+        targetOpacity = 0.45;
+    } else if (isScanned) {
+        targetHex = 0x06b6d4; // Cyan (Scanned & Harvest ready)
+        targetOpacity = 0.90;
+    }
+
+    if (reticleBracketMaterial) {
+        reticleBracketMaterial.color.setHex(targetHex);
+        reticleBracketMaterial.opacity = targetOpacity;
+    }
+    if (reticleInnerMaterial) {
+        reticleInnerMaterial.color.setHex(targetHex);
+        reticleInnerMaterial.opacity = targetOpacity * 0.4;
+    }
+
+    // Smooth level rotation on Y axis without gimbal tilting
+    targetReticleGroup.rotation.y += dt * 0.45;
 }
 
 export function createAbductBeam(startPos: THREE.Vector3, targetPos: THREE.Vector3) {
@@ -209,18 +279,16 @@ export function createScanVisuals(startPos: THREE.Vector3, targetPos: THREE.Vect
     scanBeamMesh = new THREE.LineSegments(geo, mat);
     scene.add(scanBeamMesh);
 
-    // 2. Holographic Scan Grid Ring around Planet
-    const ringGeo = new THREE.RingGeometry(targetSize * 1.05, targetSize * 1.35, 48);
-    ringGeo.rotateX(Math.PI / 2);
-    const ringMat = new THREE.MeshBasicMaterial({
+    // 2. Holographic Scan Grid Envelope around Planet (Concentric spherical envelope)
+    const scanGeo = new THREE.SphereGeometry(targetSize * 1.15, 24, 16);
+    const scanMat = new THREE.MeshBasicMaterial({
         color: 0x06b6d4,
         transparent: true,
-        opacity: 0.75,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        wireframe: true
+        opacity: 0.35,
+        wireframe: true,
+        blending: THREE.AdditiveBlending
     });
-    scanPlanetRingMesh = new THREE.Mesh(ringGeo, ringMat);
+    scanPlanetRingMesh = new THREE.Mesh(scanGeo, scanMat);
     scanPlanetRingMesh.position.copy(targetPos);
     scene.add(scanPlanetRingMesh);
 }
@@ -250,9 +318,10 @@ export function updateScanVisuals(startPos: THREE.Vector3, targetPos: THREE.Vect
 
     if (scanPlanetRingMesh) {
         scanPlanetRingMesh.position.copy(targetPos);
-        scanPlanetRingMesh.position.y = Math.sin(Date.now() * 0.008) * 1.5;
-        scanPlanetRingMesh.rotation.y += 0.04;
-        (scanPlanetRingMesh.material as THREE.Material).opacity = 0.5 + Math.sin(Date.now() * 0.02) * 0.4;
+        scanPlanetRingMesh.rotation.y += 0.02;
+        const pulse = 1.0 + Math.sin(Date.now() * 0.008) * 0.03;
+        scanPlanetRingMesh.scale.set(pulse, pulse, pulse);
+        (scanPlanetRingMesh.material as THREE.Material).opacity = 0.25 + Math.sin(Date.now() * 0.015) * 0.15;
     }
 }
 

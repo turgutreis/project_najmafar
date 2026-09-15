@@ -56,7 +56,7 @@ function setupAudioNode(key: string, buffer: AudioBuffer, playerGroup?: THREE.Gr
     } else if (key === 'ignite') {
         shipIgniteSound = new THREE.PositionalAudio(audioListener);
         shipIgniteSound.setBuffer(buffer);
-        shipIgniteSound.setVolume(0.65);
+        shipIgniteSound.setVolume(0.22);
         shipIgniteSound.setRefDistance(20);
         if (playerGroup) playerGroup.add(shipIgniteSound);
     } else if (key === 'retro') {
@@ -74,11 +74,11 @@ function setupAudioNode(key: string, buffer: AudioBuffer, playerGroup?: THREE.Gr
     } else if (key === 'scan_complete') {
         scanCompleteSound = new THREE.Audio(audioListener);
         scanCompleteSound.setBuffer(buffer);
-        scanCompleteSound.setVolume(0.65);
+        scanCompleteSound.setVolume(0.22);
     } else if (key === 'sonar') {
         sonarSound = new THREE.Audio(audioListener);
         sonarSound.setBuffer(buffer);
-        sonarSound.setVolume(0.70);
+        sonarSound.setVolume(0.20);
     }
 }
 
@@ -115,19 +115,24 @@ export function playBioHarvestSound() {
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
 
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(220, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(180, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(540, ctx.currentTime + 0.25);
 
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(800, ctx.currentTime);
 
-    osc.connect(gain);
+    gain.gain.setValueAtTime(0.06, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+
+    osc.connect(filter);
+    filter.connect(gain);
     gain.connect(ctx.destination);
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.26);
 }
 
 export function playEmpChargeSound() {
@@ -136,20 +141,25 @@ export function playEmpChargeSound() {
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
 
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(180, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1400, ctx.currentTime + 0.45);
+    osc.frequency.setValueAtTime(140, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(950, ctx.currentTime + 0.4);
 
-    gain.gain.setValueAtTime(0.01, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.12, ctx.currentTime + 0.35);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(700, ctx.currentTime);
 
-    osc.connect(gain);
+    gain.gain.setValueAtTime(0.005, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.06, ctx.currentTime + 0.3);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+
+    osc.connect(filter);
+    filter.connect(gain);
     gain.connect(ctx.destination);
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.46);
+    osc.stop(ctx.currentTime + 0.42);
 }
 
 export function playBioCollectSound() {
@@ -157,13 +167,21 @@ export function playBioCollectSound() {
     if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
     osc.type = 'sine';
     osc.frequency.setValueAtTime(160, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(320, ctx.currentTime + 0.12);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(750, ctx.currentTime);
+
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.25, ctx.currentTime + 0.02);
+    gain.gain.linearRampToValueAtTime(0.08, ctx.currentTime + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
-    osc.connect(gain);
+
+    osc.connect(filter);
+    filter.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.2);
@@ -174,17 +192,25 @@ export function playSiliconCollectSound() {
     if (!ctx) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(660, ctx.currentTime);
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.07);
-    osc.frequency.setValueAtTime(1174, ctx.currentTime + 0.14);
+    osc.frequency.setValueAtTime(550, ctx.currentTime);
+    osc.frequency.setValueAtTime(740, ctx.currentTime + 0.07);
+    osc.frequency.setValueAtTime(980, ctx.currentTime + 0.14);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1100, ctx.currentTime);
+
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
-    osc.connect(gain);
+    gain.gain.linearRampToValueAtTime(0.07, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.24);
+
+    osc.connect(filter);
+    filter.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.26);
 }
 
 export function playCrashSound() {
@@ -194,7 +220,7 @@ export function playCrashSound() {
     const gainNode = ctx.createGain();
     const filter = ctx.createBiquadFilter();
 
-    const bufferSize = ctx.sampleRate * 0.5;
+    const bufferSize = ctx.sampleRate * 0.4;
     const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -205,11 +231,11 @@ export function playCrashSound() {
     noise.buffer = buffer;
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(250, ctx.currentTime);
-    filter.frequency.exponentialRampToValueAtTime(20, ctx.currentTime + 0.45);
+    filter.frequency.setValueAtTime(200, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(20, ctx.currentTime + 0.35);
 
-    gainNode.gain.setValueAtTime(0.35, ctx.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    gainNode.gain.setValueAtTime(0.12, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
 
     osc.connect(filter);
     noise.connect(filter);
@@ -217,9 +243,9 @@ export function playCrashSound() {
     gainNode.connect(ctx.destination);
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.5);
+    osc.stop(ctx.currentTime + 0.4);
     noise.start();
-    noise.stop(ctx.currentTime + 0.5);
+    noise.stop(ctx.currentTime + 0.4);
 }
 
 export function playLockOnSound() {
@@ -228,16 +254,24 @@ export function playLockOnSound() {
     const time = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
     osc.type = "sine";
-    osc.frequency.setValueAtTime(880, time);
-    osc.frequency.exponentialRampToValueAtTime(1760, time + 0.12);
+    osc.frequency.setValueAtTime(740, time);
+    osc.frequency.exponentialRampToValueAtTime(1480, time + 0.12);
+
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(1600, time);
+
     gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(0.18, time + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
-    osc.connect(gain);
+    gain.gain.linearRampToValueAtTime(0.07, time + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
+
+    osc.connect(filter);
+    filter.connect(gain);
     gain.connect(ctx.destination);
     osc.start(time);
-    osc.stop(time + 0.2);
+    osc.stop(time + 0.18);
 }
 
 export function playSonarChime() {
@@ -251,17 +285,25 @@ export function playSonarChime() {
     const time = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
     osc.type = "sine";
-    osc.frequency.setValueAtTime(587.33, time);
-    osc.frequency.exponentialRampToValueAtTime(880, time + 0.3);
-    osc.frequency.exponentialRampToValueAtTime(1174.66, time + 0.6);
+    osc.frequency.setValueAtTime(440, time);
+    osc.frequency.exponentialRampToValueAtTime(660, time + 0.25);
+    osc.frequency.exponentialRampToValueAtTime(880, time + 0.5);
+
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(900, time);
+
     gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(0.2, time + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.9);
-    osc.connect(gain);
+    gain.gain.linearRampToValueAtTime(0.08, time + 0.04);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.7);
+
+    osc.connect(filter);
+    filter.connect(gain);
     gain.connect(ctx.destination);
     osc.start(time);
-    osc.stop(time + 0.95);
+    osc.stop(time + 0.75);
 }
 
 export function playExplosionSound() {
@@ -285,7 +327,7 @@ export function playExplosionSound() {
     noiseFilter.frequency.exponentialRampToValueAtTime(30, time + 1.4);
 
     const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.6, time);
+    noiseGain.gain.setValueAtTime(0.15, time);
     noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 1.4);
 
     noise.connect(noiseFilter);
@@ -298,7 +340,7 @@ export function playExplosionSound() {
     subOsc.frequency.setValueAtTime(140, time);
     subOsc.frequency.exponentialRampToValueAtTime(25, time + 1.3);
 
-    subGain.gain.setValueAtTime(0.7, time);
+    subGain.gain.setValueAtTime(0.18, time);
     subGain.gain.exponentialRampToValueAtTime(0.001, time + 1.5);
 
     subOsc.connect(subGain);
@@ -317,16 +359,16 @@ export function playExplosionSound() {
 export function startQuantumScanSound() {
     if (scanStreamSound && scanStreamSound.buffer) {
         scanStreamSound.setPlaybackRate(0.95);
-        scanStreamSound.setVolume(0.48);
+        scanStreamSound.setVolume(0.18);
         if (!scanStreamSound.isPlaying) scanStreamSound.play();
     }
 }
 
 export function updateQuantumScanSound(progressPct: number) {
     if (scanStreamSound && scanStreamSound.isPlaying) {
-        const rate = 0.95 + (progressPct / 100.0) * 0.65;
+        const rate = 0.95 + (progressPct / 100.0) * 0.45;
         scanStreamSound.setPlaybackRate(rate);
-        scanStreamSound.setVolume(0.48 + (progressPct / 100.0) * 0.15);
+        scanStreamSound.setVolume(0.18 + (progressPct / 100.0) * 0.08);
     }
 }
 
@@ -345,24 +387,24 @@ export function stopQuantumScanSound(wasCompleted: boolean = false) {
 // ----------------------------------------------------------------------------
 
 export interface AudioSettings {
-    masterVolume: number;    // 0.0 to 1.0 (default: 0.8)
-    musicVolume: number;     // 0.0 to 1.0 (default: 0.5)
-    sfxVolume: number;       // 0.0 to 1.0 (default: 0.7)
-    thrusterVolume: number;  // 0.0 to 1.0 (default: 0.65)
+    masterVolume: number;    // 0.0 to 1.0 (default: 0.65)
+    musicVolume: number;     // 0.0 to 1.0 (default: 0.45)
+    sfxVolume: number;       // 0.0 to 1.0 (default: 0.45)
+    thrusterVolume: number;  // 0.0 to 1.0 (default: 0.45)
     spatialAudio: boolean;   // default: true
 }
 
 export const AUDIO_SETTINGS: AudioSettings = {
-    masterVolume: 0.80,
-    musicVolume: 0.50,
-    sfxVolume: 0.70,
-    thrusterVolume: 0.65,
+    masterVolume: 0.65,
+    musicVolume: 0.45,
+    sfxVolume: 0.45,
+    thrusterVolume: 0.45,
     spatialAudio: true
 };
 
 export function loadAudioSettings() {
     try {
-        const saved = localStorage.getItem('najmafar_audio_settings');
+        const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('najmafar_audio_settings') : null;
         if (saved) {
             const parsed = JSON.parse(saved);
             if (typeof parsed.masterVolume === 'number') AUDIO_SETTINGS.masterVolume = Math.max(0, Math.min(1, parsed.masterVolume));

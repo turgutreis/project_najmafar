@@ -8,6 +8,7 @@
     "dev": "bun build src/main.ts --outfile=game.js --watch",
     "build:ts": "bun build src/main.ts --outfile=game.js",
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "start": "bun run build:ts && electron .",
     "build:mac": "bun run build:ts && electron-builder --mac",
     "build:win": "bun run build:ts && electron-builder --win --x64",

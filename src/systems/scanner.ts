@@ -425,7 +425,17 @@ export function updateScannerUI(planet: any, dist: number) {
         }
 
         if (harvestBtn) {
+            const isDepleted = planet.depleted || planet.harvested || (STATE.depletedPlanets && STATE.depletedPlanets[planet.name]);
             harvestBtn.style.display = (inRange && !STATE.extractingPlanet && !STATE.abductActive) ? 'block' : 'none';
+            if (isDepleted) {
+                (harvestBtn as HTMLButtonElement).disabled = true;
+                harvestBtn.innerText = "Ressourcen erschöpft ✕";
+                harvestBtn.style.opacity = '0.5';
+            } else {
+                (harvestBtn as HTMLButtonElement).disabled = false;
+                harvestBtn.innerText = "Bio-Siphon aktivieren [E]";
+                harvestBtn.style.opacity = '1.0';
+            }
         }
 
         if (abductBtn) {

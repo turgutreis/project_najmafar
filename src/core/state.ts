@@ -86,6 +86,7 @@ export const STATE: GameState = {
 
     extractingPlanet: null,
     harvestProgress: 0,
+    depletedPlanets: {} as Record<string, boolean>,
 
     abductActive: false,
     abductTarget: null,

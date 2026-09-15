@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { resizePostProcessing } from './postprocessing';
 import { createRealisticStarfield, CosmicBackgroundController } from './starfield';
 
-export let scene: THREE.Scene;
+export let scene: THREE.Scene = new THREE.Scene();
 export let camera: THREE.PerspectiveCamera;
 export let renderer: THREE.WebGLRenderer;
 export let starfieldController: CosmicBackgroundController | null = null;

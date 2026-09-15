@@ -3,7 +3,7 @@ import { STATE, activePlanets } from '../core/state';
 import { PlanetEntry } from '../types/game';
 import { camera, scene } from './scene';
 import { playCrashSound, playBioCollectSound, playSiliconCollectSound } from './audio';
-import { targetReticleGroup, createTargetReticle } from '../procedural/meshes';
+import { targetReticleGroup, createTargetReticle, updateTargetReticleState } from '../procedural/meshes';
 import { addLogEntry, updateHUDStats } from '../ui/hud';
 import { updateScannerUI } from '../systems/scanner';
 import { updateMutationUI } from '../ui/deck';
@@ -183,24 +183,26 @@ export function updatePhysics(dt: number) {
     });
 
     // 2. Update 3D Target Reticle
-    if (STATE.lockedTarget && STATE.lockedTarget.mesh) {
+    const focusTarget = STATE.lockedTarget || ((STATE.orbitLevel === 'moon' && STATE.activeMoonOrbit) ? STATE.activeMoonOrbit : (STATE.isInPlanetOrbit && STATE.orbitPlanet ? STATE.orbitPlanet : null));
+
+    if (focusTarget && focusTarget.mesh) {
         if (!targetReticleGroup) createTargetReticle();
         if (targetReticleGroup) {
             targetReticleGroup.visible = true;
             targetReticleGroup.position.set(
-                STATE.lockedTarget.mesh.position.x,
-                0.4,
-                STATE.lockedTarget.mesh.position.z
+                focusTarget.mesh.position.x,
+                0.25,
+                focusTarget.mesh.position.z
             );
             
-            const curVisualScale = STATE.lockedTarget.mesh.scale.x || 1.0;
-            const baseSize = STATE.lockedTarget.size || 2.5;
-            const scale = baseSize * curVisualScale * 1.45;
-            const pulse = 1.0 + Math.sin(Date.now() * 0.008) * 0.08;
+            const curVisualScale = focusTarget.mesh.scale.x || 1.0;
+            const baseSize = focusTarget.size || 2.5;
+            // Frame cleanly outside the planet body (1.28x) without slicing the equator
+            const scale = baseSize * curVisualScale * 1.28;
+            const pulse = 1.0 + Math.sin(Date.now() * 0.005) * 0.03;
             targetReticleGroup.scale.set(scale * pulse, scale * pulse, scale * pulse);
 
-            if (targetReticleGroup.children[0]) targetReticleGroup.children[0].rotation.z += dt * 1.2;
-            if (targetReticleGroup.children[1]) targetReticleGroup.children[1].rotation.z -= dt * 0.8;
+            updateTargetReticleState(focusTarget, dt);
         }
     } else {
         if (targetReticleGroup) targetReticleGroup.visible = false;
@@ -341,10 +343,13 @@ export function updatePhysics(dt: number) {
     // 7. Update Collisions
     updateCollisions(dt);
 
-    // 8. Passive Engineer Repair (Requires Silicon Nanites)
-    if (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0 && STATE.siliconRes >= 0.15 && STATE.health < STATE.maxHealth) {
-        STATE.health = Math.min(STATE.maxHealth, STATE.health + STATE.crewBuffs.repairRate * dt);
-        STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.25 * dt);
+    // 8. Auto Nanite Hull Repair (Consumes Silicon Nanites)
+    const baseRepairRate = 0.25;
+    const engineerBonus = (STATE.crewBuffs && STATE.crewBuffs.repairRate > 0) ? STATE.crewBuffs.repairRate : 0;
+    const totalRepairRate = baseRepairRate + engineerBonus;
+    if (totalRepairRate > 0 && STATE.siliconRes >= 0.1 && STATE.health < STATE.maxHealth) {
+        STATE.health = Math.min(STATE.maxHealth, STATE.health + totalRepairRate * dt);
+        STATE.siliconRes = Math.max(0, STATE.siliconRes - 0.20 * dt);
     }
 }
 
