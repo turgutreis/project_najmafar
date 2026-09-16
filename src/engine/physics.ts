@@ -344,6 +344,38 @@ export function updatePhysics(dt: number) {
         STATE.playerVelocity.x += netGx * dt;
         STATE.playerVelocity.z += netGz * dt;
 
+        // 4.5 Organic Lateral Drift Damping (Bio-Manta Vectoring when Flight Assist is ON)
+        const isThrusting = Boolean(STATE.isThrusting || (STATE.keys && STATE.keys.w));
+        const isRetroBraking = Boolean(STATE.isRetroBraking || (STATE.keys && STATE.keys.s));
+
+        if (STATE.flightAssist && isThrusting) {
+            const forwardX = Math.cos(STATE.shipHeading);
+            const forwardZ = -Math.sin(STATE.shipHeading);
+
+            // Project current velocity onto the ship's forward nose axis
+            const vForward = STATE.playerVelocity.x * forwardX + STATE.playerVelocity.z * forwardZ;
+
+            // Lateral velocity component (perpendicular drift)
+            let latX = STATE.playerVelocity.x - forwardX * vForward;
+            let latZ = STATE.playerVelocity.z - forwardZ * vForward;
+
+            // Biological hydrodynamic grip: aggressively dampens lateral slide
+            const lateralDamping = 5.5;
+            const dampingFactor = Math.exp(-lateralDamping * dt);
+            latX *= dampingFactor;
+            latZ *= dampingFactor;
+
+            // Reconstruct velocity with attenuated lateral slip
+            STATE.playerVelocity.x = forwardX * vForward + latX;
+            STATE.playerVelocity.z = forwardZ * vForward + latZ;
+        }
+
+        // Active Bio-Brake enhancement on 'S' (Flared dorsal plates absorb forward momentum)
+        if (isRetroBraking) {
+            const brakeDamping = 3.2;
+            STATE.playerVelocity.multiplyScalar(Math.exp(-brakeDamping * dt));
+        }
+
         // 5. Apply Natural Vacuum Drag
         const effectiveDrag = STATE.currentDrag;
         STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));

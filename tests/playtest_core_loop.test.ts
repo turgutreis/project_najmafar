@@ -122,6 +122,8 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         STATE.scanProgress = 0;
         STATE.orbitLevel = 'solar';
         STATE.activeMoonOrbit = null;
+        STATE.systemArrivalActive = false;
+        STATE.systemDepartureActive = false;
 
         // Mock 3D Planet
         const meshGroup = new THREE.Group();
@@ -588,6 +590,46 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
                 expect(hasHabitable).toBe(false);
             }
         }
+    });
+
+    test("17. Organic bio-flight locomotion: Lateral drift damping redirects velocity when thrusting into a turn, and active bio-braking halts ship cleanly", () => {
+        // 1. Initial State: Ship flying along +X axis (Heading 0) at 20 LJ/s
+        STATE.shipHeading = 0; // Pointing +X
+        STATE.playerVelocity.set(20, 0, 0);
+        STATE.flightAssist = true;
+        STATE.isThrusting = true;
+        STATE.keys.w = true;
+        STATE.isRetroBraking = false;
+        STATE.keys.s = false;
+
+        // 2. Player turns 90 degrees left (heading = Math.PI / 2, pointing -Z axis)
+        STATE.shipHeading = Math.PI / 2;
+
+        // Initial velocity is perpendicular to the new heading (pure lateral drift!)
+        const initialLateral = STATE.playerVelocity.x;
+        expect(initialLateral).toBe(20);
+
+        // 3. Simulate multiple physics steps with thrusting along new heading
+        const dt = 0.1;
+        for (let step = 0; step < 5; step++) {
+            updatePhysics(dt);
+        }
+
+        // 4. Lateral velocity (along +X) must be dramatically reduced by organic hydrodynamic damping
+        expect(STATE.playerVelocity.x).toBeLessThan(5.0);
+
+        // 5. Test active bio-braking on 'S'
+        STATE.isThrusting = false;
+        STATE.keys.w = false;
+        STATE.isRetroBraking = true;
+        STATE.keys.s = true;
+
+        const speedBeforeBrake = STATE.playerVelocity.length();
+        updatePhysics(0.5);
+        const speedAfterBrake = STATE.playerVelocity.length();
+
+        // Must decelerate significantly
+        expect(speedAfterBrake).toBeLessThan(speedBeforeBrake * 0.4);
     });
 });
 

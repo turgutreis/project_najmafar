@@ -29401,7 +29401,9 @@ var STATE = {
   turnSpeed: 2.85,
   shipHeading: 0,
   shipAngularVelocity: 0,
-  flightAssist: false,
+  flightAssist: true,
+  isThrusting: false,
+  isRetroBraking: false,
   shipSpeed: 2,
   progradeVector: new Vector3(1, 0, 0),
   drag: 0.005,
@@ -31385,6 +31387,7 @@ function createAlienBioShip() {
   coreMesh.position.x = 0.5;
   group.add(coreMesh);
   const plateCount = 5;
+  const dorsalPlates = [];
   for (let i = 0;i < plateCount; i++) {
     const pSize = 1.6 - i * 0.22;
     const plateGeo = new CylinderGeometry(pSize * 0.65, pSize, 0.55, 12);
@@ -31393,6 +31396,7 @@ function createAlienBioShip() {
     const plate = new Mesh(plateGeo, dorsalPlateMat);
     plate.position.set(0.8 - i * 0.75, 0.28 - i * 0.03, 0);
     group.add(plate);
+    dorsalPlates.push(plate);
   }
   const nucGeo = new SphereGeometry(0.85, 24, 24);
   nucGeo.scale(1.4, 0.55, 0.75);
@@ -31483,6 +31487,14 @@ function createAlienBioShip() {
     tendrils.push(tendrilGroup);
   }
   group.scale.set(1.5, 1.5, 1.5);
+  const pulseRingsGroup = new Group;
+  if (scene) {
+    scene.add(pulseRingsGroup);
+  }
+  const activePulseRings = [];
+  const pulseRingGeo = new RingGeometry(0.8, 1.3, 32);
+  pulseRingGeo.rotateX(Math.PI / 2);
+  let pulseEmitTimer = 0;
   let animTime = 0;
   return {
     group,
@@ -31494,37 +31506,59 @@ function createAlienBioShip() {
     leftMandible,
     rightMandible,
     ventFlaps,
+    dorsalPlates,
     tendrils,
+    pulseRingsGroup,
     update: (dt) => {
       animTime += dt;
-      const breath = Math.sin(animTime * 2.5);
-      const coreScale = 1 + breath * 0.08;
+      if (scene && pulseRingsGroup.parent !== scene) {
+        scene.add(pulseRingsGroup);
+      }
+      const isThrusting = Boolean(STATE.isThrusting || STATE.keys && STATE.keys.w);
+      const isRetroBraking = Boolean(STATE.isRetroBraking || STATE.keys && STATE.keys.s);
+      const speedMagnitude = STATE.playerVelocity ? STATE.playerVelocity.length() : 0;
+      const breathSpeed = isThrusting ? 5.5 : 2.5;
+      const breath = Math.sin(animTime * breathSpeed);
+      const coreScale = 1 + breath * (isThrusting ? 0.14 : 0.08);
       psioCoreMesh.scale.set(1.4 * coreScale, 0.55 * coreScale, 0.75 * coreScale);
       let activeColor = 65416;
       if (STATE.health < 30) {
         activeColor = 16007006;
       } else if (STATE.telepathyActive) {
         activeColor = 11032055;
+      } else if (isThrusting) {
+        activeColor = 3718648;
       }
+      const targetEmissive = isThrusting ? 2.4 : isRetroBraking ? 1.8 : 1.1;
       psioCoreMesh.material.color.setHex(activeColor);
       psioCoreMesh.material.emissive.setHex(activeColor);
+      psioCoreMesh.material.emissiveIntensity = MathUtils.lerp(psioCoreMesh.material.emissiveIntensity, targetEmissive, Math.min(1, dt * 6));
       biolumMat.color.setHex(activeColor);
       biolumMat.emissive.setHex(activeColor);
-      const speedMagnitude = STATE.playerVelocity ? STATE.playerVelocity.length() : 0;
-      const wingFreq = 3.2 + Math.min(speedMagnitude * 0.15, 3.5);
-      const wingWave = Math.sin(animTime * wingFreq) * 0.22;
+      biolumMat.emissiveIntensity = MathUtils.lerp(biolumMat.emissiveIntensity, targetEmissive, Math.min(1, dt * 6));
+      const wingFreq = isThrusting ? 5.8 + Math.min(speedMagnitude * 0.22, 4) : 2.4 + Math.min(speedMagnitude * 0.1, 1.8);
+      const wingAmp = isThrusting ? 0.38 : isRetroBraking ? 0.12 : 0.2;
+      const wingWave = Math.sin(animTime * wingFreq) * wingAmp;
       leftWing.rotation.x = wingWave;
-      leftWing.rotation.z = Math.cos(animTime * wingFreq) * 0.08;
+      leftWing.rotation.z = Math.cos(animTime * wingFreq) * (isThrusting ? 0.14 : 0.06);
       rightWing.rotation.x = -wingWave;
-      rightWing.rotation.z = -Math.cos(animTime * wingFreq) * 0.08;
+      rightWing.rotation.z = -Math.cos(animTime * wingFreq) * (isThrusting ? 0.14 : 0.06);
+      const targetWingPitch = isRetroBraking ? -0.35 : isThrusting ? 0.1 : 0;
+      leftWing.rotation.y = MathUtils.lerp(leftWing.rotation.y, targetWingPitch, Math.min(1, dt * 8));
+      rightWing.rotation.y = MathUtils.lerp(rightWing.rotation.y, -targetWingPitch, Math.min(1, dt * 8));
+      dorsalPlates.forEach((plate, idx) => {
+        const targetRotZ = isRetroBraking ? -Math.PI / 2 - 0.38 * (idx + 1) * 0.18 : -Math.PI / 2;
+        const targetPosY = isRetroBraking ? 0.42 - idx * 0.02 : 0.28 - idx * 0.03;
+        plate.rotation.z = MathUtils.lerp(plate.rotation.z, targetRotZ, Math.min(1, dt * 9));
+        plate.position.y = MathUtils.lerp(plate.position.y, targetPosY, Math.min(1, dt * 9));
+      });
       const isAbducting = STATE.abductActive || STATE.extractingPlanet !== null;
       const mandAngle = isAbducting ? 0.45 + Math.sin(animTime * 8) * 0.15 : 0.08 + Math.sin(animTime * 1.5) * 0.05;
       leftMandible.rotation.y = mandAngle;
       rightMandible.rotation.y = -mandAngle;
-      const isThrusting = STATE.keys ? STATE.keys.w : false;
-      const targetVentAngle = isThrusting ? 0.55 : 0.08 + Math.sin(animTime * 2) * 0.04;
+      const targetVentAngle = isThrusting ? 0.65 : isRetroBraking ? -0.25 : 0.08 + Math.sin(animTime * 2) * 0.04;
       ventFlaps.forEach((f, idx) => {
-        f.rotation.z = targetVentAngle * (idx === 1 ? 1.3 : 0.9);
+        f.rotation.z = MathUtils.lerp(f.rotation.z, targetVentAngle * (idx === 1 ? 1.3 : 0.9), Math.min(1, dt * 8));
       });
       tendrils.forEach((tGroup, tIdx) => {
         let currentJoint = tGroup;
@@ -31532,9 +31566,10 @@ function createAlienBioShip() {
         while (currentJoint && currentJoint.children && currentJoint.children.length > 0) {
           const next = currentJoint.children[0];
           if (next) {
-            const phase = animTime * 4 + depth * 0.6 + tIdx * Math.PI;
-            next.rotation.z = Math.sin(phase) * 0.16;
-            next.rotation.y = Math.cos(phase * 0.8) * 0.12;
+            const phase = animTime * (isThrusting ? 7 : 4) + depth * 0.6 + tIdx * Math.PI;
+            const tendrilAmp = isThrusting ? 0.08 : 0.16;
+            next.rotation.z = Math.sin(phase) * tendrilAmp;
+            next.rotation.y = Math.cos(phase * 0.8) * (tendrilAmp * 0.7);
             currentJoint = next;
             depth++;
           } else {
@@ -31542,6 +31577,54 @@ function createAlienBioShip() {
           }
         }
       });
+      if (isThrusting) {
+        pulseEmitTimer += dt;
+        const emitInterval = Math.max(0.12, 0.22 - Math.min(speedMagnitude * 0.005, 0.08));
+        if (pulseEmitTimer >= emitInterval) {
+          pulseEmitTimer = 0;
+          const forwardX = Math.cos(STATE.shipHeading);
+          const forwardZ = -Math.sin(STATE.shipHeading);
+          const shipScale = STATE.playerGroup ? STATE.playerGroup.scale.x : 0.42;
+          const ringMat = new MeshBasicMaterial({
+            color: activeColor,
+            transparent: true,
+            opacity: 0.85,
+            side: DoubleSide,
+            blending: AdditiveBlending,
+            depthWrite: false
+          });
+          const ringMesh = new Mesh(pulseRingGeo, ringMat);
+          ringMesh.position.set(STATE.playerPosition.x - forwardX * (3 * shipScale), 0.15, STATE.playerPosition.z - forwardZ * (3 * shipScale));
+          ringMesh.scale.set(0.65, 0.65, 0.65);
+          const driftVel = new Vector3(-forwardX * 3.2, 0, -forwardZ * 3.2);
+          if (STATE.playerVelocity) {
+            driftVel.addScaledVector(STATE.playerVelocity, 0.15);
+          }
+          pulseRingsGroup.add(ringMesh);
+          activePulseRings.push({
+            mesh: ringMesh,
+            life: 0,
+            maxLife: 0.58,
+            velocity: driftVel,
+            mat: ringMat
+          });
+        }
+      }
+      for (let i = activePulseRings.length - 1;i >= 0; i--) {
+        const ring = activePulseRings[i];
+        ring.life += dt;
+        const progress = ring.life / ring.maxLife;
+        if (progress >= 1) {
+          pulseRingsGroup.remove(ring.mesh);
+          ring.mat.dispose();
+          activePulseRings.splice(i, 1);
+        } else {
+          const expandScale = MathUtils.lerp(0.65, 3.6, Math.pow(progress, 0.65));
+          ring.mesh.scale.set(expandScale, expandScale, expandScale);
+          ring.mesh.position.addScaledVector(ring.velocity, dt);
+          ring.mat.opacity = (1 - progress) * 0.85;
+        }
+      }
     }
   };
 }
@@ -38398,9 +38481,9 @@ function toggleFlightAssist() {
   if (dockBtn)
     dockBtn.classList.toggle("active", STATE.flightAssist);
   if (STATE.flightAssist) {
-    addLogEntry("SYSTEM", "\uD83D\uDD79️ Flug-Assistent AKTIVIERT: Automatische Trägheitsbremsen online.");
+    addLogEntry("SYSTEM", "\uD83D\uDD79️ Bio-Flug-Assistent AKTIVIERT: Organische Kurvenführung & Querkraftdämpfung online.");
   } else {
-    addLogEntry("SYSTEM", "\uD83C\uDF0C Newton'scher DRIFT-Modus: Trägheitsdämpfer deaktiviert. Reines Gleiten.");
+    addLogEntry("SYSTEM", "\uD83C\uDF0C Newton'scher DRIFT-Modus: Querkraftdämpfer deaktiviert. Reines Gleiten.");
   }
 }
 function processInput(dt) {
@@ -38483,6 +38566,8 @@ function processInput(dt) {
     }
     prevGpButtons = gp.buttons.map((b) => b ? b.pressed || b.value > 0.5 : false);
   }
+  STATE.isThrusting = isThrusting;
+  STATE.isRetroBraking = isRetroBraking;
   if (STATE.systemDepartureActive) {
     return;
   }
@@ -39000,6 +39085,25 @@ function updatePhysics(dt) {
     STATE.playerVelocity.addScaledVector(STATE.playerAcceleration, dt);
     STATE.playerVelocity.x += netGx * dt;
     STATE.playerVelocity.z += netGz * dt;
+    const isThrusting = Boolean(STATE.isThrusting || STATE.keys && STATE.keys.w);
+    const isRetroBraking = Boolean(STATE.isRetroBraking || STATE.keys && STATE.keys.s);
+    if (STATE.flightAssist && isThrusting) {
+      const forwardX = Math.cos(STATE.shipHeading);
+      const forwardZ = -Math.sin(STATE.shipHeading);
+      const vForward = STATE.playerVelocity.x * forwardX + STATE.playerVelocity.z * forwardZ;
+      let latX = STATE.playerVelocity.x - forwardX * vForward;
+      let latZ = STATE.playerVelocity.z - forwardZ * vForward;
+      const lateralDamping = 5.5;
+      const dampingFactor = Math.exp(-lateralDamping * dt);
+      latX *= dampingFactor;
+      latZ *= dampingFactor;
+      STATE.playerVelocity.x = forwardX * vForward + latX;
+      STATE.playerVelocity.z = forwardZ * vForward + latZ;
+    }
+    if (isRetroBraking) {
+      const brakeDamping = 3.2;
+      STATE.playerVelocity.multiplyScalar(Math.exp(-brakeDamping * dt));
+    }
     const effectiveDrag = STATE.currentDrag;
     STATE.playerVelocity.multiplyScalar(Math.exp(-effectiveDrag * dt));
     const pilotMult = STATE.crewBuffs ? STATE.crewBuffs.thrust || 1 : 1;

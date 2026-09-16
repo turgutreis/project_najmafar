@@ -312,6 +312,8 @@ export interface GameState {
     shipHeading: number;
     shipAngularVelocity: number;
     flightAssist: boolean;
+    isThrusting?: boolean;
+    isRetroBraking?: boolean;
     shipSpeed: number;
     progradeVector: THREE.Vector3;
     drag: number;

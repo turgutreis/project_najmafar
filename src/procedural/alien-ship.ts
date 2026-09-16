@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { STATE } from '../core/state';
+import { scene } from '../engine/scene';
 import { createAlienCarapaceTexture, createAlienWingTexture, createAlienVeinTexture } from './textures';
 
 export interface AlienShipController {
@@ -12,7 +13,9 @@ export interface AlienShipController {
     leftMandible: THREE.Group;
     rightMandible: THREE.Group;
     ventFlaps: THREE.Mesh[];
+    dorsalPlates: THREE.Mesh[];
     tendrils: THREE.Group[];
+    pulseRingsGroup: THREE.Group;
     update: (dt: number) => void;
 }
 
@@ -89,6 +92,7 @@ export function createAlienBioShip(): AlienShipController {
 
     // 4. Segmented Dorsal Carapace Plates (Trilobite spinal crests)
     const plateCount = 5;
+    const dorsalPlates: THREE.Mesh[] = [];
     for (let i = 0; i < plateCount; i++) {
         const pSize = 1.6 - i * 0.22;
         const plateGeo = new THREE.CylinderGeometry(pSize * 0.65, pSize, 0.55, 12);
@@ -97,6 +101,7 @@ export function createAlienBioShip(): AlienShipController {
         const plate = new THREE.Mesh(plateGeo, dorsalPlateMat);
         plate.position.set(0.8 - i * 0.75, 0.28 - i * 0.03, 0);
         group.add(plate);
+        dorsalPlates.push(plate);
     }
 
     // 5. Central Psionic Neural Core (Pulsing Bio-Heart)
@@ -220,6 +225,25 @@ export function createAlienBioShip(): AlienShipController {
     // Set prominent scale for clear, crisp visibility
     group.scale.set(1.5, 1.5, 1.5);
 
+    // 11. World-Space Bio-Pulse Rings (Spacetime Distortion Waves)
+    const pulseRingsGroup = new THREE.Group();
+    if (scene) {
+        scene.add(pulseRingsGroup);
+    }
+
+    interface BioPulseRing {
+        mesh: THREE.Mesh;
+        life: number;
+        maxLife: number;
+        velocity: THREE.Vector3;
+        mat: THREE.MeshBasicMaterial;
+    }
+
+    const activePulseRings: BioPulseRing[] = [];
+    const pulseRingGeo = new THREE.RingGeometry(0.8, 1.3, 32);
+    pulseRingGeo.rotateX(Math.PI / 2); // Flat on X-Z plane, directly facing top-down camera
+
+    let pulseEmitTimer = 0;
     let animTime = 0;
 
     return {
@@ -232,13 +256,25 @@ export function createAlienBioShip(): AlienShipController {
         leftMandible,
         rightMandible,
         ventFlaps,
+        dorsalPlates,
         tendrils,
+        pulseRingsGroup,
         update: (dt: number) => {
             animTime += dt;
 
-            // A. Breathing Psionic Core Pulse
-            const breath = Math.sin(animTime * 2.5);
-            const coreScale = 1.0 + breath * 0.08;
+            // Ensure pulseRingsGroup stays attached to scene
+            if (scene && pulseRingsGroup.parent !== scene) {
+                scene.add(pulseRingsGroup);
+            }
+
+            const isThrusting = Boolean(STATE.isThrusting || (STATE.keys && STATE.keys.w));
+            const isRetroBraking = Boolean(STATE.isRetroBraking || (STATE.keys && STATE.keys.s));
+            const speedMagnitude = STATE.playerVelocity ? STATE.playerVelocity.length() : 0;
+
+            // A. Breathing Psionic Core Pulse & Bioluminescent Intensity Flare
+            const breathSpeed = isThrusting ? 5.5 : 2.5;
+            const breath = Math.sin(animTime * breathSpeed);
+            const coreScale = 1.0 + breath * (isThrusting ? 0.14 : 0.08);
             psioCoreMesh.scale.set(1.4 * coreScale, 0.55 * coreScale, 0.75 * coreScale);
 
             // Dynamic color state
@@ -247,47 +283,74 @@ export function createAlienBioShip(): AlienShipController {
                 activeColor = 0xf43f5e; // Emergency red
             } else if (STATE.telepathyActive) {
                 activeColor = 0xa855f7; // Psionic trance violet
+            } else if (isThrusting) {
+                activeColor = 0x38bdf8; // Cyber cyan bio-flux on full thrust
             }
 
+            const targetEmissive = isThrusting ? 2.4 : (isRetroBraking ? 1.8 : 1.1);
             (psioCoreMesh.material as THREE.MeshPhysicalMaterial).color.setHex(activeColor);
             (psioCoreMesh.material as THREE.MeshPhysicalMaterial).emissive.setHex(activeColor);
+            (psioCoreMesh.material as THREE.MeshPhysicalMaterial).emissiveIntensity = THREE.MathUtils.lerp(
+                (psioCoreMesh.material as THREE.MeshPhysicalMaterial).emissiveIntensity,
+                targetEmissive,
+                Math.min(1.0, dt * 6.0)
+            );
+
             (biolumMat as THREE.MeshStandardMaterial).color.setHex(activeColor);
             (biolumMat as THREE.MeshStandardMaterial).emissive.setHex(activeColor);
+            (biolumMat as THREE.MeshStandardMaterial).emissiveIntensity = THREE.MathUtils.lerp(
+                (biolumMat as THREE.MeshStandardMaterial).emissiveIntensity,
+                targetEmissive,
+                Math.min(1.0, dt * 6.0)
+            );
 
-            // B. Undulating Wing Motion (Manta wave)
-            const speedMagnitude = STATE.playerVelocity ? STATE.playerVelocity.length() : 0;
-            const wingFreq = 3.2 + Math.min(speedMagnitude * 0.15, 3.5);
-            const wingWave = Math.sin(animTime * wingFreq) * 0.22;
+            // B. Undulating Wing Motion (Deep, powerful manta stroke on thrust; cupping on brake)
+            const wingFreq = isThrusting ? (5.8 + Math.min(speedMagnitude * 0.22, 4.0)) : (2.4 + Math.min(speedMagnitude * 0.1, 1.8));
+            const wingAmp = isThrusting ? 0.38 : (isRetroBraking ? 0.12 : 0.20);
+            const wingWave = Math.sin(animTime * wingFreq) * wingAmp;
 
             leftWing.rotation.x = wingWave;
-            leftWing.rotation.z = Math.cos(animTime * wingFreq) * 0.08;
+            leftWing.rotation.z = Math.cos(animTime * wingFreq) * (isThrusting ? 0.14 : 0.06);
 
             rightWing.rotation.x = -wingWave;
-            rightWing.rotation.z = -Math.cos(animTime * wingFreq) * 0.08;
+            rightWing.rotation.z = -Math.cos(animTime * wingFreq) * (isThrusting ? 0.14 : 0.06);
 
-            // C. Front Mandibles Swaying / Grasping
+            // Wing pitch angle: Cups backwards during retro-braking, angles sleek during forward thrust
+            const targetWingPitch = isRetroBraking ? -0.35 : (isThrusting ? 0.10 : 0.0);
+            leftWing.rotation.y = THREE.MathUtils.lerp(leftWing.rotation.y, targetWingPitch, Math.min(1.0, dt * 8.0));
+            rightWing.rotation.y = THREE.MathUtils.lerp(rightWing.rotation.y, -targetWingPitch, Math.min(1.0, dt * 8.0));
+
+            // C. Dorsal Carapace Plates Flaring (Biological Airbrakes on 'S')
+            dorsalPlates.forEach((plate, idx) => {
+                const targetRotZ = isRetroBraking ? (-Math.PI / 2 - 0.38 * (idx + 1) * 0.18) : -Math.PI / 2;
+                const targetPosY = isRetroBraking ? (0.42 - idx * 0.02) : (0.28 - idx * 0.03);
+                plate.rotation.z = THREE.MathUtils.lerp(plate.rotation.z, targetRotZ, Math.min(1.0, dt * 9.0));
+                plate.position.y = THREE.MathUtils.lerp(plate.position.y, targetPosY, Math.min(1.0, dt * 9.0));
+            });
+
+            // D. Front Mandibles Swaying / Grasping
             const isAbducting = STATE.abductActive || STATE.extractingPlanet !== null;
             const mandAngle = isAbducting ? 0.45 + Math.sin(animTime * 8.0) * 0.15 : 0.08 + Math.sin(animTime * 1.5) * 0.05;
             leftMandible.rotation.y = mandAngle;
             rightMandible.rotation.y = -mandAngle;
 
-            // D. Breathing Rear Vents (Flares open when thrusting)
-            const isThrusting = STATE.keys ? STATE.keys.w : false;
-            const targetVentAngle = isThrusting ? 0.55 : 0.08 + Math.sin(animTime * 2.0) * 0.04;
+            // E. Breathing Rear Vents (Flares wide on thrust)
+            const targetVentAngle = isThrusting ? 0.65 : (isRetroBraking ? -0.25 : 0.08 + Math.sin(animTime * 2.0) * 0.04);
             ventFlaps.forEach((f, idx) => {
-                f.rotation.z = targetVentAngle * (idx === 1 ? 1.3 : 0.9);
+                f.rotation.z = THREE.MathUtils.lerp(f.rotation.z, targetVentAngle * (idx === 1 ? 1.3 : 0.9), Math.min(1.0, dt * 8.0));
             });
 
-            // E. Twin Tail Tendril Physics Simulation
+            // F. Twin Tail Tendril Physics Simulation (Streams back tightly on thrust)
             tendrils.forEach((tGroup, tIdx) => {
                 let currentJoint: any = tGroup;
                 let depth = 0;
                 while (currentJoint && currentJoint.children && currentJoint.children.length > 0) {
                     const next = currentJoint.children[0];
                     if (next) {
-                        const phase = animTime * 4.0 + depth * 0.6 + tIdx * Math.PI;
-                        next.rotation.z = Math.sin(phase) * 0.16;
-                        next.rotation.y = Math.cos(phase * 0.8) * 0.12;
+                        const phase = animTime * (isThrusting ? 7.0 : 4.0) + depth * 0.6 + tIdx * Math.PI;
+                        const tendrilAmp = isThrusting ? 0.08 : 0.16;
+                        next.rotation.z = Math.sin(phase) * tendrilAmp;
+                        next.rotation.y = Math.cos(phase * 0.8) * (tendrilAmp * 0.7);
                         currentJoint = next;
                         depth++;
                     } else {
@@ -295,6 +358,68 @@ export function createAlienBioShip(): AlienShipController {
                     }
                 }
             });
+
+            // G. Spacetime Bio-Pulse Rings Emission (Quallen / Rochen-Pulse in Raumzeit)
+            if (isThrusting) {
+                pulseEmitTimer += dt;
+                const emitInterval = Math.max(0.12, 0.22 - Math.min(speedMagnitude * 0.005, 0.08));
+                if (pulseEmitTimer >= emitInterval) {
+                    pulseEmitTimer = 0;
+                    const forwardX = Math.cos(STATE.shipHeading);
+                    const forwardZ = -Math.sin(STATE.shipHeading);
+                    const shipScale = STATE.playerGroup ? STATE.playerGroup.scale.x : 0.42;
+
+                    const ringMat = new THREE.MeshBasicMaterial({
+                        color: activeColor,
+                        transparent: true,
+                        opacity: 0.85,
+                        side: THREE.DoubleSide,
+                        blending: THREE.AdditiveBlending,
+                        depthWrite: false
+                    });
+
+                    const ringMesh = new THREE.Mesh(pulseRingGeo, ringMat);
+                    // Spawn at rear vents
+                    ringMesh.position.set(
+                        STATE.playerPosition.x - forwardX * (3.0 * shipScale),
+                        0.15,
+                        STATE.playerPosition.z - forwardZ * (3.0 * shipScale)
+                    );
+                    ringMesh.scale.set(0.65, 0.65, 0.65);
+
+                    // Counter-drift velocity
+                    const driftVel = new THREE.Vector3(-forwardX * 3.2, 0, -forwardZ * 3.2);
+                    if (STATE.playerVelocity) {
+                        driftVel.addScaledVector(STATE.playerVelocity, 0.15);
+                    }
+
+                    pulseRingsGroup.add(ringMesh);
+                    activePulseRings.push({
+                        mesh: ringMesh,
+                        life: 0,
+                        maxLife: 0.58,
+                        velocity: driftVel,
+                        mat: ringMat
+                    });
+                }
+            }
+
+            // Update & expand active bio-pulse rings
+            for (let i = activePulseRings.length - 1; i >= 0; i--) {
+                const ring = activePulseRings[i];
+                ring.life += dt;
+                const progress = ring.life / ring.maxLife;
+                if (progress >= 1.0) {
+                    pulseRingsGroup.remove(ring.mesh);
+                    ring.mat.dispose();
+                    activePulseRings.splice(i, 1);
+                } else {
+                    const expandScale = THREE.MathUtils.lerp(0.65, 3.6, Math.pow(progress, 0.65));
+                    ring.mesh.scale.set(expandScale, expandScale, expandScale);
+                    ring.mesh.position.addScaledVector(ring.velocity, dt);
+                    ring.mat.opacity = (1.0 - progress) * 0.85;
+                }
+            }
         }
     };
 }
