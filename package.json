@@ -10,10 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "start": "bun run build:ts && electron .",
-    "build:mac": "bun run build:ts && electron-builder --mac",
-    "build:win": "bun run build:ts && electron-builder --win --x64",
-    "build:linux": "bun run build:ts && electron-builder --linux --x64",
-    "build:all": "bun run build:ts && electron-builder --win --mac --linux --x64"
+    "build:mac": "bun run build:ts && electron-builder --mac --publish never",
+    "build:win": "bun run build:ts && electron-builder --win --x64 --publish never",
+    "build:linux": "bun run build:ts && electron-builder --linux --x64 --publish never",
+    "build:all": "bun run build:ts && electron-builder --win --mac --linux --x64 --publish never"
   },
   "dependencies": {
     "three": "^0.185.1"
