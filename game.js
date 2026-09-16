@@ -35162,7 +35162,7 @@ function updateMinimap() {
         minimapCtx.fillText(probeLabel, sx + 7, sy + 3);
       } else if (source.type === "asteroid") {
         minimapCtx.fillStyle = source.resourceType === "bio" ? "#00ff88" : "#38bdf8";
-        minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
+        minimapCtx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
       }
     }
   });
@@ -36471,14 +36471,14 @@ function spawnPlanetsAndAsteroids() {
   });
   const asteroidsList = activeSystem.asteroids && activeSystem.asteroids.length > 0 ? activeSystem.asteroids : [];
   asteroidsList.forEach((ast) => {
-    const size = 0.4 + Math.random() * 0.45;
+    const size = 1.1 + Math.random() * 1.3;
     const geo = new DodecahedronGeometry(size, 1);
     const posAttr = geo.attributes.position;
     for (let j = 0;j < posAttr.count; j++) {
       const vx = posAttr.getX(j);
       const vy = posAttr.getY(j);
       const vz = posAttr.getZ(j);
-      const scale = 1 + (Math.random() - 0.5) * 0.3;
+      const scale = 1 + (Math.random() - 0.5) * 0.35;
       posAttr.setXYZ(j, vx * scale, vy * scale, vz * scale);
     }
     geo.computeVertexNormals();
@@ -36486,14 +36486,14 @@ function spawnPlanetsAndAsteroids() {
     const color = isOrganic ? 65416 : 440020;
     const mat = new MeshStandardMaterial({
       color,
-      roughness: 0.9,
-      metalness: 0.8,
+      roughness: 0.85,
+      metalness: 0.7,
       emissive: isOrganic ? 13073 : 8755
     });
     const mesh = new Mesh(geo, mat);
     mesh.position.set(ast.x * 2.2, (Math.random() - 0.5) * 1.5, ast.z * 2.2);
     scene.add(mesh);
-    const astRange = size * 2.8;
+    const astRange = size * 2.6;
     const sourceObj = {
       mesh,
       type: "asteroid",
@@ -36504,7 +36504,7 @@ function spawnPlanetsAndAsteroids() {
       position: mesh.position,
       isResource: true,
       resourceType: isOrganic ? "bio" : "silicon",
-      yield: isOrganic ? 15 : 20
+      yield: isOrganic ? Math.round(15 + size * 5) : Math.round(20 + size * 6)
     };
     STATE.gravitySources.push(sourceObj);
     STATE.asteroids.push(sourceObj);

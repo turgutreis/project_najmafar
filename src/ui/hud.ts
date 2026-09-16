@@ -270,7 +270,7 @@ export function updateMinimap() {
                 minimapCtx.fillText(probeLabel, sx + 7, sy + 3);
             } else if (source.type === 'asteroid') {
                 minimapCtx.fillStyle = source.resourceType === 'bio' ? '#00ff88' : '#38bdf8';
-                minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
+                minimapCtx.fillRect(sx - 1.5, sy - 1.5, 3, 3);
             }
         }
     });

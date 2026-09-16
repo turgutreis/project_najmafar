@@ -534,7 +534,7 @@ export function spawnPlanetsAndAsteroids() {
     // 3. Spawn Asteroids
     const asteroidsList = (activeSystem.asteroids && activeSystem.asteroids.length > 0) ? activeSystem.asteroids : [];
     asteroidsList.forEach((ast: any) => {
-        const size = 0.4 + Math.random() * 0.45;
+        const size = 1.1 + Math.random() * 1.3;
         const geo = new THREE.DodecahedronGeometry(size, 1);
 
         const posAttr = geo.attributes.position;
@@ -542,7 +542,7 @@ export function spawnPlanetsAndAsteroids() {
             const vx = posAttr.getX(j);
             const vy = posAttr.getY(j);
             const vz = posAttr.getZ(j);
-            const scale = 1 + (Math.random() - 0.5) * 0.3;
+            const scale = 1 + (Math.random() - 0.5) * 0.35;
             posAttr.setXYZ(j, vx * scale, vy * scale, vz * scale);
         }
         geo.computeVertexNormals();
@@ -552,8 +552,8 @@ export function spawnPlanetsAndAsteroids() {
 
         const mat = new THREE.MeshStandardMaterial({
             color: color,
-            roughness: 0.9,
-            metalness: 0.8,
+            roughness: 0.85,
+            metalness: 0.7,
             emissive: isOrganic ? 0x003311 : 0x002233
         });
 
@@ -561,7 +561,7 @@ export function spawnPlanetsAndAsteroids() {
         mesh.position.set(ast.x * 2.2, (Math.random() - 0.5) * 1.5, ast.z * 2.2);
         scene.add(mesh);
 
-        const astRange = size * 2.8;
+        const astRange = size * 2.6;
         const sourceObj: any = {
             mesh: mesh,
             type: 'asteroid',
@@ -572,7 +572,7 @@ export function spawnPlanetsAndAsteroids() {
             position: mesh.position,
             isResource: true,
             resourceType: isOrganic ? 'bio' : 'silicon',
-            yield: isOrganic ? 15 : 20
+            yield: isOrganic ? Math.round(15 + size * 5) : Math.round(20 + size * 6)
         };
         STATE.gravitySources.push(sourceObj);
 
