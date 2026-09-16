@@ -597,8 +597,8 @@ export function spawnVoyagerProbe() {
     }
 
     const voyagerController = createVoyagerProbeMesh(2.2);
-    // Position 35 units ahead of starting player pos (0, 0, 65)
-    voyagerController.group.position.set(18, 0, 88);
+    // Position deep in the outer interstellar void (~175 AE from star, 140+ AE from player spawn)
+    voyagerController.group.position.set(-110, 0, 135);
     scene.add(voyagerController.group);
 
     const probeObj: any = {

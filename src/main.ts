@@ -170,10 +170,14 @@ function setupMenuListeners() {
             if (STATE.universe) {
                 clearActiveSystem();
                 spawnPlanetsAndAsteroids();
-                STATE.playerPosition.set(0, 0, 65);
-                STATE.playerVelocity.set(0.8, 0, 0);
+                // Spawn on inbound approach vector facing star and inner planets
+                STATE.playerPosition.set(0, 0, 75);
+                STATE.playerVelocity.set(0, 0, -1.8);
+                STATE.shipHeading = -Math.PI / 2;
+                STATE.progradeVector.set(0, 0, -1);
                 if (STATE.playerGroup) {
-                    STATE.playerGroup.position.set(0, 0, 65);
+                    STATE.playerGroup.position.set(0, 0, 75);
+                    STATE.playerGroup.rotation.y = -Math.PI / 2;
                 }
             }
 
@@ -183,8 +187,8 @@ function setupMenuListeners() {
                 if (!isMusicPlaying() && !isMusicUserMuted()) {
                     toggleMusic(true);
                 }
-                addLogEntry("SYSTEM", "Biologisches Raumschiff erwacht. Psionische Sensoren online.");
-                addLogEntry("VOYAGER", "Schwaches Mikrowellen-Signal (1420 MHz) empfangen: VOYAGER 2 treibt im Sektor.");
+                addLogEntry("SYSTEM", "Biologisches Raumschiff erwacht. Sternensystem Perseus-Rand erreicht.");
+                addLogEntry("SYSTEM", "Psionische Sensoren online. Erkunde die Planeten des Systems nach Lebenszeichen.");
             });
         });
     }

@@ -509,8 +509,8 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         expect(STATE.voyagerSignalDetected).toBe(true);
         expect(STATE.ftueStep).toBe(2); // Advanced to Phase 3: Archaisches Signal
 
-        // 5. Player approaches Voyager 2 probe (position: 18, 0, 88)
-        STATE.playerPosition.set(18, 0, 80); // Distance = 8 AE (< 22 AE interaction range)
+        // 5. Player approaches Voyager 2 probe in the outer interstellar void
+        STATE.playerPosition.set(STATE.voyagerProbe.position.x, 0, STATE.voyagerProbe.position.z + 5);
         const dist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
         expect(dist).toBeLessThanOrEqual(22);
 
