@@ -32959,11 +32959,11 @@ function calculateCrewBuffs() {
   STATE.psionicRange = basePsio + STATE.crewBuffs.psionicBonus;
 }
 var STORY_LOGS = [
-  { time: 6, sender: "Capt. Miller", text: "Das Ding lebt! Wir sind im Bauch eines Lovecraft-Monsters gefangen! Wo ist die Luft?" },
-  { time: 24, sender: "Dr. Song", text: "Die Schiffswände atmen... Valeria, das Schiff absorbiert Weltraummaterie um sich zu heilen!" },
-  { time: 48, sender: "Valeria", text: "Jamal, guck dir die Messgeräte an. Die kosmische Hintergrundstrahlung... Die Expansion verlangsamt sich!" },
-  { time: 70, sender: "Jamal", text: "Das ist kein Fehler. Jemand macht eine kosmische Vollbremsung. Dieses Wesen... versucht es uns zu warnen?" },
-  { time: 95, sender: "Capt. Miller", text: "Es sendet Gedankenwellen. Die Software übersetzt es als... Dschinn? Es ist einsam." }
+  { time: 6, sender: "Capt. Miller", text: "Das Ding lebt! Wir sind im Bauch eines biologischen Leviathans gefangen... uralte Glyphen nennen es 'Najmafar'! Wo ist die Luft?" },
+  { time: 24, sender: "Dr. Song", text: "Die Schiffswände atmen... Valeria, die Najmafar absorbiert Weltraummaterie um sich zu heilen!" },
+  { time: 48, sender: "Valeria", text: "Jamal, guck dir die Messgeräte an. Die kosmische Hintergrundstrahlung... Die Sterne am Rand der Galaxie verglühen!" },
+  { time: 70, sender: "Jamal", text: "Das ist kein Messfehler. Die Entropie beschleunigt sich. Die Najmafar... reist sie dorthin, wo die Sterne sterben?" },
+  { time: 95, sender: "Capt. Miller", text: "Es sendet Gedankenwellen. Die Software übersetzt es als... Dschinn? Die Najmafar ist einsam." }
 ];
 var storyIndex = 0;
 var playTime = 0;

@@ -1,7 +1,7 @@
 {
   "name": "project-najmafar",
   "version": "0.11.0-alpha",
-  "description": "Najmafar: Pillars of The Void - A Cosmic Survival Game",
+  "description": "Where Stars Die: Pillars of The Void - A Cosmic Bio-Ship Survival Odyssey (Project Najmafar)",
   "author": "Ali Mazlum <a_mazlum@web.de>",
   "main": "main.js",
   "scripts": {
@@ -27,7 +27,7 @@
   },
   "build": {
     "appId": "com.najmafar.game",
-    "productName": "Najmafar - Pillars of The Void",
+    "productName": "Where Stars Die",
     "directories": {
       "output": "dist"
     },
@@ -47,7 +47,7 @@
       "category": "public.app-category.games"
     },
     "dmg": {
-      "title": "Project Najmafar Installer"
+      "title": "Where Stars Die Installer"
     },
     "win": {
       "target": [
