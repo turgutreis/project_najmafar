@@ -21,29 +21,29 @@ export const FTUE_DIRECTIVES: DirectiveItem[] = [
         id: 1,
         badge: "PHASE 2",
         title: "Archaisches Signal",
-        instruction: "Folge dem goldenen Signal zur Sonde & Scanne mit [F]",
-        hint: "Ein uraltes Artefakt (Voyager 2) treibt in ca. 35 AE Entfernung."
+        instruction: "Folge dem goldenen Radar-Signal & Scanne Voyager 2 mit [F] oder [Klick]",
+        hint: "Ein uraltes Artefakt (Voyager 2) treibt im Sektor. Halte Abstand < 22 AE."
     },
     {
         id: 2,
         badge: "PHASE 3",
-        title: "Nahrungsaufnahme",
-        instruction: "Fliege einen Planeten an & Halte [F] zum Spektralscan",
-        hint: "Finde Biomasse oder Silizium zur Selbstreparatur und Stärkung."
+        title: "Funke der Hoffnung",
+        instruction: "Öffne die Golden Record im Dialog & höre die Botschaft der Erde",
+        hint: "Die Klänge der Menschheit vertreiben die Depression (+50% Mentalkraft)."
     },
     {
         id: 3,
         badge: "PHASE 4",
-        title: "Gegen die Leere",
-        instruction: "Scanne eine bewohnte Welt & führe Entführung durch [F]",
-        hint: "Übernehme ein intelligentes Wesen in deine Kokon-Matrix, um Einsamkeit zu senken."
+        title: "Aufbruch ins Leben",
+        instruction: "Öffne die Sternenkarte [M] – Kurs auf System mit Biosphäre",
+        hint: "Im Startsystem gibt es kein Leben. Finde eine bewohnbare Welt im Nachbarsystem!"
     },
     {
         id: 4,
         badge: "PHASE 5",
-        title: "Die große Reise",
-        instruction: "Öffne die Sternenkarte mit [M] – Kurs zum Kern",
-        hint: "Sammle Chronos-Fragmente und erreiche Sagittarius A*."
+        title: "Der erste Wirt",
+        instruction: "Scanne eine bewohnte Welt & führe eine Entführung [F] durch",
+        hint: "Übernehme ein intelligentes Wesen in deine Kokon-Matrix gegen die Einsamkeit."
     }
 ];
 

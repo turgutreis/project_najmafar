@@ -29469,6 +29469,7 @@ var STATE = {
   systemDepartureTarget: null,
   voyagerProbe: null,
   voyagerScanned: false,
+  voyagerDialogSeen: false,
   ftueStep: 0,
   ftueCompleted: false
 };
@@ -32122,12 +32123,23 @@ function createVoyagerProbeMesh(size = 2.2) {
   signalHalo.position.set(0, size * 1.15, 0);
   signalHalo.rotation.x = Math.PI / 2;
   group.add(signalHalo);
+  const hitboxGeo = new SphereGeometry(size * 3.2, 12, 12);
+  const hitboxMat = new MeshBasicMaterial({ visible: false });
+  const hitboxMesh = new Mesh(hitboxGeo, hitboxMat);
+  hitboxMesh.isVoyagerHitbox = true;
+  group.isVoyagerGroup = true;
+  group.add(hitboxMesh);
+  const driftVelocity = new Vector3(0.35, 0, 0.2);
   return {
     group,
+    hitboxMesh,
     goldenRecord,
     beaconLight,
     signalHalo,
+    driftVelocity,
     update: (dt) => {
+      group.position.x += driftVelocity.x * dt;
+      group.position.z += driftVelocity.z * dt;
       group.rotation.y += 0.05 * dt;
       group.rotation.x += 0.02 * dt;
       goldenRecord.rotation.y += 1.2 * dt;
@@ -34282,29 +34294,29 @@ var FTUE_DIRECTIVES = [
     id: 1,
     badge: "PHASE 2",
     title: "Archaisches Signal",
-    instruction: "Folge dem goldenen Signal zur Sonde & Scanne mit [F]",
-    hint: "Ein uraltes Artefakt (Voyager 2) treibt in ca. 35 AE Entfernung."
+    instruction: "Folge dem goldenen Radar-Signal & Scanne Voyager 2 mit [F] oder [Klick]",
+    hint: "Ein uraltes Artefakt (Voyager 2) treibt im Sektor. Halte Abstand < 22 AE."
   },
   {
     id: 2,
     badge: "PHASE 3",
-    title: "Nahrungsaufnahme",
-    instruction: "Fliege einen Planeten an & Halte [F] zum Spektralscan",
-    hint: "Finde Biomasse oder Silizium zur Selbstreparatur und Stärkung."
+    title: "Funke der Hoffnung",
+    instruction: "Öffne die Golden Record im Dialog & höre die Botschaft der Erde",
+    hint: "Die Klänge der Menschheit vertreiben die Depression (+50% Mentalkraft)."
   },
   {
     id: 3,
     badge: "PHASE 4",
-    title: "Gegen die Leere",
-    instruction: "Scanne eine bewohnte Welt & führe Entführung durch [F]",
-    hint: "Übernehme ein intelligentes Wesen in deine Kokon-Matrix, um Einsamkeit zu senken."
+    title: "Aufbruch ins Leben",
+    instruction: "Öffne die Sternenkarte [M] – Kurs auf System mit Biosphäre",
+    hint: "Im Startsystem gibt es kein Leben. Finde eine bewohnbare Welt im Nachbarsystem!"
   },
   {
     id: 4,
     badge: "PHASE 5",
-    title: "Die große Reise",
-    instruction: "Öffne die Sternenkarte mit [M] – Kurs zum Kern",
-    hint: "Sammle Chronos-Fragmente und erreiche Sagittarius A*."
+    title: "Der erste Wirt",
+    instruction: "Scanne eine bewohnte Welt & führe eine Entführung [F] durch",
+    hint: "Übernehme ein intelligentes Wesen in deine Kokon-Matrix gegen die Einsamkeit."
   }
 ];
 var isCollapsed = false;
@@ -35091,15 +35103,50 @@ function updateMinimap() {
           minimapCtx.arc(sx, sy, planetEntry && planetEntry.isMoon ? 2 : 3.5, 0, Math.PI * 2);
           minimapCtx.fill();
         }
+      } else if (source.type === "voyager_probe" || source.isVoyager) {
+        minimapCtx.fillStyle = "#fbbf24";
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, 4, 0, Math.PI * 2);
+        minimapCtx.fill();
+        const wavePulse = 5 + Math.sin(Date.now() * 0.007) * 3;
+        minimapCtx.strokeStyle = "rgba(251, 191, 36, 0.75)";
+        minimapCtx.lineWidth = 1.2;
+        minimapCtx.beginPath();
+        minimapCtx.arc(sx, sy, wavePulse, 0, Math.PI * 2);
+        minimapCtx.stroke();
+        minimapCtx.fillStyle = "#fbbf24";
+        minimapCtx.font = "8px Orbitron, sans-serif";
+        minimapCtx.fillText("\uD83D\uDCE1 VOYAGER 2", sx + 7, sy + 3);
       } else if (source.type === "asteroid") {
         minimapCtx.fillStyle = source.resourceType === "bio" ? "#00ff88" : "#38bdf8";
         minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
       }
     }
   });
-  if (STATE.lockedTarget && STATE.lockedTarget.source) {
-    const dx = STATE.lockedTarget.source.position.x - STATE.playerPosition.x;
-    const dz = STATE.lockedTarget.source.position.z - STATE.playerPosition.z;
+  if (STATE.voyagerProbe && STATE.voyagerProbe.position) {
+    const vx = STATE.voyagerProbe.position.x - STATE.playerPosition.x;
+    const vz = STATE.voyagerProbe.position.z - STATE.playerPosition.z;
+    const vDist = Math.hypot(vx, vz);
+    if (vDist >= range) {
+      const angle = Math.atan2(vz, vx);
+      const edgeRadius = radius - 3;
+      const ex = cx + Math.cos(angle) * edgeRadius;
+      const ey = cy + Math.sin(angle) * edgeRadius;
+      minimapCtx.fillStyle = "#fbbf24";
+      minimapCtx.beginPath();
+      minimapCtx.arc(ex, ey, 3.5, 0, Math.PI * 2);
+      minimapCtx.fill();
+      minimapCtx.strokeStyle = "rgba(251, 191, 36, 0.8)";
+      minimapCtx.lineWidth = 1;
+      minimapCtx.beginPath();
+      minimapCtx.arc(ex, ey, 5.5, 0, Math.PI * 2);
+      minimapCtx.stroke();
+    }
+  }
+  const lockedTargetPos = STATE.lockedTarget ? STATE.lockedTarget.position || (STATE.lockedTarget.source ? STATE.lockedTarget.source.position : null) : null;
+  if (lockedTargetPos) {
+    const dx = lockedTargetPos.x - STATE.playerPosition.x;
+    const dz = lockedTargetPos.z - STATE.playerPosition.z;
     const dist = Math.sqrt(dx * dx + dz * dz);
     if (dist < range) {
       const sx = cx + dx * invRangeRadius;
@@ -37843,6 +37890,73 @@ function toggleOptionsModal() {
   }
 }
 
+// src/ui/voyager-dialog.ts
+var isDialogOpen = false;
+function isVoyagerDialogOpen() {
+  return isDialogOpen;
+}
+function openVoyagerDialog() {
+  const modal = document.getElementById("voyager-dialog-modal");
+  if (!modal)
+    return;
+  isDialogOpen = true;
+  modal.style.display = "flex";
+  try {
+    playGoldenRecordAudio();
+  } catch (e) {
+    console.warn("Could not play Golden Record audio immediately", e);
+  }
+  if (!STATE.voyagerDialogSeen) {
+    STATE.voyagerDialogSeen = true;
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 50);
+    STATE.loneliness = Math.max(10, STATE.loneliness - 40);
+    updateHUDStats();
+    addLogEntry("SYSTEM", "PSIONISCHER DURCHBRUCH: Die Botschaft der Menschheit schenkt der Najmafar neue Hoffnung.");
+    addLogEntry("CREW", "Gedanken-Resonanz: Die tiefe seelische Kälte weicht. Deine Lebensgeister erwachen!");
+    addLogEntry("NAV", "Interstellare Vektoren kalibriert: Kurs auf habitable Biosphäre im Nachbarsystem freigeschaltet.");
+  }
+  advanceFtueStep(3);
+}
+function closeVoyagerDialog() {
+  const modal = document.getElementById("voyager-dialog-modal");
+  if (!modal)
+    return;
+  isDialogOpen = false;
+  modal.style.display = "none";
+}
+function initVoyagerDialogListeners() {
+  const closeBtn = document.getElementById("close-voyager-dialog-btn");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeVoyagerDialog();
+    });
+  }
+  const replayBtn = document.getElementById("voyager-replay-audio-btn");
+  if (replayBtn) {
+    replayBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      playGoldenRecordAudio();
+      addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoge Aufnahme erneut abgespielt.");
+    });
+  }
+  const mapBtn = document.getElementById("voyager-open-map-btn");
+  if (mapBtn) {
+    mapBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeVoyagerDialog();
+      toggleGalaxyMap();
+    });
+  }
+  window.addEventListener("keydown", (e) => {
+    if (!isDialogOpen)
+      return;
+    if (e.key === "Escape") {
+      closeVoyagerDialog();
+    }
+  });
+}
+
 // src/input/controls.ts
 var raycaster = new Raycaster;
 var mouseVec = new Vector2;
@@ -37887,6 +38001,8 @@ function setupControls() {
     }
     if (key === "escape") {
       closeDiplomacyComms();
+      if (isVoyagerDialogOpen())
+        closeVoyagerDialog();
       if (isOptionsModalOpen())
         closeOptionsModal();
       if (isMapOpen())
@@ -37898,23 +38014,8 @@ function setupControls() {
       if (STATE.voyagerProbe && STATE.voyagerProbe.position) {
         const voyagerDist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
         if (voyagerDist <= 22) {
-          if (!STATE.voyagerScanned) {
-            STATE.voyagerScanned = true;
-            playGoldenRecordAudio();
-            STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
-            STATE.loneliness = Math.max(0, STATE.loneliness - 25);
-            advanceFtueStep(2);
-            addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
-            addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
-            addLogEntry("SYSTEM", "Mentale Feldstärke um +30% regeneriert. Die Einsamkeit weicht.");
-            addLogEntry("NAV", "Interstellare Vektoren freigeschaltet. Nächste habitable Welten auf Sensorik markiert.");
-            const hint = document.getElementById("flight-controls-hint");
-            if (hint)
-              hint.classList.add("hidden");
-            return;
-          } else {
-            addLogEntry("SYSTEM", "Voyager 2: Die Golden Record rotiert leise im Äther. Resonanz stabil.");
-          }
+          handleVoyagerScan();
+          return;
         }
       }
       if (STATE.nearestPlanet) {
@@ -38033,6 +38134,26 @@ function setupControls() {
     STATE.targetCameraHeight = Math.max(30, Math.min(130, (STATE.targetCameraHeight || 65) + delta));
   }, { passive: true });
 }
+function handleVoyagerScan() {
+  if (!STATE.voyagerProbe)
+    return;
+  const wasScanned = STATE.voyagerScanned;
+  STATE.voyagerScanned = true;
+  playGoldenRecordAudio();
+  if (!wasScanned) {
+    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
+    STATE.loneliness = Math.max(10, STATE.loneliness - 25);
+    advanceFtueStep(2);
+    addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
+    addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
+    addLogEntry("SYSTEM", "Mentale Feldstärke regeneriert. Hoffnung durchströmt dein neuronales Netzwerk.");
+    addLogEntry("NAV", "Interstellare Vektoren freigeschaltet. Nächste habitable Welten auf Sensorik markiert.");
+    const hint = document.getElementById("flight-controls-hint");
+    if (hint)
+      hint.classList.add("hidden");
+  }
+  openVoyagerDialog();
+}
 function setupTargetRaycasting() {
   let pointerDownPos = { x: 0, y: 0 };
   window.addEventListener("pointerdown", (e) => {
@@ -38043,7 +38164,7 @@ function setupTargetRaycasting() {
     const dy = e.clientY - pointerDownPos.y;
     if (Math.sqrt(dx * dx + dy * dy) > 8)
       return;
-    if (e.target && e.target.closest("#hud-container, #galaxy-map-overlay, #main-menu, #how-to-play-modal")) {
+    if (e.target && e.target.closest("#hud-container, #galaxy-map-overlay, #main-menu, #how-to-play-modal, #voyager-dialog-modal, #diplomacy-overlay")) {
       return;
     }
     if (!STATE.gameStarted || !renderer || !camera)
@@ -38056,9 +38177,35 @@ function setupTargetRaycasting() {
       if (p.mesh)
         targetMeshes.push(p.mesh);
     });
+    if (STATE.voyagerProbe && STATE.voyagerProbe.mesh) {
+      targetMeshes.push(STATE.voyagerProbe.mesh);
+    }
     const intersects2 = raycaster.intersectObjects(targetMeshes, true);
     if (intersects2.length > 0) {
       const hitObject = intersects2[0].object;
+      let hitVoyager = false;
+      let curObj = hitObject;
+      while (curObj) {
+        if (curObj === (STATE.voyagerProbe ? STATE.voyagerProbe.mesh : null) || curObj.isVoyagerHitbox || curObj.isVoyagerGroup) {
+          hitVoyager = true;
+          break;
+        }
+        curObj = curObj.parent;
+      }
+      if (hitVoyager && STATE.voyagerProbe) {
+        setLockedTarget(STATE.voyagerProbe);
+        if (STATE.voyagerScanned) {
+          openVoyagerDialog();
+        } else {
+          const dist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
+          if (dist <= 22) {
+            handleVoyagerScan();
+          } else {
+            addLogEntry("VOYAGER", `Archaische Sonde (Voyager 2) anvisiert (${dist.toFixed(1)} AE). Fliege heran (< 22 AE) und drücke [F] zum Scannen.`);
+          }
+        }
+        return;
+      }
       const target = activePlanets.find((p) => {
         if (p.mesh === hitObject || p.bodyMesh === hitObject)
           return true;
@@ -38093,8 +38240,12 @@ function setLockedTarget(target) {
   resetDismissedScanner();
   STATE.lockedTarget = target;
   playLockOnSound();
-  const typeLabel = target.isMoon ? `Mond (${target.type})` : target.type;
-  addLogEntry("SYSTEM", `\uD83C\uDFAF ZIEL MANUELL FIXIERT: ${target.name} [${typeLabel}]. Scanner ausgerichtet.`);
+  if (target.isVoyager) {
+    addLogEntry("SYSTEM", `\uD83C\uDFAF ZIEL FIXIERT: Voyager 2 [Archaische Raumsonde]. 1420 MHz Radiobarke erfasst.`);
+  } else {
+    const typeLabel = target.isMoon ? `Mond (${target.type})` : target.type;
+    addLogEntry("SYSTEM", `\uD83C\uDFAF ZIEL MANUELL FIXIERT: ${target.name} [${typeLabel}]. Scanner ausgerichtet.`);
+  }
   updateTargetLockBadgeUI();
 }
 function clearLockedTarget() {
@@ -39174,6 +39325,7 @@ function init() {
   initGameOverUI();
   initPrologueListeners();
   initDirectivesHUD();
+  initVoyagerDialogListeners();
   renderCrewUI();
   updateMutationUI();
   checkUniverseData();

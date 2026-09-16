@@ -144,6 +144,7 @@ export const STATE: GameState = {
     // Voyager 2 & First-Time User Experience (FTUE)
     voyagerProbe: null,
     voyagerScanned: false,
+    voyagerDialogSeen: false,
     ftueStep: 0,
     ftueCompleted: false
 };

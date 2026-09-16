@@ -249,6 +249,81 @@
         </div>
     </div>
 
+    <!-- Voyager 2 Golden Record Dialogue / Lore Modal Overlay -->
+    <div id="voyager-dialog-modal" class="modal-overlay" style="display: none; z-index: 1070;">
+        <div class="voyager-dialog-content glass-panel">
+            <header class="voyager-dialog-header">
+                <div class="voyager-header-left">
+                    <span class="voyager-emblem">📀</span>
+                    <div>
+                        <h2>VOYAGER 2 &bull; DIE GOLDEN RECORD</h2>
+                        <span class="voyager-header-sub">Interstellare Raumsonde (NASA, 1977) &bull; 1420 MHz Analog-Frequenz</span>
+                    </div>
+                </div>
+                <div class="voyager-header-right">
+                    <span class="voyager-status-badge">✨ DEKODIERT</span>
+                    <button id="close-voyager-dialog-btn" class="close-diplo-btn">✕</button>
+                </div>
+            </header>
+
+            <div class="voyager-dialog-body">
+                <div class="voyager-left-col">
+                    <div class="golden-record-display">
+                        <div class="golden-record-disc">
+                            <div class="golden-record-center-label">
+                                <span>THE SOUNDS<br>OF EARTH</span>
+                            </div>
+                            <div class="golden-record-grooves"></div>
+                        </div>
+                        <button id="voyager-replay-audio-btn" class="voyager-audio-btn">
+                            <span>🔊</span> Botschaft der Erde anhören
+                        </button>
+                    </div>
+
+                    <div class="voyager-pulsar-box">
+                        <div class="voyager-pulsar-title">🧭 Sternenkarte & Pulsar-Vektoren</div>
+                        <p class="voyager-pulsar-desc">
+                            Die goldene Gravur codiert die Position eines gelben Zwergsterns (Sonne) anhand von 14 interstellaren Pulsarfrequenzen.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="voyager-right-col">
+                    <div class="voyager-quote-card">
+                        <div class="quote-header">📜 Archivierte Botschaft an den Kosmos:</div>
+                        <blockquote class="voyager-quote-text">
+                            „Dies ist ein Geschenk einer kleinen, weit entfernten Welt. Eine Aufzeichnung unserer Klänge, unserer Wissenschaft, unserer Bilder, unserer Musik, unserer Gedanken und unserer Gefühle. Wir versuchen, unsere Zeit zu überleben, damit wir vielleicht in der euren leben dürfen.“
+                        </blockquote>
+                        <div class="quote-author">— Jimmy Carter, Präsident der Vereinigten Staaten von Amerika (1977)</div>
+                        <div class="quote-audio-snippet">♫ „Hello from the children of planet Earth.“</div>
+                    </div>
+
+                    <div class="voyager-awakening-box">
+                        <h4>🧬 Der Funke der Hoffnung (Najmafar Erwachen)</h4>
+                        <p>
+                            Ein wohliger Schauer durchfährt deine lebendige Zellhülle. Nach Äonen des einsamen Driftens durch tote Asche-Systeme ist dies der erste greifbare Beweis: <em>Du bist nicht allein.</em> 
+                            Wesen aus Fleisch und Geist reichten einst hoffnungsvoll ihre Hände ins All.
+                        </p>
+                        <div class="voyager-buffs-row">
+                            <span class="buff-tag green">⚡ +50% Mentalkraft</span>
+                            <span class="buff-tag cyan">💫 Einsamkeit sinkt massiv (-40%)</span>
+                            <span class="buff-tag amber">🪐 Sternenroute freigeschaltet</span>
+                        </div>
+                    </div>
+
+                    <div class="voyager-next-step-box">
+                        <div class="next-step-text">
+                            ⚠️ <strong>Keine Biosphäre in diesem System:</strong> Dieses Rand-System beherbergt nur lebloses Felsgestein. Nutze die Sternenkarte, um das benachbarte System <em>Perseus Minor</em> mit einer lebendigen Zivilisation anzusteuern!
+                        </div>
+                        <button id="voyager-open-map-btn" class="voyager-map-action-btn">
+                            🌌 Sternenkarte öffnen [M] – Kurs setzen
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Game Over Modal Overlay -->
     <div id="game-over-modal" class="modal-overlay"
         style="display: none; z-index: 1200; background: rgba(3, 7, 18, 0.88); backdrop-filter: blur(8px);">

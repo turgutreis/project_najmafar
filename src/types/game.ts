@@ -394,7 +394,8 @@ export interface GameState {
     // Voyager 2 & First-Time User Experience (FTUE)
     voyagerProbe?: any | null;
     voyagerScanned?: boolean;
-    ftueStep?: number; // 0: Move, 1: Voyager, 2: Planet Scan, 3: Abduct, 4: Complete/Map
+    voyagerDialogSeen?: boolean;
+    ftueStep?: number;
     ftueCompleted?: boolean;
 }
 

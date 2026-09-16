@@ -13,6 +13,7 @@ import { openDiplomacyComms, closeDiplomacyComms } from '../systems/diplomacy';
 import { toggleDeckModal, isDeckOpen } from '../ui/deck';
 import { toggleOptionsModal, isOptionsModalOpen, closeOptionsModal } from '../ui/options';
 import { advanceFtueStep } from '../ui/directives';
+import { openVoyagerDialog, closeVoyagerDialog, isVoyagerDialogOpen } from '../ui/voyager-dialog';
 
 const raycaster = new THREE.Raycaster();
 const mouseVec = new THREE.Vector2();
@@ -59,6 +60,7 @@ export function setupControls() {
         }
         if (key === 'escape') {
             closeDiplomacyComms();
+            if (isVoyagerDialogOpen()) closeVoyagerDialog();
             if (isOptionsModalOpen()) closeOptionsModal();
             if (isMapOpen()) toggleGalaxyMap();
             if (isDeckOpen()) toggleDeckModal(false);
@@ -68,23 +70,8 @@ export function setupControls() {
             if (STATE.voyagerProbe && STATE.voyagerProbe.position) {
                 const voyagerDist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
                 if (voyagerDist <= 22) {
-                    if (!STATE.voyagerScanned) {
-                        STATE.voyagerScanned = true;
-                        playGoldenRecordAudio();
-                        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
-                        STATE.loneliness = Math.max(0, STATE.loneliness - 25);
-                        advanceFtueStep(2);
-                        addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
-                        addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
-                        addLogEntry("SYSTEM", "Mentale Feldstärke um +30% regeneriert. Die Einsamkeit weicht.");
-                        addLogEntry("NAV", "Interstellare Vektoren freigeschaltet. Nächste habitable Welten auf Sensorik markiert.");
-
-                        const hint = document.getElementById('flight-controls-hint');
-                        if (hint) hint.classList.add('hidden');
-                        return;
-                    } else {
-                        addLogEntry("SYSTEM", "Voyager 2: Die Golden Record rotiert leise im Äther. Resonanz stabil.");
-                    }
+                    handleVoyagerScan();
+                    return;
                 }
             }
 
@@ -212,6 +199,28 @@ export function setupControls() {
     }, { passive: true });
 }
 
+export function handleVoyagerScan() {
+    if (!STATE.voyagerProbe) return;
+    const wasScanned = STATE.voyagerScanned;
+    STATE.voyagerScanned = true;
+    playGoldenRecordAudio();
+
+    if (!wasScanned) {
+        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
+        STATE.loneliness = Math.max(10, STATE.loneliness - 25);
+        advanceFtueStep(2);
+        addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
+        addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
+        addLogEntry("SYSTEM", "Mentale Feldstärke regeneriert. Hoffnung durchströmt dein neuronales Netzwerk.");
+        addLogEntry("NAV", "Interstellare Vektoren freigeschaltet. Nächste habitable Welten auf Sensorik markiert.");
+
+        const hint = document.getElementById('flight-controls-hint');
+        if (hint) hint.classList.add('hidden');
+    }
+
+    openVoyagerDialog();
+}
+
 export function setupTargetRaycasting() {
     let pointerDownPos = { x: 0, y: 0 };
     window.addEventListener('pointerdown', (e) => {
@@ -223,7 +232,7 @@ export function setupTargetRaycasting() {
         const dy = e.clientY - pointerDownPos.y;
         if (Math.sqrt(dx * dx + dy * dy) > 8) return;
 
-        if (e.target && (e.target as HTMLElement).closest('#hud-container, #galaxy-map-overlay, #main-menu, #how-to-play-modal')) {
+        if (e.target && (e.target as HTMLElement).closest('#hud-container, #galaxy-map-overlay, #main-menu, #how-to-play-modal, #voyager-dialog-modal, #diplomacy-overlay')) {
             return;
         }
 
@@ -238,10 +247,40 @@ export function setupTargetRaycasting() {
         activePlanets.forEach(p => {
             if (p.mesh) targetMeshes.push(p.mesh);
         });
+        if (STATE.voyagerProbe && STATE.voyagerProbe.mesh) {
+            targetMeshes.push(STATE.voyagerProbe.mesh);
+        }
 
         const intersects = raycaster.intersectObjects(targetMeshes, true);
         if (intersects.length > 0) {
             const hitObject = intersects[0].object;
+
+            // Check if Voyager 2 was clicked
+            let hitVoyager = false;
+            let curObj: THREE.Object3D | null = hitObject;
+            while (curObj) {
+                if (curObj === (STATE.voyagerProbe ? STATE.voyagerProbe.mesh : null) || (curObj as any).isVoyagerHitbox || (curObj as any).isVoyagerGroup) {
+                    hitVoyager = true;
+                    break;
+                }
+                curObj = curObj.parent;
+            }
+
+            if (hitVoyager && STATE.voyagerProbe) {
+                setLockedTarget(STATE.voyagerProbe);
+                if (STATE.voyagerScanned) {
+                    openVoyagerDialog();
+                } else {
+                    const dist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
+                    if (dist <= 22) {
+                        handleVoyagerScan();
+                    } else {
+                        addLogEntry("VOYAGER", `Archaische Sonde (Voyager 2) anvisiert (${dist.toFixed(1)} AE). Fliege heran (< 22 AE) und drücke [F] zum Scannen.`);
+                    }
+                }
+                return;
+            }
+
             const target = activePlanets.find(p => {
                 if (p.mesh === hitObject || p.bodyMesh === hitObject) return true;
                 let cur: THREE.Object3D | null = hitObject;
@@ -276,8 +315,12 @@ export function setLockedTarget(target: any) {
     resetDismissedScanner();
     STATE.lockedTarget = target;
     playLockOnSound();
-    const typeLabel = target.isMoon ? `Mond (${target.type})` : target.type;
-    addLogEntry("SYSTEM", `🎯 ZIEL MANUELL FIXIERT: ${target.name} [${typeLabel}]. Scanner ausgerichtet.`);
+    if (target.isVoyager) {
+        addLogEntry("SYSTEM", `🎯 ZIEL FIXIERT: Voyager 2 [Archaische Raumsonde]. 1420 MHz Radiobarke erfasst.`);
+    } else {
+        const typeLabel = target.isMoon ? `Mond (${target.type})` : target.type;
+        addLogEntry("SYSTEM", `🎯 ZIEL MANUELL FIXIERT: ${target.name} [${typeLabel}]. Scanner ausgerichtet.`);
+    }
     updateTargetLockBadgeUI();
 }
 

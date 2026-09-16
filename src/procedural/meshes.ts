@@ -717,12 +717,28 @@ export function createVoyagerProbeMesh(size: number = 2.2) {
     signalHalo.rotation.x = Math.PI / 2;
     group.add(signalHalo);
 
+    // H. Clickable Raycast Hitbox (Enlarged invisible sphere for easy clicking in 3D space)
+    const hitboxGeo = new THREE.SphereGeometry(size * 3.2, 12, 12);
+    const hitboxMat = new THREE.MeshBasicMaterial({ visible: false });
+    const hitboxMesh = new THREE.Mesh(hitboxGeo, hitboxMat);
+    (hitboxMesh as any).isVoyagerHitbox = true;
+    (group as any).isVoyagerGroup = true;
+    group.add(hitboxMesh);
+
+    const driftVelocity = new THREE.Vector3(0.35, 0, 0.2);
+
     return {
         group,
+        hitboxMesh,
         goldenRecord,
         beaconLight,
         signalHalo,
+        driftVelocity,
         update: (dt: number) => {
+            // Slow interstellar drift through the void
+            group.position.x += driftVelocity.x * dt;
+            group.position.z += driftVelocity.z * dt;
+
             // Gentle spatial drift / rotation
             group.rotation.y += 0.05 * dt;
             group.rotation.x += 0.02 * dt;

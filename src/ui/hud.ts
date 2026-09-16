@@ -250,6 +250,23 @@ export function updateMinimap() {
                     minimapCtx.arc(sx, sy, planetEntry && planetEntry.isMoon ? 2 : 3.5, 0, Math.PI * 2);
                     minimapCtx.fill();
                 }
+            } else if ((source as any).type === 'voyager_probe' || (source as any).isVoyager) {
+                // Bright golden radar ping with pulsing wave ring
+                minimapCtx.fillStyle = '#fbbf24';
+                minimapCtx.beginPath();
+                minimapCtx.arc(sx, sy, 4.0, 0, Math.PI * 2);
+                minimapCtx.fill();
+
+                const wavePulse = 5.0 + Math.sin(Date.now() * 0.007) * 3.0;
+                minimapCtx.strokeStyle = 'rgba(251, 191, 36, 0.75)';
+                minimapCtx.lineWidth = 1.2;
+                minimapCtx.beginPath();
+                minimapCtx.arc(sx, sy, wavePulse, 0, Math.PI * 2);
+                minimapCtx.stroke();
+
+                minimapCtx.fillStyle = '#fbbf24';
+                minimapCtx.font = '8px Orbitron, sans-serif';
+                minimapCtx.fillText("📡 VOYAGER 2", sx + 7, sy + 3);
             } else if (source.type === 'asteroid') {
                 minimapCtx.fillStyle = source.resourceType === 'bio' ? '#00ff88' : '#38bdf8';
                 minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
@@ -257,10 +274,35 @@ export function updateMinimap() {
         }
     });
 
+    // Off-screen Voyager 2 pointer on radar perimeter
+    if (STATE.voyagerProbe && STATE.voyagerProbe.position) {
+        const vx = STATE.voyagerProbe.position.x - STATE.playerPosition.x;
+        const vz = STATE.voyagerProbe.position.z - STATE.playerPosition.z;
+        const vDist = Math.hypot(vx, vz);
+        if (vDist >= range) {
+            const angle = Math.atan2(vz, vx);
+            const edgeRadius = radius - 3;
+            const ex = cx + Math.cos(angle) * edgeRadius;
+            const ey = cy + Math.sin(angle) * edgeRadius;
+
+            minimapCtx.fillStyle = '#fbbf24';
+            minimapCtx.beginPath();
+            minimapCtx.arc(ex, ey, 3.5, 0, Math.PI * 2);
+            minimapCtx.fill();
+
+            minimapCtx.strokeStyle = 'rgba(251, 191, 36, 0.8)';
+            minimapCtx.lineWidth = 1;
+            minimapCtx.beginPath();
+            minimapCtx.arc(ex, ey, 5.5, 0, Math.PI * 2);
+            minimapCtx.stroke();
+        }
+    }
+
     // Draw Locked Target Indicator
-    if (STATE.lockedTarget && STATE.lockedTarget.source) {
-        const dx = STATE.lockedTarget.source.position.x - STATE.playerPosition.x;
-        const dz = STATE.lockedTarget.source.position.z - STATE.playerPosition.z;
+    const lockedTargetPos = STATE.lockedTarget ? ((STATE.lockedTarget as any).position || ((STATE.lockedTarget as any).source ? (STATE.lockedTarget as any).source.position : null)) : null;
+    if (lockedTargetPos) {
+        const dx = lockedTargetPos.x - STATE.playerPosition.x;
+        const dz = lockedTargetPos.z - STATE.playerPosition.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
         if (dist < range) {
             const sx = cx + dx * invRangeRadius;

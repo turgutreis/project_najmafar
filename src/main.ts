@@ -21,6 +21,7 @@ import { toggleMusic, isMusicPlaying, isMusicUserMuted, initThreeAudio, attachSh
 import { initGameOverUI, updateExplosionEffects } from './engine/game-over';
 import { triggerPrologueSequence, initPrologueListeners } from './ui/prologue';
 import { initDirectivesHUD, renderDirectives, updateVoyagerHUDTracker } from './ui/directives';
+import { initVoyagerDialogListeners } from './ui/voyager-dialog';
 
 let lastTime = 0;
 let voyagerBeaconTimer = 0;
@@ -139,6 +140,7 @@ function init() {
     initGameOverUI();
     initPrologueListeners();
     initDirectivesHUD();
+    initVoyagerDialogListeners();
     renderCrewUI();
     updateMutationUI();
 

@@ -97,6 +97,8 @@ import { updatePhysics } from '../src/engine/physics';
 import { generateProceduralCandidates, getCrewReactiveThought } from '../src/systems/crew-generation';
 import { calculateCrewBuffs, updateCrewSimulation, rejuvenateCrewMember } from '../src/systems/crew';
 import { advanceFtueStep, FTUE_DIRECTIVES } from '../src/ui/directives';
+import { openVoyagerDialog, closeVoyagerDialog, isVoyagerDialogOpen } from '../src/ui/voyager-dialog';
+import { handleVoyagerScan, setLockedTarget } from '../src/input/controls';
 
 describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
     let mockPlanet: any;
@@ -515,6 +517,59 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         expect(STATE.ftueStep).toBe(5);
         expect(STATE.ftueCompleted).toBe(true);
     });
+
+    test("16. Voyager 2 drifts in vacuum, raycasting locks target, scan opens Golden Record dialog with emotional hope buff, and starting system is sterile", () => {
+        // 1. Reset state
+        STATE.ftueStep = 0;
+        STATE.ftueCompleted = false;
+        STATE.voyagerScanned = false;
+        STATE.voyagerDialogSeen = false;
+        STATE.mentalEnergy = 40;
+        STATE.loneliness = 85;
+        STATE.currentSystemId = 1;
+
+        // 2. Spawn probe and check initial position
+        spawnVoyagerProbe();
+        expect(STATE.voyagerProbe).not.toBeNull();
+        const startX = STATE.voyagerProbe.position.x;
+        const startZ = STATE.voyagerProbe.position.z;
+
+        // 3. Test slow drift movement (update with dt = 2.0s)
+        STATE.voyagerProbe.update(2.0);
+        expect(STATE.voyagerProbe.position.x).toBeGreaterThan(startX);
+        expect(STATE.voyagerProbe.position.z).toBeGreaterThan(startZ);
+
+        // 4. Test targeting via setLockedTarget
+        setLockedTarget(STATE.voyagerProbe);
+        expect(STATE.lockedTarget).toBe(STATE.voyagerProbe);
+
+        // 5. Test scan interaction & dialog opening
+        STATE.playerPosition.set(STATE.voyagerProbe.position.x, 0, STATE.voyagerProbe.position.z + 5);
+        handleVoyagerScan();
+
+        expect(STATE.voyagerScanned).toBe(true);
+        expect(isVoyagerDialogOpen()).toBe(true);
+        expect(STATE.voyagerDialogSeen).toBe(true);
+
+        // Hope buff: mental energy increased and loneliness decreased
+        expect(STATE.mentalEnergy).toBeGreaterThan(70);
+        expect(STATE.loneliness).toBeLessThanOrEqual(45);
+        expect(STATE.ftueStep).toBe(3);
+
+        // 6. Test closing dialog
+        closeVoyagerDialog();
+        expect(isVoyagerDialogOpen()).toBe(false);
+
+        // 7. Verify starting system (Perseus-Rand) has NO habitable worlds
+        if (STATE.universe && STATE.universe.systems && STATE.universe.systems[1]) {
+            const sys1 = STATE.universe.systems[1];
+            if (sys1 && Array.isArray(sys1.planets)) {
+                const hasHabitable = sys1.planets.some((p: any) => p.type === 'Habitable');
+                expect(hasHabitable).toBe(false);
+            }
+        }
+    });
 });
+
 
 
