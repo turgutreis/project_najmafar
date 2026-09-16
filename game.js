@@ -29468,6 +29468,7 @@ var STATE = {
   systemDepartureDirection: new Vector3(1, 0, 0),
   systemDepartureTarget: null,
   voyagerProbe: null,
+  voyagerSignalDetected: false,
   voyagerScanned: false,
   voyagerDialogSeen: false,
   ftueStep: 0,
@@ -34293,27 +34294,34 @@ var FTUE_DIRECTIVES = [
   {
     id: 1,
     badge: "PHASE 2",
-    title: "Archaisches Signal",
-    instruction: "Folge dem goldenen Radar-Signal & Scanne Voyager 2 mit [F] oder [Klick]",
-    hint: "Ein uraltes Artefakt (Voyager 2) treibt im Sektor. Halte Abstand < 22 AE."
+    title: "System-Erkundung",
+    instruction: "Erkunde das Sternensystem: Fliege zu einem Planeten & scanne ihn mit [F]",
+    hint: "Halte Orbit-Abstand (< 25 AE) zu einem Himmelskörper und prüfe ihn auf Biosignaturen."
   },
   {
     id: 2,
     badge: "PHASE 3",
+    title: "Archaisches Signal",
+    instruction: "Folge dem goldenen Radar-Signal & Scanne Voyager 2 mit [F] oder [Klick]",
+    hint: "Ein uraltes künstliches Artefakt treibt am Systemrand. Halte Abstand < 22 AE."
+  },
+  {
+    id: 3,
+    badge: "PHASE 4",
     title: "Funke der Hoffnung",
     instruction: "Öffne die Golden Record im Dialog & höre die Botschaft der Erde",
     hint: "Die Klänge der Menschheit vertreiben die Depression (+50% Mentalkraft)."
   },
   {
-    id: 3,
-    badge: "PHASE 4",
+    id: 4,
+    badge: "PHASE 5",
     title: "Aufbruch ins Leben",
     instruction: "Öffne die Sternenkarte [M] – Kurs auf System mit Biosphäre",
     hint: "Im Startsystem gibt es kein Leben. Finde eine bewohnbare Welt im Nachbarsystem!"
   },
   {
-    id: 4,
-    badge: "PHASE 5",
+    id: 5,
+    badge: "PHASE 6",
     title: "Der erste Wirt",
     instruction: "Scanne eine bewohnte Welt & führe eine Entführung [F] durch",
     hint: "Übernehme ein intelligentes Wesen in deine Kokon-Matrix gegen die Einsamkeit."
@@ -34376,11 +34384,23 @@ function advanceFtueStep(targetStep) {
     renderDirectives();
   }
 }
+function triggerVoyagerSignalDetection() {
+  if (STATE.voyagerSignalDetected)
+    return;
+  STATE.voyagerSignalDetected = true;
+  try {
+    playVoyagerBeaconPing();
+  } catch (e) {}
+  addLogEntry("NAJMAFAR", "„Dieses System ist erstarrt... Niemand ist hier. Nur die Kälte der Leere.“");
+  addLogEntry("SENSOR", "ANOMALIE DETEKTIERT: Schwache elektromagnetische Trägerwelle (1420 MHz) empfangen!");
+  addLogEntry("SYSTEM", "Archaische Signalquelle am Systemrand geortet. VOYAGER 2 auf Radar und Nav-Tracker aufgeschaltet!");
+  advanceFtueStep(2);
+}
 function updateVoyagerHUDTracker() {
   const trackerEl = document.getElementById("voyager-nav-tracker");
   if (!trackerEl)
     return;
-  if (!STATE.voyagerProbe || STATE.voyagerScanned) {
+  if (!STATE.voyagerProbe || !STATE.voyagerSignalDetected || STATE.voyagerScanned) {
     trackerEl.style.display = "none";
     return;
   }
@@ -34537,8 +34557,14 @@ function completeScanning() {
     addLogEntry("SYSTEM", `Spektral-Scan von ${planet.name} abgeschlossen! Atmosphärendatenbank aktualisiert (+15 Bio | +10 Silizium).`);
     if (planet.attributes.species && planet.attributes.species.population > 0) {
       addLogEntry("SYSTEM", `PSIO-DETEKTION: Intelligentes Leben (${planet.attributes.species.name}) auf ${planet.name} entdeckt! Psionischer Transfer [F] bereit.`);
+    } else {
+      addLogEntry("SENSOR", `Atmosphärendaten: ${planet.attributes.atmos || "Vakuum"} | Bio: ${planet.attributes.bio || "Steril"}. Keine Lebensformen detektiert.`);
     }
-    advanceFtueStep(3);
+    if ((STATE.ftueStep || 0) <= 1 && !STATE.voyagerSignalDetected) {
+      triggerVoyagerSignalDetection();
+    } else if ((STATE.ftueStep || 0) === 1) {
+      advanceFtueStep(2);
+    }
     updateScannerUI(planet, 10);
   }
   STATE.scanningPlanet = null;
@@ -35103,7 +35129,7 @@ function updateMinimap() {
           minimapCtx.arc(sx, sy, planetEntry && planetEntry.isMoon ? 2 : 3.5, 0, Math.PI * 2);
           minimapCtx.fill();
         }
-      } else if (source.type === "voyager_probe" || source.isVoyager) {
+      } else if ((source.type === "voyager_probe" || source.isVoyager) && STATE.voyagerSignalDetected) {
         minimapCtx.fillStyle = "#fbbf24";
         minimapCtx.beginPath();
         minimapCtx.arc(sx, sy, 4, 0, Math.PI * 2);
@@ -35123,7 +35149,7 @@ function updateMinimap() {
       }
     }
   });
-  if (STATE.voyagerProbe && STATE.voyagerProbe.position) {
+  if (STATE.voyagerSignalDetected && !STATE.voyagerScanned && STATE.voyagerProbe && STATE.voyagerProbe.position) {
     const vx = STATE.voyagerProbe.position.x - STATE.playerPosition.x;
     const vz = STATE.voyagerProbe.position.z - STATE.playerPosition.z;
     const vDist = Math.hypot(vx, vz);
@@ -37680,7 +37706,7 @@ function completeAbduction() {
         STATE.loneliness = Math.min(STATE.loneliness, instantTarget);
         addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.roleName || candidate.role}) in Kokon-Kammer transferiert.`);
         addLogEntry("CREW", `Traum-Matrix initialisiert: ${candidate.name} lindert deine Einsamkeit! (${Math.round(STATE.loneliness)}% Einsamkeit)`);
-        advanceFtueStep(4);
+        advanceFtueStep(6);
         renderCrewUI();
         updatePartyGrid();
         updateHUDStats();
@@ -37915,7 +37941,6 @@ function openVoyagerDialog() {
     addLogEntry("CREW", "Gedanken-Resonanz: Die tiefe seelische Kälte weicht. Deine Lebensgeister erwachen!");
     addLogEntry("NAV", "Interstellare Vektoren kalibriert: Kurs auf habitable Biosphäre im Nachbarsystem freigeschaltet.");
   }
-  advanceFtueStep(3);
 }
 function closeVoyagerDialog() {
   const modal = document.getElementById("voyager-dialog-modal");
@@ -37923,6 +37948,7 @@ function closeVoyagerDialog() {
     return;
   isDialogOpen = false;
   modal.style.display = "none";
+  advanceFtueStep(4);
 }
 function initVoyagerDialogListeners() {
   const closeBtn = document.getElementById("close-voyager-dialog-btn");
@@ -38139,11 +38165,12 @@ function handleVoyagerScan() {
     return;
   const wasScanned = STATE.voyagerScanned;
   STATE.voyagerScanned = true;
+  STATE.voyagerSignalDetected = true;
   playGoldenRecordAudio();
   if (!wasScanned) {
     STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
     STATE.loneliness = Math.max(10, STATE.loneliness - 25);
-    advanceFtueStep(2);
+    advanceFtueStep(3);
     addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
     addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
     addLogEntry("SYSTEM", "Mentale Feldstärke regeneriert. Hoffnung durchströmt dein neuronales Netzwerk.");
@@ -39088,20 +39115,8 @@ var PROLOGUE_STORY = [
     heartbeat: true
   },
   {
-    text: "Und doch... durchdringt ein schwaches, archaisches Echo das Vakuum.",
-    subtext: "1420 MHz Mikrowellenstrahlung. Künstlich geordnet.",
-    duration: 4200,
-    heartbeat: false
-  },
-  {
-    text: "Ein Signal aus einer fernen Epoche.",
-    subtext: "Eine goldene Botschaft, driftend im interstellaren Eis.",
-    duration: 4000,
-    heartbeat: true
-  },
-  {
     text: "Erwache, Najmafar.",
-    subtext: "Folge dem Signal der Kinder der Erde.",
+    subtext: "Erkunde dieses Sternensystem. Durchbrich das ewige Schweigen.",
     duration: 3800,
     heartbeat: true
   }
@@ -39276,7 +39291,7 @@ function animate(time) {
     updateTrajectory();
     updateMinimap();
     updateVoyagerHUDTracker();
-    if (STATE.voyagerProbe && !STATE.voyagerScanned) {
+    if (STATE.voyagerProbe && STATE.voyagerSignalDetected && !STATE.voyagerScanned) {
       const probeDist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
       if (probeDist < 85) {
         voyagerBeaconTimer += dt;

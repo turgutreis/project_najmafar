@@ -7,7 +7,7 @@ import { openDiplomacyComms } from '../systems/diplomacy';
 import { createScanVisuals, updateScanVisuals, removeScanVisuals } from '../procedural/meshes';
 import { SpeciesData, PlanetAttributes } from '../types/game';
 import { generateProceduralCandidates } from './crew-generation';
-import { advanceFtueStep } from '../ui/directives';
+import { advanceFtueStep, triggerVoyagerSignalDetection } from '../ui/directives';
 
 export function generatePlanetAttributes(p: any) {
     if (p.atmos && p.temp && p.bio && p.res && (p.type !== 'Habitable' || (p.species && p.species.candidates && p.species.candidates.length > 0))) {
@@ -190,9 +190,17 @@ export function completeScanning() {
 
         if (planet.attributes.species && planet.attributes.species.population > 0) {
             addLogEntry("SYSTEM", `PSIO-DETEKTION: Intelligentes Leben (${planet.attributes.species.name}) auf ${planet.name} entdeckt! Psionischer Transfer [F] bereit.`);
+        } else {
+            addLogEntry("SENSOR", `Atmosphärendaten: ${planet.attributes.atmos || 'Vakuum'} | Bio: ${planet.attributes.bio || 'Steril'}. Keine Lebensformen detektiert.`);
         }
 
-        advanceFtueStep(3);
+        // If in FTUE early exploration phases, first planet scan triggers archaic Voyager signal detection
+        if ((STATE.ftueStep || 0) <= 1 && !STATE.voyagerSignalDetected) {
+            triggerVoyagerSignalDetection();
+        } else if ((STATE.ftueStep || 0) === 1) {
+            advanceFtueStep(2);
+        }
+
         updateScannerUI(planet, 10);
     }
 

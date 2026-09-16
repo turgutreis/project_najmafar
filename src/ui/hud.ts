@@ -250,7 +250,7 @@ export function updateMinimap() {
                     minimapCtx.arc(sx, sy, planetEntry && planetEntry.isMoon ? 2 : 3.5, 0, Math.PI * 2);
                     minimapCtx.fill();
                 }
-            } else if ((source as any).type === 'voyager_probe' || (source as any).isVoyager) {
+            } else if (((source as any).type === 'voyager_probe' || (source as any).isVoyager) && STATE.voyagerSignalDetected) {
                 // Bright golden radar ping with pulsing wave ring
                 minimapCtx.fillStyle = '#fbbf24';
                 minimapCtx.beginPath();
@@ -275,7 +275,7 @@ export function updateMinimap() {
     });
 
     // Off-screen Voyager 2 pointer on radar perimeter
-    if (STATE.voyagerProbe && STATE.voyagerProbe.position) {
+    if (STATE.voyagerSignalDetected && !STATE.voyagerScanned && STATE.voyagerProbe && STATE.voyagerProbe.position) {
         const vx = STATE.voyagerProbe.position.x - STATE.playerPosition.x;
         const vz = STATE.voyagerProbe.position.z - STATE.playerPosition.z;
         const vDist = Math.hypot(vx, vz);

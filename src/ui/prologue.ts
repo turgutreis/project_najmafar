@@ -27,20 +27,8 @@ const PROLOGUE_STORY: PrologueLine[] = [
         heartbeat: true
     },
     {
-        text: "Und doch... durchdringt ein schwaches, archaisches Echo das Vakuum.",
-        subtext: "1420 MHz Mikrowellenstrahlung. Künstlich geordnet.",
-        duration: 4200,
-        heartbeat: false
-    },
-    {
-        text: "Ein Signal aus einer fernen Epoche.",
-        subtext: "Eine goldene Botschaft, driftend im interstellaren Eis.",
-        duration: 4000,
-        heartbeat: true
-    },
-    {
         text: "Erwache, Najmafar.",
-        subtext: "Folge dem Signal der Kinder der Erde.",
+        subtext: "Erkunde dieses Sternensystem. Durchbrich das ewige Schweigen.",
         duration: 3800,
         heartbeat: true
     }

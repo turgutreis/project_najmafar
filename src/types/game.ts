@@ -393,6 +393,7 @@ export interface GameState {
 
     // Voyager 2 & First-Time User Experience (FTUE)
     voyagerProbe?: any | null;
+    voyagerSignalDetected?: boolean;
     voyagerScanned?: boolean;
     voyagerDialogSeen?: boolean;
     ftueStep?: number;

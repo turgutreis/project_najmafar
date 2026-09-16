@@ -1,5 +1,6 @@
 import { STATE } from '../core/state';
 import { addLogEntry } from './hud';
+import { playVoyagerBeaconPing } from '../engine/audio';
 
 export interface DirectiveItem {
     id: number;
@@ -20,27 +21,34 @@ export const FTUE_DIRECTIVES: DirectiveItem[] = [
     {
         id: 1,
         badge: "PHASE 2",
-        title: "Archaisches Signal",
-        instruction: "Folge dem goldenen Radar-Signal & Scanne Voyager 2 mit [F] oder [Klick]",
-        hint: "Ein uraltes Artefakt (Voyager 2) treibt im Sektor. Halte Abstand < 22 AE."
+        title: "System-Erkundung",
+        instruction: "Erkunde das Sternensystem: Fliege zu einem Planeten & scanne ihn mit [F]",
+        hint: "Halte Orbit-Abstand (< 25 AE) zu einem Himmelskörper und prüfe ihn auf Biosignaturen."
     },
     {
         id: 2,
         badge: "PHASE 3",
+        title: "Archaisches Signal",
+        instruction: "Folge dem goldenen Radar-Signal & Scanne Voyager 2 mit [F] oder [Klick]",
+        hint: "Ein uraltes künstliches Artefakt treibt am Systemrand. Halte Abstand < 22 AE."
+    },
+    {
+        id: 3,
+        badge: "PHASE 4",
         title: "Funke der Hoffnung",
         instruction: "Öffne die Golden Record im Dialog & höre die Botschaft der Erde",
         hint: "Die Klänge der Menschheit vertreiben die Depression (+50% Mentalkraft)."
     },
     {
-        id: 3,
-        badge: "PHASE 4",
+        id: 4,
+        badge: "PHASE 5",
         title: "Aufbruch ins Leben",
         instruction: "Öffne die Sternenkarte [M] – Kurs auf System mit Biosphäre",
         hint: "Im Startsystem gibt es kein Leben. Finde eine bewohnbare Welt im Nachbarsystem!"
     },
     {
-        id: 4,
-        badge: "PHASE 5",
+        id: 5,
+        badge: "PHASE 6",
         title: "Der erste Wirt",
         instruction: "Scanne eine bewohnte Welt & führe eine Entführung [F] durch",
         hint: "Übernehme ein intelligentes Wesen in deine Kokon-Matrix gegen die Einsamkeit."
@@ -118,12 +126,27 @@ export function advanceFtueStep(targetStep: number) {
     }
 }
 
+export function triggerVoyagerSignalDetection() {
+    if (STATE.voyagerSignalDetected) return;
+    STATE.voyagerSignalDetected = true;
+
+    try {
+        playVoyagerBeaconPing();
+    } catch (e) {}
+
+    addLogEntry("NAJMAFAR", "„Dieses System ist erstarrt... Niemand ist hier. Nur die Kälte der Leere.“");
+    addLogEntry("SENSOR", "ANOMALIE DETEKTIERT: Schwache elektromagnetische Trägerwelle (1420 MHz) empfangen!");
+    addLogEntry("SYSTEM", "Archaische Signalquelle am Systemrand geortet. VOYAGER 2 auf Radar und Nav-Tracker aufgeschaltet!");
+
+    advanceFtueStep(2);
+}
+
 export function updateVoyagerHUDTracker() {
     const trackerEl = document.getElementById('voyager-nav-tracker');
     if (!trackerEl) return;
 
-    // Show tracker if Voyager is in system, not yet scanned or active step is 1
-    if (!STATE.voyagerProbe || STATE.voyagerScanned) {
+    // Show tracker only if Voyager is in system, signal has been detected, and not yet scanned
+    if (!STATE.voyagerProbe || !STATE.voyagerSignalDetected || STATE.voyagerScanned) {
         trackerEl.style.display = 'none';
         return;
     }

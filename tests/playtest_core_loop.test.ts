@@ -470,10 +470,11 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         expect(crewNames.length).toBe(uniqueCrewNames.size);
     });
 
-    test("15. Voyager 2 probe spawns in starting system, enables proximity scan [F], restores mental energy and advances FTUE onboarding", () => {
+    test("15. Starting system exploration requires planet scan before detecting Voyager 2 signal and advancing FTUE onboarding", () => {
         // 1. Initial State: Player starts at step 0
         STATE.ftueStep = 0;
         STATE.ftueCompleted = false;
+        STATE.voyagerSignalDetected = false;
         STATE.voyagerScanned = false;
         STATE.mentalEnergy = 50;
         STATE.loneliness = 80;
@@ -485,36 +486,51 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         expect(STATE.voyagerProbe.isVoyager).toBe(true);
         expect(STATE.voyagerProbe.name).toContain("Voyager 2");
         expect(STATE.gravitySources.some((s: any) => s.isVoyager)).toBe(true);
+        expect(STATE.voyagerSignalDetected).toBe(false);
 
-        // 3. Player moves -> FTUE advances to Phase 1 (Move accomplished -> Phase 2: Voyager)
+        // 3. Player moves -> FTUE advances to Phase 2: System-Erkundung
         advanceFtueStep(1);
         expect(STATE.ftueStep).toBe(1);
+        expect(STATE.voyagerSignalDetected).toBe(false);
 
-        // 4. Player approaches Voyager 2 probe (position: 18, 0, 88)
+        // 4. Player scans a sterile planet in the starting system
+        const sterilePlanet: any = {
+            name: "Perseus-Erwachen Prime A",
+            size: 3.0,
+            scanned: false,
+            mesh: { position: new THREE.Vector3(12, 0, 12), scale: { x: 1 } },
+            attributes: { atmos: "Dünnes CO2", bio: "Steril", res: "Silizium" }
+        };
+        STATE.scanningPlanet = sterilePlanet;
+        completeScanning();
+
+        // Planet scan reveals sterile nature & triggers archaic Voyager signal detection
+        expect(sterilePlanet.scanned).toBe(true);
+        expect(STATE.voyagerSignalDetected).toBe(true);
+        expect(STATE.ftueStep).toBe(2); // Advanced to Phase 3: Archaisches Signal
+
+        // 5. Player approaches Voyager 2 probe (position: 18, 0, 88)
         STATE.playerPosition.set(18, 0, 80); // Distance = 8 AE (< 22 AE interaction range)
         const dist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
         expect(dist).toBeLessThanOrEqual(22);
 
-        // Simulate interaction with [F]
-        STATE.voyagerScanned = true;
-        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
-        STATE.loneliness = Math.max(0, STATE.loneliness - 25);
-        advanceFtueStep(2);
-
+        // Scan Voyager 2 with [F]
+        handleVoyagerScan();
         expect(STATE.voyagerScanned).toBe(true);
-        expect(STATE.mentalEnergy).toBe(80);
-        expect(STATE.loneliness).toBe(55);
-        expect(STATE.ftueStep).toBe(2);
+        expect(STATE.ftueStep).toBe(3); // Advanced to Phase 4: Funke der Hoffnung
+        expect(isVoyagerDialogOpen()).toBe(true);
 
-        // 5. Subsequent directives progression
-        advanceFtueStep(3); // Planet scan
-        expect(STATE.ftueStep).toBe(3);
+        // 6. Close/listen Golden Record dialog
+        closeVoyagerDialog();
+        expect(STATE.ftueStep).toBe(4); // Advanced to Phase 5: Aufbruch ins Leben
 
-        advanceFtueStep(4); // Abduction
-        expect(STATE.ftueStep).toBe(4);
-
-        advanceFtueStep(5); // Galaxy map
+        // 7. Open Galaxy Map [M]
+        advanceFtueStep(5); // Phase 6: Der erste Wirt
         expect(STATE.ftueStep).toBe(5);
+
+        // 8. Abduction completed
+        advanceFtueStep(6);
+        expect(STATE.ftueStep).toBe(6);
         expect(STATE.ftueCompleted).toBe(true);
     });
 
@@ -522,6 +538,7 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         // 1. Reset state
         STATE.ftueStep = 0;
         STATE.ftueCompleted = false;
+        STATE.voyagerSignalDetected = false;
         STATE.voyagerScanned = false;
         STATE.voyagerDialogSeen = false;
         STATE.mentalEnergy = 40;
@@ -548,6 +565,7 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         handleVoyagerScan();
 
         expect(STATE.voyagerScanned).toBe(true);
+        expect(STATE.voyagerSignalDetected).toBe(true);
         expect(isVoyagerDialogOpen()).toBe(true);
         expect(STATE.voyagerDialogSeen).toBe(true);
 
@@ -559,6 +577,7 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         // 6. Test closing dialog
         closeVoyagerDialog();
         expect(isVoyagerDialogOpen()).toBe(false);
+        expect(STATE.ftueStep).toBe(4);
 
         // 7. Verify starting system (Perseus-Rand) has NO habitable worlds
         if (STATE.universe && STATE.universe.systems && STATE.universe.systems[1]) {

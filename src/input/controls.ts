@@ -203,12 +203,13 @@ export function handleVoyagerScan() {
     if (!STATE.voyagerProbe) return;
     const wasScanned = STATE.voyagerScanned;
     STATE.voyagerScanned = true;
+    STATE.voyagerSignalDetected = true;
     playGoldenRecordAudio();
 
     if (!wasScanned) {
         STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
         STATE.loneliness = Math.max(10, STATE.loneliness - 25);
-        advanceFtueStep(2);
+        advanceFtueStep(3);
         addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
         addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
         addLogEntry("SYSTEM", "Mentale Feldstärke regeneriert. Hoffnung durchströmt dein neuronales Netzwerk.");

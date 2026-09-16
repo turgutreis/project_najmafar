@@ -35,9 +35,6 @@ export function openVoyagerDialog() {
         addLogEntry("CREW", "Gedanken-Resonanz: Die tiefe seelische Kälte weicht. Deine Lebensgeister erwachen!");
         addLogEntry("NAV", "Interstellare Vektoren kalibriert: Kurs auf habitable Biosphäre im Nachbarsystem freigeschaltet.");
     }
-
-    // Advance FTUE step to Phase 3 (Hope gained -> Next: Interstellar travel to find life)
-    advanceFtueStep(3);
 }
 
 export function closeVoyagerDialog() {
@@ -46,6 +43,7 @@ export function closeVoyagerDialog() {
 
     isDialogOpen = false;
     modal.style.display = 'none';
+    advanceFtueStep(4);
 }
 
 export function initVoyagerDialogListeners() {

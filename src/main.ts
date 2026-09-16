@@ -78,8 +78,8 @@ function animate(time: number) {
         // FTUE & Voyager 2 directional tracking
         updateVoyagerHUDTracker();
 
-        // Periodic Voyager 2 archaic carrier beacon chirp (when within 85 AE and not scanned)
-        if (STATE.voyagerProbe && !STATE.voyagerScanned) {
+        // Periodic Voyager 2 archaic carrier beacon chirp (when signal detected, within 85 AE and not scanned)
+        if (STATE.voyagerProbe && STATE.voyagerSignalDetected && !STATE.voyagerScanned) {
             const probeDist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
             if (probeDist < 85) {
                 voyagerBeaconTimer += dt;
