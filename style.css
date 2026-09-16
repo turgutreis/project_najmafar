@@ -1345,31 +1345,35 @@ body.game-started .hud-left {
 .menu-content {
     text-align: center;
     width: 100%;
-    max-width: 560px;
-    padding: 2.5rem 3rem;
-    background: rgba(10, 15, 30, 0.75);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(56, 189, 248, 0.25);
-    border-radius: 20px;
-    box-shadow: 0 12px 50px rgba(0, 0, 0, 0.7), 0 0 40px rgba(6, 182, 212, 0.1);
-    animation: menuGlow 6s infinite alternate;
+    max-width: 580px;
+    padding: 2.6rem 2.8rem;
+    background: radial-gradient(circle at 50% 0%, rgba(20, 28, 48, 0.94) 0%, rgba(7, 12, 26, 0.98) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    border-radius: 24px;
+    box-shadow: 
+        0 25px 65px rgba(0, 0, 0, 0.95),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        inset 0 0 40px rgba(168, 85, 247, 0.12),
+        0 0 50px rgba(56, 189, 248, 0.2);
+    position: relative;
+    overflow: hidden;
 }
 
-@keyframes menuGlow {
-    0% {
-        box-shadow: 0 0 30px rgba(56, 189, 248, 0.05);
-        border-color: rgba(56, 189, 248, 0.15);
-    }
-
-    100% {
-        box-shadow: 0 0 50px rgba(168, 85, 247, 0.15);
-        border-color: rgba(168, 85, 247, 0.3);
-    }
+.menu-content::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, #00ff88, #38bdf8 50%, #c084fc, transparent);
+    box-shadow: 0 0 18px #38bdf8;
 }
 
 .menu-brand {
-    margin-bottom: 2rem;
+    margin-bottom: 1.8rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1378,51 +1382,54 @@ body.game-started .hud-left {
 .brand-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     font-family: 'Orbitron', sans-serif;
-    font-size: 0.65rem;
-    font-weight: 700;
-    letter-spacing: 0.15em;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
     color: #38bdf8;
-    background: rgba(56, 189, 248, 0.12);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    border-radius: 12px;
-    padding: 3px 10px;
-    margin-bottom: 0.8rem;
+    background: rgba(56, 189, 248, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    border-radius: 20px;
+    padding: 4px 14px;
+    margin-bottom: 0.9rem;
     text-transform: uppercase;
+    box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
 }
 
 .brand-pulse-dot {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
-    background: #38bdf8;
-    box-shadow: 0 0 8px #38bdf8;
+    background: #00ff88;
+    box-shadow: 0 0 10px #00ff88;
     animation: scanPulse 1.2s infinite alternate;
 }
 
 .menu-title-main {
     font-family: 'Orbitron', system-ui, -apple-system, sans-serif;
-    font-size: 3.4rem;
+    font-size: 3.5rem;
     font-weight: 900;
-    letter-spacing: 0.4rem;
-    margin: 0;
+    letter-spacing: 0.35rem;
+    margin: 0.2rem 0;
     line-height: 1.05;
-    background: linear-gradient(135deg, #ffffff 15%, #38bdf8 65%, #c084fc 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    filter: drop-shadow(0 0 25px rgba(56, 189, 248, 0.45));
+    color: #ffffff;
+    text-shadow:
+        0 0 15px rgba(56, 189, 248, 0.95),
+        0 0 35px rgba(192, 132, 252, 0.8),
+        0 0 70px rgba(56, 189, 248, 0.4),
+        0 3px 6px rgba(0, 0, 0, 0.95);
     animation: titlePulse 4s infinite alternate;
 }
 
 .menu-title-sub {
     font-family: 'Orbitron', system-ui, -apple-system, sans-serif;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     font-weight: 800;
-    letter-spacing: 0.45rem;
-    margin-top: 0.4rem;
-    color: #38bdf8;
-    text-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+    letter-spacing: 0.4rem;
+    margin-top: 0.6rem;
+    color: #7dd3fc;
+    text-shadow: 0 0 15px rgba(56, 189, 248, 0.7);
     text-transform: uppercase;
 }
 
@@ -1436,11 +1443,11 @@ body.game-started .hud-left {
 
 @keyframes titlePulse {
     0% {
-        filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.4));
+        text-shadow: 0 0 12px rgba(56, 189, 248, 0.9), 0 0 25px rgba(168, 85, 247, 0.6), 0 2px 4px rgba(0, 0, 0, 0.9);
     }
 
     100% {
-        filter: drop-shadow(0 0 25px rgba(168, 85, 247, 0.7));
+        text-shadow: 0 0 22px rgba(56, 189, 248, 1), 0 0 45px rgba(192, 132, 252, 0.9), 0 0 80px rgba(56, 189, 248, 0.5), 0 3px 6px rgba(0, 0, 0, 0.95);
     }
 }
 
@@ -1567,15 +1574,89 @@ body.game-started .hud-left {
     margin-bottom: 0.75rem;
 }
 
-/* --- QUANTUM GENERATOR BOX --- */
-.quantum-generator-box {
+/* --- QUANTUM GENERATOR COLLAPSIBLE --- */
+.quantum-generator-collapsible {
     margin-bottom: 2rem;
-    padding: 1.25rem;
+    width: 100%;
+}
+
+.quantum-collapsible-trigger {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1.25rem;
     background: rgba(15, 23, 42, 0.6);
-    border: 1px dashed rgba(168, 85, 247, 0.4);
+    border: 1px solid rgba(168, 85, 247, 0.35);
     border-radius: 10px;
-    box-shadow: inset 0 0 15px rgba(168, 85, 247, 0.1);
+    color: #e2e8f0;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05rem;
+    cursor: pointer;
+    transition: all 0.25s ease;
+}
+
+.quantum-collapsible-trigger:hover {
+    background: rgba(30, 41, 59, 0.85);
+    border-color: rgba(192, 132, 252, 0.6);
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.25);
+    color: #ffffff;
+}
+
+.trigger-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.trigger-icon {
+    font-size: 1.1rem;
+}
+
+.trigger-chevron {
+    font-size: 0.9rem;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    color: #a855f7;
+}
+
+.trigger-chevron.expanded {
+    transform: rotate(180deg);
+}
+
+.quantum-box-drawer {
+    margin-top: 0.6rem;
+    padding: 1.25rem;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px dashed rgba(168, 85, 247, 0.45);
+    border-radius: 12px;
+    box-shadow: inset 0 0 20px rgba(168, 85, 247, 0.12);
     text-align: left;
+    animation: fadeIn 0.25s ease;
+}
+
+.quantum-drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+}
+
+.quantum-close-icon-btn {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.quantum-close-icon-btn:hover {
+    color: #f43f5e;
+    background: rgba(244, 63, 94, 0.15);
 }
 
 .generator-title {
@@ -1583,7 +1664,7 @@ body.game-started .hud-left {
     font-size: 1.05rem;
     font-weight: 700;
     color: #ffffff;
-    margin: 0 0 0.4rem 0;
+    margin: 0;
     letter-spacing: 0.05rem;
     text-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
 }
@@ -1592,7 +1673,7 @@ body.game-started .hud-left {
     font-size: 0.75rem;
     color: #94a3b8;
     line-height: 1.4;
-    margin: 0 0 1rem 0;
+    margin: 0.3rem 0 0.9rem 0;
 }
 
 .quantum-input {
@@ -1633,28 +1714,74 @@ body.game-started .hud-left {
     cursor: pointer;
 }
 
+.quantum-actions-row {
+    display: flex;
+    gap: 10px;
+}
+
 .quantum-gen-btn {
-    width: 100%;
+    flex: 1;
     font-family: 'Orbitron', sans-serif;
     font-size: 0.85rem;
     font-weight: 700;
-    padding: 0.75rem 1.5rem;
+    padding: 0.75rem 1.25rem;
     border-radius: 6px;
     cursor: pointer;
-    border: none;
-    outline: none;
-    background: linear-gradient(135deg, #7e22ce 0%, #06b6d4 100%);
+    background: linear-gradient(135deg, #7e22ce 0%, #0284c7 100%);
     color: #ffffff;
-    box-shadow: 0 4px 12px rgba(126, 34, 206, 0.3);
+    border: none;
+    box-shadow: 0 2px 10px rgba(126, 34, 206, 0.4);
     transition: all 0.3s ease;
-    text-transform: uppercase;
-    letter-spacing: 0.05rem;
 }
 
-.quantum-gen-btn:hover:not(:disabled) {
+.quantum-gen-btn:hover {
+    box-shadow: 0 4px 15px rgba(126, 34, 206, 0.6);
     transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(126, 34, 206, 0.5), 0 0 10px rgba(6, 182, 212, 0.3);
-    background: linear-gradient(135deg, #6b21a8 0%, #0891b2 100%);
+}
+
+.quantum-collapse-btn {
+    padding: 0.75rem 1.25rem;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #cbd5e1;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.75rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.quantum-collapse-btn:hover {
+    background: rgba(244, 63, 94, 0.2);
+    border-color: #f43f5e;
+    color: #ffffff;
+}
+
+.voyager-actions-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.voyager-continue-btn {
+    flex: 1;
+    padding: 12px 18px;
+    background: linear-gradient(135deg, #059669 0%, #0284c7 100%);
+    color: #ffffff;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 800;
+    border: 1px solid rgba(0, 255, 136, 0.5);
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+    transition: all 0.25s ease;
+}
+
+.voyager-continue-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 25px rgba(0, 255, 136, 0.5);
+    background: linear-gradient(135deg, #10b981 0%, #0369a1 100%);
 }
 
 .quantum-gen-btn:disabled {

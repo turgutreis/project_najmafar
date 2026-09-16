@@ -178,34 +178,38 @@ export function completeScanning() {
     if (progContainer) progContainer.style.display = 'none';
 
     const planet = STATE.scanningPlanet;
-    if (planet) {
-        planet.scanned = true;
-        STATE.scannedPlanets[planet.name] = true;
+    try {
+        if (planet) {
+            planet.scanned = true;
+            STATE.scannedPlanets[planet.name] = true;
 
-        STATE.bioRes += 15;
-        STATE.siliconRes += 10;
-        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 15);
+            STATE.bioRes += 15;
+            STATE.siliconRes += 10;
+            STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 15);
 
-        addLogEntry("SYSTEM", `Spektral-Scan von ${planet.name} abgeschlossen! Atmosphärendatenbank aktualisiert (+15 Bio | +10 Silizium).`);
+            addLogEntry("SYSTEM", `Spektral-Scan von ${planet.name} abgeschlossen! Atmosphärendatenbank aktualisiert (+15 Bio | +10 Silizium).`);
 
-        if (planet.attributes.species && planet.attributes.species.population > 0) {
-            addLogEntry("SYSTEM", `PSIO-DETEKTION: Intelligentes Leben (${planet.attributes.species.name}) auf ${planet.name} entdeckt! Psionischer Transfer [F] bereit.`);
-        } else {
-            addLogEntry("SENSOR", `Atmosphärendaten: ${planet.attributes.atmos || 'Vakuum'} | Bio: ${planet.attributes.bio || 'Steril'}. Keine Lebensformen detektiert.`);
+            if (planet.attributes.species && planet.attributes.species.population > 0) {
+                addLogEntry("SYSTEM", `PSIO-DETEKTION: Intelligentes Leben (${planet.attributes.species.name}) auf ${planet.name} entdeckt! Psionischer Transfer [F] bereit.`);
+            } else {
+                addLogEntry("SENSOR", `Atmosphärendaten: ${planet.attributes.atmos || 'Vakuum'} | Bio: ${planet.attributes.bio || 'Steril'}. Keine Lebensformen detektiert.`);
+            }
+
+            // If in FTUE early exploration phases, first planet scan triggers archaic Voyager signal detection
+            if ((STATE.ftueStep || 0) <= 1 && !STATE.voyagerSignalDetected) {
+                triggerVoyagerSignalDetection();
+            } else if ((STATE.ftueStep || 0) === 1) {
+                advanceFtueStep(2);
+            }
+
+            updateScannerUI(planet, 10);
         }
-
-        // If in FTUE early exploration phases, first planet scan triggers archaic Voyager signal detection
-        if ((STATE.ftueStep || 0) <= 1 && !STATE.voyagerSignalDetected) {
-            triggerVoyagerSignalDetection();
-        } else if ((STATE.ftueStep || 0) === 1) {
-            advanceFtueStep(2);
-        }
-
-        updateScannerUI(planet, 10);
+    } catch (err) {
+        console.error("Scanner completion error:", err);
+    } finally {
+        STATE.scanningPlanet = null;
+        STATE.scanProgress = 0;
     }
-
-    STATE.scanningPlanet = null;
-    STATE.scanProgress = 0;
 }
 
 let manuallyDismissedTarget: string | null = null;

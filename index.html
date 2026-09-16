@@ -43,29 +43,46 @@
                 <button id="exit-btn" class="menu-btn secondary" style="display: none;">Verbindung trennen</button>
             </div>
 
-            <!-- Quantum Universe Generator Interface -->
-            <div class="quantum-generator-box">
-                <h3 class="generator-title">🌌 Quanten-Welten-Generator</h3>
-                <p class="generator-desc">Seede eine Galaxie aus 1000 Systemen mittels Hadamard-Superpositionen auf IBM
-                    Quantum QPUs.</p>
+            <!-- Collapsible Quantum Universe Generator Interface -->
+            <div class="quantum-generator-collapsible">
+                <button id="toggle-quantum-box-btn" class="quantum-collapsible-trigger" type="button">
+                    <span class="trigger-left">
+                        <span class="trigger-icon">🌌</span>
+                        <span class="trigger-label">IBM Quantum QPU Generator</span>
+                    </span>
+                    <span id="quantum-chevron" class="trigger-chevron">▾</span>
+                </button>
 
-                <input type="password" id="ibm-key-input" class="quantum-input"
-                    placeholder="IBM Quantum Token eingeben (optional)" autocomplete="off" spellcheck="false"
-                    data-lpignore="true">
+                <div id="quantum-box-drawer" class="quantum-box-drawer" style="display: none;">
+                    <div class="quantum-drawer-inner">
+                        <div class="quantum-drawer-header">
+                            <h4 class="generator-title">🌌 IBM Quantum Generator</h4>
+                            <button id="close-quantum-box-btn" class="quantum-close-icon-btn" type="button" title="Zuklappen">✕</button>
+                        </div>
+                        <p class="generator-desc">Seede eine Galaxie aus 1.000 Systemen mittels Hadamard-Superpositionen auf IBM Quantum QPUs oder Simulator.</p>
 
-                <div class="generator-options">
-                    <label class="quantum-checkbox-label">
-                        <input type="checkbox" id="use-qpu-chk">
-                        <span class="checkbox-text">Echter IBM QPU (Guthaben benötigt)</span>
-                    </label>
+                        <input type="password" id="ibm-key-input" class="quantum-input"
+                            placeholder="IBM Quantum Token eingeben (optional)" autocomplete="off" spellcheck="false"
+                            data-lpignore="true">
+
+                        <div class="generator-options">
+                            <label class="quantum-checkbox-label">
+                                <input type="checkbox" id="use-qpu-chk">
+                                <span class="checkbox-text">Echter IBM QPU (Guthaben benötigt)</span>
+                            </label>
+                        </div>
+
+                        <div class="quantum-actions-row">
+                            <button id="generate-btn" class="quantum-gen-btn">Galaxie generieren</button>
+                            <button id="collapse-quantum-btn" class="quantum-collapse-btn" type="button">✕ Zuklappen</button>
+                        </div>
+                        <div id="generation-status" class="generation-status">Bereit zum Seeden.</div>
+                    </div>
                 </div>
-
-                <button id="generate-btn" class="quantum-gen-btn">Galaxie generieren</button>
-                <div id="generation-status" class="generation-status">Bereit zum Seeden.</div>
             </div>
 
             <div class="menu-credits">
-                Designer: Ali Mazlum & Entwickelt mit Antigravity, Qiskit, Three.js & Electron
+                Designer: Ali Mazlum &bull; Entwickelt mit Antigravity, Qiskit, Three.js &amp; Electron
             </div>
         </div>
     </div>
@@ -257,7 +274,8 @@
                     <span class="voyager-emblem">📀</span>
                     <div>
                         <h2>VOYAGER 2 &bull; DIE GOLDEN RECORD</h2>
-                        <span class="voyager-header-sub">Interstellare Raumsonde (NASA, 1977) &bull; 1420 MHz Analog-Frequenz</span>
+                        <span class="voyager-header-sub">Interstellare Raumsonde (NASA, 1977) &bull; 1420 MHz
+                            Analog-Frequenz</span>
                     </div>
                 </div>
                 <div class="voyager-header-right">
@@ -283,7 +301,8 @@
                     <div class="voyager-pulsar-box">
                         <div class="voyager-pulsar-title">🧭 Sternenkarte & Pulsar-Vektoren</div>
                         <p class="voyager-pulsar-desc">
-                            Die goldene Gravur codiert die Position eines gelben Zwergsterns (Sonne) anhand von 14 interstellaren Pulsarfrequenzen.
+                            Die goldene Gravur codiert die Position eines gelben Zwergsterns (Sonne) anhand von 14
+                            interstellaren Pulsarfrequenzen.
                         </p>
                     </div>
                 </div>
@@ -292,16 +311,21 @@
                     <div class="voyager-quote-card">
                         <div class="quote-header">📜 Archivierte Botschaft an den Kosmos:</div>
                         <blockquote class="voyager-quote-text">
-                            „Dies ist ein Geschenk einer kleinen, weit entfernten Welt. Eine Aufzeichnung unserer Klänge, unserer Wissenschaft, unserer Bilder, unserer Musik, unserer Gedanken und unserer Gefühle. Wir versuchen, unsere Zeit zu überleben, damit wir vielleicht in der euren leben dürfen.“
+                            „Dies ist ein Geschenk einer kleinen, weit entfernten Welt. Eine Aufzeichnung unserer
+                            Klänge, unserer Wissenschaft, unserer Bilder, unserer Musik, unserer Gedanken und unserer
+                            Gefühle. Wir versuchen, unsere Zeit zu überleben, damit wir vielleicht in der euren leben
+                            dürfen.“
                         </blockquote>
-                        <div class="quote-author">— Jimmy Carter, Präsident der Vereinigten Staaten von Amerika (1977)</div>
+                        <div class="quote-author">— Jimmy Carter, Präsident der Vereinigten Staaten von Amerika (1977)
+                        </div>
                         <div class="quote-audio-snippet">♫ „Hello from the children of planet Earth.“</div>
                     </div>
 
                     <div class="voyager-awakening-box">
                         <h4>🧬 Der Funke der Hoffnung (Najmafar Erwachen)</h4>
                         <p>
-                            Ein wohliger Schauer durchfährt deine lebendige Zellhülle. Nach Äonen des einsamen Driftens durch tote Asche-Systeme ist dies der erste greifbare Beweis: <em>Du bist nicht allein.</em> 
+                            Ein wohliger Schauer durchfährt deine lebendige Zellhülle. Nach Äonen des einsamen Driftens
+                            durch tote Asche-Systeme ist dies der erste greifbare Beweis: <em>Du bist nicht allein.</em>
                             Wesen aus Fleisch und Geist reichten einst hoffnungsvoll ihre Hände ins All.
                         </p>
                         <div class="voyager-buffs-row">
@@ -313,11 +337,18 @@
 
                     <div class="voyager-next-step-box">
                         <div class="next-step-text">
-                            ⚠️ <strong>Keine Biosphäre in diesem System:</strong> Dieses Rand-System beherbergt nur lebloses Felsgestein. Nutze die Sternenkarte, um das benachbarte System <em>Perseus Minor</em> mit einer lebendigen Zivilisation anzusteuern!
+                            ⚠️ <strong>Keine Biosphäre in diesem System:</strong> Dieses Rand-System beherbergt nur
+                            lebloses Felsgestein. Nutze die Sternenkarte, um das benachbarte System <em>Perseus
+                                Minor</em> mit einer lebendigen Zivilisation anzusteuern!
                         </div>
-                        <button id="voyager-open-map-btn" class="voyager-map-action-btn">
-                            🌌 Sternenkarte öffnen [M] – Kurs setzen
-                        </button>
+                        <div class="voyager-actions-row">
+                            <button id="voyager-continue-btn" class="voyager-continue-btn">
+                                🚀 Weiterfliegen [Leertaste]
+                            </button>
+                            <button id="voyager-open-map-btn" class="voyager-map-action-btn">
+                                🌌 Sternenkarte öffnen [M]
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -506,7 +537,7 @@
         <div id="voyager-nav-tracker" class="voyager-nav-tracker glass-capsule" style="display: none;">
             <span class="voyager-ping-icon">📡</span>
             <div class="voyager-tracker-info">
-                <div class="voyager-tracker-title">VOYAGER 2 SIGNAL</div>
+                <div class="voyager-tracker-title">UNBEKANNTES SIGNAL</div>
                 <div id="voyager-nav-dist" class="voyager-tracker-dist">35.2 AE</div>
             </div>
             <div id="voyager-nav-arrow" class="voyager-nav-arrow">▲</div>
@@ -843,7 +874,7 @@
                 </div>
                 <button id="options-close-btn" class="options-close-btn" title="Schließen [ESC]">✕</button>
             </div>
-            
+
             <div class="options-body">
                 <!-- 1. Master Volume -->
                 <div class="option-row">
@@ -888,7 +919,8 @@
                     </div>
                     <div class="track-selector-box">
                         <button id="opt-prev-track-btn" class="track-nav-btn" title="Vorheriger Track">◀</button>
-                        <div id="opt-current-track-name" class="current-track-display">Pillars of the Void (Quantum Core)</div>
+                        <div id="opt-current-track-name" class="current-track-display">Pillars of the Void (Quantum
+                            Core)</div>
                         <button id="opt-next-track-btn" class="track-nav-btn" title="Nächster Track">▶</button>
                     </div>
                     <div id="opt-track-artist" class="track-artist-sub">IBM Quantum Platform OST</div>

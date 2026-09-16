@@ -47,9 +47,26 @@ export function closeVoyagerDialog() {
 }
 
 export function initVoyagerDialogListeners() {
+    const modal = document.getElementById('voyager-dialog-modal');
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeVoyagerDialog();
+            }
+        });
+    }
+
     const closeBtn = document.getElementById('close-voyager-dialog-btn');
     if (closeBtn) {
         closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeVoyagerDialog();
+        });
+    }
+
+    const continueBtn = document.getElementById('voyager-continue-btn');
+    if (continueBtn) {
+        continueBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             closeVoyagerDialog();
         });
@@ -75,7 +92,8 @@ export function initVoyagerDialogListeners() {
 
     window.addEventListener('keydown', (e) => {
         if (!isDialogOpen) return;
-        if (e.key === 'Escape') {
+        if (e.key === 'Escape' || e.key === ' ' || e.code === 'Space' || e.key === 'Enter') {
+            e.preventDefault();
             closeVoyagerDialog();
         }
     });

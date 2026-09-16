@@ -605,7 +605,7 @@ export function spawnVoyagerProbe() {
         mesh: voyagerController.group,
         update: voyagerController.update,
         type: 'voyager_probe',
-        name: 'Voyager 2 (Archaische Raumsonde)',
+        name: STATE.voyagerScanned ? 'Voyager 2 (Archaische Raumsonde)' : 'Unbekanntes Signal (Archaische Sonde)',
         mass: 0.5,
         radius: 2.2,
         gravityRange: 10.0,

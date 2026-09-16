@@ -29,8 +29,8 @@ export const FTUE_DIRECTIVES: DirectiveItem[] = [
         id: 2,
         badge: "PHASE 3",
         title: "Archaisches Signal",
-        instruction: "Folge dem goldenen Radar-Signal & Scanne Voyager 2 mit [F] oder [Klick]",
-        hint: "Ein uraltes künstliches Artefakt treibt am Systemrand. Halte Abstand < 22 AE."
+        instruction: "Folge dem goldenen Radar-Signal & Scanne das unbekannte Signal mit [F] oder [Klick]",
+        hint: "Eine künstliche metallische Anomalie treibt am Systemrand. Halte Abstand < 22 AE."
     },
     {
         id: 3,
@@ -136,7 +136,7 @@ export function triggerVoyagerSignalDetection() {
 
     addLogEntry("NAJMAFAR", "„Dieses System ist erstarrt... Niemand ist hier. Nur die Kälte der Leere.“");
     addLogEntry("SENSOR", "ANOMALIE DETEKTIERT: Schwache elektromagnetische Trägerwelle (1420 MHz) empfangen!");
-    addLogEntry("SYSTEM", "Archaische Signalquelle am Systemrand geortet. VOYAGER 2 auf Radar und Nav-Tracker aufgeschaltet!");
+    addLogEntry("SYSTEM", "Archaische Signalquelle am Systemrand geortet. UNBEKANNTES SIGNAL auf Radar und Nav-Tracker aufgeschaltet!");
 
     advanceFtueStep(2);
 }
@@ -149,6 +149,11 @@ export function updateVoyagerHUDTracker() {
     if (!STATE.voyagerProbe || !STATE.voyagerSignalDetected || STATE.voyagerScanned) {
         trackerEl.style.display = 'none';
         return;
+    }
+
+    const titleEl = trackerEl.querySelector('.voyager-tracker-title') as HTMLElement;
+    if (titleEl) {
+        titleEl.innerText = STATE.voyagerScanned ? "VOYAGER 2 SIGNAL" : "UNBEKANNTES SIGNAL";
     }
 
     const playerPos = STATE.playerPosition;

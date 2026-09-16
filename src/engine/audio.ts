@@ -963,56 +963,62 @@ export function playVoyagerBeaconPing() {
     osc.stop(time + 0.25);
 }
 
+let cachedVinylBuffer: AudioBuffer | null = null;
+
 export function playGoldenRecordAudio() {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    const time = ctx.currentTime;
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        const time = ctx.currentTime;
 
-    // 1. Vinyl surface crackle & analog needle contact
-    const bufferSize = Math.floor(ctx.sampleRate * 2.8);
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-        // Occasional crackle pops mixed with pinkish noise
-        const pop = Math.random() < 0.002 ? (Math.random() - 0.5) * 1.8 : 0;
-        data[i] = (Math.random() * 2 - 1) * 0.05 + pop;
+        // 1. Vinyl surface crackle & analog needle contact (cached buffer)
+        if (!cachedVinylBuffer || cachedVinylBuffer.sampleRate !== ctx.sampleRate) {
+            const bufferSize = Math.floor(ctx.sampleRate * 1.8);
+            cachedVinylBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = cachedVinylBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                const pop = Math.random() < 0.002 ? (Math.random() - 0.5) * 1.5 : 0;
+                data[i] = (Math.random() * 2 - 1) * 0.04 + pop;
+            }
+        }
+
+        const crackle = ctx.createBufferSource();
+        crackle.buffer = cachedVinylBuffer;
+        const crackleFilter = ctx.createBiquadFilter();
+        crackleFilter.type = 'bandpass';
+        crackleFilter.frequency.setValueAtTime(1800, time);
+        crackleFilter.Q.setValueAtTime(1.2, time);
+
+        const crackleGain = ctx.createGain();
+        crackleGain.gain.setValueAtTime(0.08, time);
+        crackleGain.gain.exponentialRampToValueAtTime(0.001, time + 1.8);
+
+        crackle.connect(crackleFilter);
+        crackleFilter.connect(crackleGain);
+        crackleGain.connect(ctx.destination);
+        crackle.start(time);
+        crackle.stop(time + 1.85);
+
+        // 2. Harmonic warm acoustic chord swell (C Major triad - 261.6Hz, 329.6Hz, 392Hz + 523.2Hz)
+        const freqs = [261.63, 329.63, 392.00, 523.25];
+        freqs.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const chordGain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, time);
+
+            const startOffset = idx * 0.12;
+            chordGain.gain.setValueAtTime(0, time);
+            chordGain.gain.linearRampToValueAtTime(0.07, time + 0.3 + startOffset);
+            chordGain.gain.exponentialRampToValueAtTime(0.001, time + 2.5);
+
+            osc.connect(chordGain);
+            chordGain.connect(ctx.destination);
+            osc.start(time + startOffset);
+            osc.stop(time + 2.6);
+        });
+    } catch (e) {
+        console.warn("Golden Record audio playback skipped:", e);
     }
-
-    const crackle = ctx.createBufferSource();
-    crackle.buffer = buffer;
-    const crackleFilter = ctx.createBiquadFilter();
-    crackleFilter.type = 'bandpass';
-    crackleFilter.frequency.setValueAtTime(1800, time);
-    crackleFilter.Q.setValueAtTime(1.2, time);
-
-    const crackleGain = ctx.createGain();
-    crackleGain.gain.setValueAtTime(0.08, time);
-    crackleGain.gain.exponentialRampToValueAtTime(0.001, time + 2.8);
-
-    crackle.connect(crackleFilter);
-    crackleFilter.connect(crackleGain);
-    crackleGain.connect(ctx.destination);
-    crackle.start(time);
-    crackle.stop(time + 2.85);
-
-    // 2. Harmonic warm acoustic chord swell (C Major triad - 261.6Hz, 329.6Hz, 392Hz + 523.2Hz)
-    const freqs = [261.63, 329.63, 392.00, 523.25];
-    freqs.forEach((freq, idx) => {
-        const osc = ctx.createOscillator();
-        const chordGain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, time);
-
-        // Soft staggered entrance
-        const startOffset = idx * 0.12;
-        chordGain.gain.setValueAtTime(0, time);
-        chordGain.gain.linearRampToValueAtTime(0.07, time + 0.4 + startOffset);
-        chordGain.gain.exponentialRampToValueAtTime(0.001, time + 3.2);
-
-        osc.connect(chordGain);
-        chordGain.connect(ctx.destination);
-        osc.start(time + startOffset);
-        osc.stop(time + 3.4);
-    });
 }
 

@@ -201,25 +201,31 @@ export function setupControls() {
 
 export function handleVoyagerScan() {
     if (!STATE.voyagerProbe) return;
-    const wasScanned = STATE.voyagerScanned;
-    STATE.voyagerScanned = true;
-    STATE.voyagerSignalDetected = true;
-    playGoldenRecordAudio();
+    try {
+        const wasScanned = STATE.voyagerScanned;
+        STATE.voyagerScanned = true;
+        STATE.voyagerSignalDetected = true;
+        if (STATE.voyagerProbe) {
+            STATE.voyagerProbe.name = 'Voyager 2 (NASA, 1977)';
+        }
 
-    if (!wasScanned) {
-        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
-        STATE.loneliness = Math.max(10, STATE.loneliness - 25);
-        advanceFtueStep(3);
-        addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
-        addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
-        addLogEntry("SYSTEM", "Mentale Feldstärke regeneriert. Hoffnung durchströmt dein neuronales Netzwerk.");
-        addLogEntry("NAV", "Interstellare Vektoren freigeschaltet. Nächste habitable Welten auf Sensorik markiert.");
+        if (!wasScanned) {
+            STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
+            STATE.loneliness = Math.max(10, STATE.loneliness - 25);
+            advanceFtueStep(3);
+            addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
+            addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
+            addLogEntry("SYSTEM", "Mentale Feldstärke regeneriert. Hoffnung durchströmt dein neuronales Netzwerk.");
+            addLogEntry("NAV", "Interstellare Vektoren freigeschaltet. Nächste habitable Welten auf Sensorik markiert.");
 
-        const hint = document.getElementById('flight-controls-hint');
-        if (hint) hint.classList.add('hidden');
+            const hint = document.getElementById('flight-controls-hint');
+            if (hint) hint.classList.add('hidden');
+        }
+
+        openVoyagerDialog();
+    } catch (err) {
+        console.error("Voyager scan error:", err);
     }
-
-    openVoyagerDialog();
 }
 
 export function setupTargetRaycasting() {

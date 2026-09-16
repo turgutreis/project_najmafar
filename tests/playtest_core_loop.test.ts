@@ -484,7 +484,7 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         spawnVoyagerProbe();
         expect(STATE.voyagerProbe).not.toBeNull();
         expect(STATE.voyagerProbe.isVoyager).toBe(true);
-        expect(STATE.voyagerProbe.name).toContain("Voyager 2");
+        expect(STATE.voyagerProbe.name).toContain("Unbekanntes Signal");
         expect(STATE.gravitySources.some((s: any) => s.isVoyager)).toBe(true);
         expect(STATE.voyagerSignalDetected).toBe(false);
 
@@ -517,6 +517,7 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         // Scan Voyager 2 with [F]
         handleVoyagerScan();
         expect(STATE.voyagerScanned).toBe(true);
+        expect(STATE.voyagerProbe.name).toContain("Voyager 2");
         expect(STATE.ftueStep).toBe(3); // Advanced to Phase 4: Funke der Hoffnung
         expect(isVoyagerDialogOpen()).toBe(true);
 

@@ -266,7 +266,8 @@ export function updateMinimap() {
 
                 minimapCtx.fillStyle = '#fbbf24';
                 minimapCtx.font = '8px Orbitron, sans-serif';
-                minimapCtx.fillText("📡 VOYAGER 2", sx + 7, sy + 3);
+                const probeLabel = STATE.voyagerScanned ? "📡 VOYAGER 2" : "📡 UNBEKANNTES SIGNAL";
+                minimapCtx.fillText(probeLabel, sx + 7, sy + 3);
             } else if (source.type === 'asteroid') {
                 minimapCtx.fillStyle = source.resourceType === 'bio' ? '#00ff88' : '#38bdf8';
                 minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);

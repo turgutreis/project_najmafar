@@ -259,6 +259,38 @@ function setupMenuListeners() {
         }
     }
 
+    // Collapsible Quantum Universe Generator Drawer
+    const toggleQuantumBtn = document.getElementById('toggle-quantum-box-btn');
+    const quantumDrawer = document.getElementById('quantum-box-drawer');
+    const quantumChevron = document.getElementById('quantum-chevron');
+    const closeQuantumBtn = document.getElementById('close-quantum-box-btn');
+    const collapseQuantumBtn = document.getElementById('collapse-quantum-btn');
+
+    function toggleQuantumDrawer(open?: boolean) {
+        if (!quantumDrawer) return;
+        const willOpen = typeof open === 'boolean' ? open : quantumDrawer.style.display === 'none';
+        quantumDrawer.style.display = willOpen ? 'block' : 'none';
+        if (quantumChevron) {
+            quantumChevron.classList.toggle('expanded', willOpen);
+        }
+    }
+
+    if (toggleQuantumBtn) {
+        toggleQuantumBtn.addEventListener('click', () => toggleQuantumDrawer());
+    }
+    if (closeQuantumBtn) {
+        closeQuantumBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleQuantumDrawer(false);
+        });
+    }
+    if (collapseQuantumBtn) {
+        collapseQuantumBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleQuantumDrawer(false);
+        });
+    }
+
     // IBM Quantum Universe Generator Button in Menu
     const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement;
     if (generateBtn) {

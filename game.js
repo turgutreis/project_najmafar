@@ -32907,47 +32907,54 @@ function playVoyagerBeaconPing() {
   osc.start(time);
   osc.stop(time + 0.25);
 }
+var cachedVinylBuffer = null;
 function playGoldenRecordAudio() {
-  const ctx = getAudioContext();
-  if (!ctx)
-    return;
-  const time = ctx.currentTime;
-  const bufferSize = Math.floor(ctx.sampleRate * 2.8);
-  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0;i < bufferSize; i++) {
-    const pop = Math.random() < 0.002 ? (Math.random() - 0.5) * 1.8 : 0;
-    data[i] = (Math.random() * 2 - 1) * 0.05 + pop;
+  try {
+    const ctx = getAudioContext();
+    if (!ctx)
+      return;
+    const time = ctx.currentTime;
+    if (!cachedVinylBuffer || cachedVinylBuffer.sampleRate !== ctx.sampleRate) {
+      const bufferSize = Math.floor(ctx.sampleRate * 1.8);
+      cachedVinylBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = cachedVinylBuffer.getChannelData(0);
+      for (let i = 0;i < bufferSize; i++) {
+        const pop = Math.random() < 0.002 ? (Math.random() - 0.5) * 1.5 : 0;
+        data[i] = (Math.random() * 2 - 1) * 0.04 + pop;
+      }
+    }
+    const crackle = ctx.createBufferSource();
+    crackle.buffer = cachedVinylBuffer;
+    const crackleFilter = ctx.createBiquadFilter();
+    crackleFilter.type = "bandpass";
+    crackleFilter.frequency.setValueAtTime(1800, time);
+    crackleFilter.Q.setValueAtTime(1.2, time);
+    const crackleGain = ctx.createGain();
+    crackleGain.gain.setValueAtTime(0.08, time);
+    crackleGain.gain.exponentialRampToValueAtTime(0.001, time + 1.8);
+    crackle.connect(crackleFilter);
+    crackleFilter.connect(crackleGain);
+    crackleGain.connect(ctx.destination);
+    crackle.start(time);
+    crackle.stop(time + 1.85);
+    const freqs = [261.63, 329.63, 392, 523.25];
+    freqs.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const chordGain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, time);
+      const startOffset = idx * 0.12;
+      chordGain.gain.setValueAtTime(0, time);
+      chordGain.gain.linearRampToValueAtTime(0.07, time + 0.3 + startOffset);
+      chordGain.gain.exponentialRampToValueAtTime(0.001, time + 2.5);
+      osc.connect(chordGain);
+      chordGain.connect(ctx.destination);
+      osc.start(time + startOffset);
+      osc.stop(time + 2.6);
+    });
+  } catch (e) {
+    console.warn("Golden Record audio playback skipped:", e);
   }
-  const crackle = ctx.createBufferSource();
-  crackle.buffer = buffer;
-  const crackleFilter = ctx.createBiquadFilter();
-  crackleFilter.type = "bandpass";
-  crackleFilter.frequency.setValueAtTime(1800, time);
-  crackleFilter.Q.setValueAtTime(1.2, time);
-  const crackleGain = ctx.createGain();
-  crackleGain.gain.setValueAtTime(0.08, time);
-  crackleGain.gain.exponentialRampToValueAtTime(0.001, time + 2.8);
-  crackle.connect(crackleFilter);
-  crackleFilter.connect(crackleGain);
-  crackleGain.connect(ctx.destination);
-  crackle.start(time);
-  crackle.stop(time + 2.85);
-  const freqs = [261.63, 329.63, 392, 523.25];
-  freqs.forEach((freq, idx) => {
-    const osc = ctx.createOscillator();
-    const chordGain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(freq, time);
-    const startOffset = idx * 0.12;
-    chordGain.gain.setValueAtTime(0, time);
-    chordGain.gain.linearRampToValueAtTime(0.07, time + 0.4 + startOffset);
-    chordGain.gain.exponentialRampToValueAtTime(0.001, time + 3.2);
-    osc.connect(chordGain);
-    chordGain.connect(ctx.destination);
-    osc.start(time + startOffset);
-    osc.stop(time + 3.4);
-  });
 }
 
 // src/ui/party-grid.ts
@@ -34302,8 +34309,8 @@ var FTUE_DIRECTIVES = [
     id: 2,
     badge: "PHASE 3",
     title: "Archaisches Signal",
-    instruction: "Folge dem goldenen Radar-Signal & Scanne Voyager 2 mit [F] oder [Klick]",
-    hint: "Ein uraltes künstliches Artefakt treibt am Systemrand. Halte Abstand < 22 AE."
+    instruction: "Folge dem goldenen Radar-Signal & Scanne das unbekannte Signal mit [F] oder [Klick]",
+    hint: "Eine künstliche metallische Anomalie treibt am Systemrand. Halte Abstand < 22 AE."
   },
   {
     id: 3,
@@ -34393,7 +34400,7 @@ function triggerVoyagerSignalDetection() {
   } catch (e) {}
   addLogEntry("NAJMAFAR", "„Dieses System ist erstarrt... Niemand ist hier. Nur die Kälte der Leere.“");
   addLogEntry("SENSOR", "ANOMALIE DETEKTIERT: Schwache elektromagnetische Trägerwelle (1420 MHz) empfangen!");
-  addLogEntry("SYSTEM", "Archaische Signalquelle am Systemrand geortet. VOYAGER 2 auf Radar und Nav-Tracker aufgeschaltet!");
+  addLogEntry("SYSTEM", "Archaische Signalquelle am Systemrand geortet. UNBEKANNTES SIGNAL auf Radar und Nav-Tracker aufgeschaltet!");
   advanceFtueStep(2);
 }
 function updateVoyagerHUDTracker() {
@@ -34403,6 +34410,10 @@ function updateVoyagerHUDTracker() {
   if (!STATE.voyagerProbe || !STATE.voyagerSignalDetected || STATE.voyagerScanned) {
     trackerEl.style.display = "none";
     return;
+  }
+  const titleEl = trackerEl.querySelector(".voyager-tracker-title");
+  if (titleEl) {
+    titleEl.innerText = STATE.voyagerScanned ? "VOYAGER 2 SIGNAL" : "UNBEKANNTES SIGNAL";
   }
   const playerPos = STATE.playerPosition;
   const probePos = STATE.voyagerProbe.position;
@@ -34548,27 +34559,32 @@ function completeScanning() {
   if (progContainer)
     progContainer.style.display = "none";
   const planet = STATE.scanningPlanet;
-  if (planet) {
-    planet.scanned = true;
-    STATE.scannedPlanets[planet.name] = true;
-    STATE.bioRes += 15;
-    STATE.siliconRes += 10;
-    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 15);
-    addLogEntry("SYSTEM", `Spektral-Scan von ${planet.name} abgeschlossen! Atmosphärendatenbank aktualisiert (+15 Bio | +10 Silizium).`);
-    if (planet.attributes.species && planet.attributes.species.population > 0) {
-      addLogEntry("SYSTEM", `PSIO-DETEKTION: Intelligentes Leben (${planet.attributes.species.name}) auf ${planet.name} entdeckt! Psionischer Transfer [F] bereit.`);
-    } else {
-      addLogEntry("SENSOR", `Atmosphärendaten: ${planet.attributes.atmos || "Vakuum"} | Bio: ${planet.attributes.bio || "Steril"}. Keine Lebensformen detektiert.`);
+  try {
+    if (planet) {
+      planet.scanned = true;
+      STATE.scannedPlanets[planet.name] = true;
+      STATE.bioRes += 15;
+      STATE.siliconRes += 10;
+      STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 15);
+      addLogEntry("SYSTEM", `Spektral-Scan von ${planet.name} abgeschlossen! Atmosphärendatenbank aktualisiert (+15 Bio | +10 Silizium).`);
+      if (planet.attributes.species && planet.attributes.species.population > 0) {
+        addLogEntry("SYSTEM", `PSIO-DETEKTION: Intelligentes Leben (${planet.attributes.species.name}) auf ${planet.name} entdeckt! Psionischer Transfer [F] bereit.`);
+      } else {
+        addLogEntry("SENSOR", `Atmosphärendaten: ${planet.attributes.atmos || "Vakuum"} | Bio: ${planet.attributes.bio || "Steril"}. Keine Lebensformen detektiert.`);
+      }
+      if ((STATE.ftueStep || 0) <= 1 && !STATE.voyagerSignalDetected) {
+        triggerVoyagerSignalDetection();
+      } else if ((STATE.ftueStep || 0) === 1) {
+        advanceFtueStep(2);
+      }
+      updateScannerUI(planet, 10);
     }
-    if ((STATE.ftueStep || 0) <= 1 && !STATE.voyagerSignalDetected) {
-      triggerVoyagerSignalDetection();
-    } else if ((STATE.ftueStep || 0) === 1) {
-      advanceFtueStep(2);
-    }
-    updateScannerUI(planet, 10);
+  } catch (err) {
+    console.error("Scanner completion error:", err);
+  } finally {
+    STATE.scanningPlanet = null;
+    STATE.scanProgress = 0;
   }
-  STATE.scanningPlanet = null;
-  STATE.scanProgress = 0;
 }
 var manuallyDismissedTarget = null;
 function dismissScannerPanel() {
@@ -35142,7 +35158,8 @@ function updateMinimap() {
         minimapCtx.stroke();
         minimapCtx.fillStyle = "#fbbf24";
         minimapCtx.font = "8px Orbitron, sans-serif";
-        minimapCtx.fillText("\uD83D\uDCE1 VOYAGER 2", sx + 7, sy + 3);
+        const probeLabel = STATE.voyagerScanned ? "\uD83D\uDCE1 VOYAGER 2" : "\uD83D\uDCE1 UNBEKANNTES SIGNAL";
+        minimapCtx.fillText(probeLabel, sx + 7, sy + 3);
       } else if (source.type === "asteroid") {
         minimapCtx.fillStyle = source.resourceType === "bio" ? "#00ff88" : "#38bdf8";
         minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
@@ -36511,7 +36528,7 @@ function spawnVoyagerProbe() {
     mesh: voyagerController.group,
     update: voyagerController.update,
     type: "voyager_probe",
-    name: "Voyager 2 (Archaische Raumsonde)",
+    name: STATE.voyagerScanned ? "Voyager 2 (Archaische Raumsonde)" : "Unbekanntes Signal (Archaische Sonde)",
     mass: 0.5,
     radius: 2.2,
     gravityRange: 10,
@@ -37951,9 +37968,24 @@ function closeVoyagerDialog() {
   advanceFtueStep(4);
 }
 function initVoyagerDialogListeners() {
+  const modal = document.getElementById("voyager-dialog-modal");
+  if (modal) {
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) {
+        closeVoyagerDialog();
+      }
+    });
+  }
   const closeBtn = document.getElementById("close-voyager-dialog-btn");
   if (closeBtn) {
     closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeVoyagerDialog();
+    });
+  }
+  const continueBtn = document.getElementById("voyager-continue-btn");
+  if (continueBtn) {
+    continueBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       closeVoyagerDialog();
     });
@@ -37977,7 +38009,8 @@ function initVoyagerDialogListeners() {
   window.addEventListener("keydown", (e) => {
     if (!isDialogOpen)
       return;
-    if (e.key === "Escape") {
+    if (e.key === "Escape" || e.key === " " || e.code === "Space" || e.key === "Enter") {
+      e.preventDefault();
       closeVoyagerDialog();
     }
   });
@@ -38163,23 +38196,29 @@ function setupControls() {
 function handleVoyagerScan() {
   if (!STATE.voyagerProbe)
     return;
-  const wasScanned = STATE.voyagerScanned;
-  STATE.voyagerScanned = true;
-  STATE.voyagerSignalDetected = true;
-  playGoldenRecordAudio();
-  if (!wasScanned) {
-    STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
-    STATE.loneliness = Math.max(10, STATE.loneliness - 25);
-    advanceFtueStep(3);
-    addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
-    addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
-    addLogEntry("SYSTEM", "Mentale Feldstärke regeneriert. Hoffnung durchströmt dein neuronales Netzwerk.");
-    addLogEntry("NAV", "Interstellare Vektoren freigeschaltet. Nächste habitable Welten auf Sensorik markiert.");
-    const hint = document.getElementById("flight-controls-hint");
-    if (hint)
-      hint.classList.add("hidden");
+  try {
+    const wasScanned = STATE.voyagerScanned;
+    STATE.voyagerScanned = true;
+    STATE.voyagerSignalDetected = true;
+    if (STATE.voyagerProbe) {
+      STATE.voyagerProbe.name = "Voyager 2 (NASA, 1977)";
+    }
+    if (!wasScanned) {
+      STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
+      STATE.loneliness = Math.max(10, STATE.loneliness - 25);
+      advanceFtueStep(3);
+      addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
+      addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
+      addLogEntry("SYSTEM", "Mentale Feldstärke regeneriert. Hoffnung durchströmt dein neuronales Netzwerk.");
+      addLogEntry("NAV", "Interstellare Vektoren freigeschaltet. Nächste habitable Welten auf Sensorik markiert.");
+      const hint = document.getElementById("flight-controls-hint");
+      if (hint)
+        hint.classList.add("hidden");
+    }
+    openVoyagerDialog();
+  } catch (err) {
+    console.error("Voyager scan error:", err);
   }
-  openVoyagerDialog();
 }
 function setupTargetRaycasting() {
   let pointerDownPos = { x: 0, y: 0 };
@@ -39444,6 +39483,35 @@ function setupMenuListeners() {
         window.api.closeApp();
       });
     }
+  }
+  const toggleQuantumBtn = document.getElementById("toggle-quantum-box-btn");
+  const quantumDrawer = document.getElementById("quantum-box-drawer");
+  const quantumChevron = document.getElementById("quantum-chevron");
+  const closeQuantumBtn = document.getElementById("close-quantum-box-btn");
+  const collapseQuantumBtn = document.getElementById("collapse-quantum-btn");
+  function toggleQuantumDrawer(open) {
+    if (!quantumDrawer)
+      return;
+    const willOpen = typeof open === "boolean" ? open : quantumDrawer.style.display === "none";
+    quantumDrawer.style.display = willOpen ? "block" : "none";
+    if (quantumChevron) {
+      quantumChevron.classList.toggle("expanded", willOpen);
+    }
+  }
+  if (toggleQuantumBtn) {
+    toggleQuantumBtn.addEventListener("click", () => toggleQuantumDrawer());
+  }
+  if (closeQuantumBtn) {
+    closeQuantumBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleQuantumDrawer(false);
+    });
+  }
+  if (collapseQuantumBtn) {
+    collapseQuantumBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      toggleQuantumDrawer(false);
+    });
   }
   const generateBtn = document.getElementById("generate-btn");
   if (generateBtn) {
