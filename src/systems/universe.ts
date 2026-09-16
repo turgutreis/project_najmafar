@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
 import { scene, camera } from '../engine/scene';
 import { PlanetEntry, StarSystem } from '../types/game';
-import { createGravityRing, createBlackHoleMesh, createPrecursorConstructMesh, createPlasmaVortexMesh, clearJumpGates, createJumpGateMesh, activeJumpGates } from '../procedural/meshes';
+import { createGravityRing, createBlackHoleMesh, createPrecursorConstructMesh, createPlasmaVortexMesh, clearJumpGates, createJumpGateMesh, activeJumpGates, createVoyagerProbeMesh } from '../procedural/meshes';
 import { createHabitableTextures, createGasGiantTextures, createRockyTextures, createIceMoonTextures, createVolcanicMoonTextures, createStarTexture, createCloudTexture, createCityLightsTexture } from '../procedural/textures';
 import { generatePlanetAttributes, generateFallbackMoons, updateScannerUI } from './scanner';
 import { initPlanetDefenseFleets, clearFleet } from './fleet';
@@ -22,6 +22,9 @@ export let activeSunRays: SunRaysController | null = null;
 export function updateUniverseShaders(dt: number, cam?: THREE.Camera) {
     activeCoronaUpdaters.forEach(fn => fn(dt));
     activeJumpGates.forEach(jg => jg.update(dt));
+    if (STATE.voyagerProbe && STATE.voyagerProbe.update) {
+        STATE.voyagerProbe.update(dt);
+    }
     if (activeSunRays && cam) {
         activeSunRays.update(dt, cam);
     }
@@ -180,6 +183,12 @@ export function clearActiveSystem() {
 
     clearFleet();
     clearJumpGates();
+
+    if (STATE.voyagerProbe && STATE.voyagerProbe.mesh) {
+        scene.remove(STATE.voyagerProbe.mesh);
+        disposeObject3D(STATE.voyagerProbe.mesh);
+        STATE.voyagerProbe = null;
+    }
 
     const badge = document.getElementById('target-lock-badge');
     const label = document.getElementById('target-label-text');
@@ -571,7 +580,41 @@ export function spawnPlanetsAndAsteroids() {
     });
 
     initPlanetDefenseFleets();
+
+    // Spawn Voyager 2 probe in the starting system
+    if (STATE.currentSystemId === 1 || STATE.currentSystemId === 0) {
+        spawnVoyagerProbe();
+    }
+
     addLogEntry("NAV", `Sensoren initialisiert: ${activeSystem.name} [${activeSystem.sectorName || 'Sektor'}].`);
+}
+
+export function spawnVoyagerProbe() {
+    if (STATE.voyagerProbe && STATE.voyagerProbe.mesh) {
+        scene.remove(STATE.voyagerProbe.mesh);
+        disposeObject3D(STATE.voyagerProbe.mesh);
+        STATE.voyagerProbe = null;
+    }
+
+    const voyagerController = createVoyagerProbeMesh(2.2);
+    // Position 35 units ahead of starting player pos (0, 0, 65)
+    voyagerController.group.position.set(18, 0, 88);
+    scene.add(voyagerController.group);
+
+    const probeObj: any = {
+        mesh: voyagerController.group,
+        update: voyagerController.update,
+        type: 'voyager_probe',
+        name: 'Voyager 2 (Archaische Raumsonde)',
+        mass: 0.5,
+        radius: 2.2,
+        gravityRange: 10.0,
+        position: voyagerController.group.position,
+        isVoyager: true
+    };
+
+    STATE.voyagerProbe = probeObj;
+    STATE.gravitySources.push(probeObj);
 }
 
 // ----------------------------------------------------------------------------

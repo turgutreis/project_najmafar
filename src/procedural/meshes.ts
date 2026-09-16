@@ -616,3 +616,124 @@ export function createJumpGateMesh(size: number = 9.0, factionColor: number = 0x
     scene.add(group);
     return controller;
 }
+
+// 7. Historical Voyager 2 Space Probe POI
+export function createVoyagerProbeMesh(size: number = 2.2) {
+    const group = new THREE.Group();
+
+    // A. Main 10-sided Equipment Bus (Central Body)
+    const busGeo = new THREE.CylinderGeometry(size * 0.45, size * 0.45, size * 0.35, 10);
+    const busMat = new THREE.MeshStandardMaterial({
+        color: 0x27272a,
+        metalness: 0.8,
+        roughness: 0.3
+    });
+    const busMesh = new THREE.Mesh(busGeo, busMat);
+    group.add(busMesh);
+
+    // B. Parabolic High-Gain Antenna Dish (3.7m diameter representation)
+    const dishGeo = new THREE.SphereGeometry(size * 1.1, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.38);
+    const dishMat = new THREE.MeshStandardMaterial({
+        color: 0xf4f4f5,
+        metalness: 0.5,
+        roughness: 0.25,
+        side: THREE.DoubleSide
+    });
+    const dishMesh = new THREE.Mesh(dishGeo, dishMat);
+    dishMesh.rotation.x = Math.PI; // Concave facing upwards / forwards
+    dishMesh.position.set(0, size * 0.35, 0);
+    group.add(dishMesh);
+
+    // C. Sub-Reflector Tripod Feed
+    const feedPoleGeo = new THREE.CylinderGeometry(0.02 * size, 0.02 * size, size * 0.6, 6);
+    const feedMat = new THREE.MeshStandardMaterial({ color: 0x71717a, metalness: 0.9, roughness: 0.2 });
+    const feedPole = new THREE.Mesh(feedPoleGeo, feedMat);
+    feedPole.position.set(0, size * 0.75, 0);
+    group.add(feedPole);
+
+    const subReflectorGeo = new THREE.ConeGeometry(size * 0.12, size * 0.12, 8);
+    const subReflector = new THREE.Mesh(subReflectorGeo, feedMat);
+    subReflector.rotation.x = Math.PI;
+    subReflector.position.set(0, size * 1.05, 0);
+    group.add(subReflector);
+
+    // D. The Golden Record (Gold-Plated Phonograph Record on Probe Flank)
+    const recordGeo = new THREE.CylinderGeometry(size * 0.32, size * 0.32, 0.03 * size, 32);
+    const recordMat = new THREE.MeshStandardMaterial({
+        color: 0xffd700,
+        emissive: 0xd97706,
+        emissiveIntensity: 0.45,
+        metalness: 0.98,
+        roughness: 0.12
+    });
+    const goldenRecord = new THREE.Mesh(recordGeo, recordMat);
+    goldenRecord.position.set(size * 0.46, -size * 0.05, 0);
+    goldenRecord.rotation.z = Math.PI / 2; // Flat against the side bus
+    group.add(goldenRecord);
+
+    // Subtle Grooves Center Ring
+    const recordCenterGeo = new THREE.CylinderGeometry(size * 0.08, size * 0.08, 0.035 * size, 16);
+    const recordCenterMat = new THREE.MeshStandardMaterial({ color: 0x18181b, metalness: 0.9, roughness: 0.5 });
+    const recordCenter = new THREE.Mesh(recordCenterGeo, recordCenterMat);
+    recordCenter.position.copy(goldenRecord.position);
+    recordCenter.rotation.copy(goldenRecord.rotation);
+    group.add(recordCenter);
+
+    // E. Magnetometer Boom (Long structural truss)
+    const boomGeo = new THREE.CylinderGeometry(0.025 * size, 0.025 * size, size * 3.2, 8);
+    const boomMat = new THREE.MeshStandardMaterial({ color: 0xa1a1aa, metalness: 0.85, roughness: 0.3 });
+    const boomMesh = new THREE.Mesh(boomGeo, boomMat);
+    boomMesh.position.set(-size * 1.6, -size * 0.2, 0);
+    boomMesh.rotation.z = Math.PI / 2.3;
+    group.add(boomMesh);
+
+    // Magnetometer Canister at Boom Tip
+    const magCanisterGeo = new THREE.CylinderGeometry(size * 0.08, size * 0.08, size * 0.22, 12);
+    const magCanister = new THREE.Mesh(magCanisterGeo, recordMat);
+    magCanister.position.set(-size * 3.1, size * 0.3, 0);
+    group.add(magCanister);
+
+    // F. RTG Power Source Boom (Radioisotope Thermoelectric Generators)
+    const rtgGeo = new THREE.BoxGeometry(size * 0.7, size * 0.2, size * 0.2);
+    const rtgMat = new THREE.MeshStandardMaterial({ color: 0x3f3f46, metalness: 0.9, roughness: 0.4 });
+    const rtgMesh = new THREE.Mesh(rtgGeo, rtgMat);
+    rtgMesh.position.set(size * 0.7, -size * 0.4, size * 0.5);
+    group.add(rtgMesh);
+
+    // G. Optical Beacon Light & Golden Signal Halo
+    const beaconLight = new THREE.PointLight(0xf59e0b, 1.8, 45, 1.2);
+    beaconLight.position.set(0, size * 1.1, 0);
+    group.add(beaconLight);
+
+    const haloGeo = new THREE.RingGeometry(size * 0.4, size * 0.55, 32);
+    const haloMat = new THREE.MeshBasicMaterial({
+        color: 0xf59e0b,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.45
+    });
+    const signalHalo = new THREE.Mesh(haloGeo, haloMat);
+    signalHalo.position.set(0, size * 1.15, 0);
+    signalHalo.rotation.x = Math.PI / 2;
+    group.add(signalHalo);
+
+    return {
+        group,
+        goldenRecord,
+        beaconLight,
+        signalHalo,
+        update: (dt: number) => {
+            // Gentle spatial drift / rotation
+            group.rotation.y += 0.05 * dt;
+            group.rotation.x += 0.02 * dt;
+            // Golden Record rotation
+            goldenRecord.rotation.y += 1.2 * dt;
+            // Pulsing carrier wave beacon
+            const pulse = 0.5 + Math.sin(Date.now() * 0.004) * 0.5;
+            beaconLight.intensity = 1.0 + pulse * 1.5;
+            signalHalo.scale.setScalar(1.0 + pulse * 0.4);
+            (signalHalo.material as THREE.Material).opacity = 0.25 + pulse * 0.4;
+        }
+    };
+}
+

@@ -390,6 +390,12 @@ export interface GameState {
     systemDepartureMaxTime?: number;
     systemDepartureDirection?: THREE.Vector3;
     systemDepartureTarget?: StarSystem | null;
+
+    // Voyager 2 & First-Time User Experience (FTUE)
+    voyagerProbe?: any | null;
+    voyagerScanned?: boolean;
+    ftueStep?: number; // 0: Move, 1: Voyager, 2: Planet Scan, 3: Abduct, 4: Complete/Map
+    ftueCompleted?: boolean;
 }
 
 export type OrbitLevel = 'solar' | 'planet' | 'moon';

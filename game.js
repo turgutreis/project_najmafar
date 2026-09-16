@@ -29466,7 +29466,11 @@ var STATE = {
   systemDepartureTimer: 0,
   systemDepartureMaxTime: 1.6,
   systemDepartureDirection: new Vector3(1, 0, 0),
-  systemDepartureTarget: null
+  systemDepartureTarget: null,
+  voyagerProbe: null,
+  voyagerScanned: false,
+  ftueStep: 0,
+  ftueCompleted: false
 };
 var activePlanets = [];
 
@@ -32040,6 +32044,100 @@ function createJumpGateMesh(size = 9, factionColor = 3718648) {
   scene.add(group);
   return controller;
 }
+function createVoyagerProbeMesh(size = 2.2) {
+  const group = new Group;
+  const busGeo = new CylinderGeometry(size * 0.45, size * 0.45, size * 0.35, 10);
+  const busMat = new MeshStandardMaterial({
+    color: 2565930,
+    metalness: 0.8,
+    roughness: 0.3
+  });
+  const busMesh = new Mesh(busGeo, busMat);
+  group.add(busMesh);
+  const dishGeo = new SphereGeometry(size * 1.1, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.38);
+  const dishMat = new MeshStandardMaterial({
+    color: 16053493,
+    metalness: 0.5,
+    roughness: 0.25,
+    side: DoubleSide
+  });
+  const dishMesh = new Mesh(dishGeo, dishMat);
+  dishMesh.rotation.x = Math.PI;
+  dishMesh.position.set(0, size * 0.35, 0);
+  group.add(dishMesh);
+  const feedPoleGeo = new CylinderGeometry(0.02 * size, 0.02 * size, size * 0.6, 6);
+  const feedMat = new MeshStandardMaterial({ color: 7434618, metalness: 0.9, roughness: 0.2 });
+  const feedPole = new Mesh(feedPoleGeo, feedMat);
+  feedPole.position.set(0, size * 0.75, 0);
+  group.add(feedPole);
+  const subReflectorGeo = new ConeGeometry(size * 0.12, size * 0.12, 8);
+  const subReflector = new Mesh(subReflectorGeo, feedMat);
+  subReflector.rotation.x = Math.PI;
+  subReflector.position.set(0, size * 1.05, 0);
+  group.add(subReflector);
+  const recordGeo = new CylinderGeometry(size * 0.32, size * 0.32, 0.03 * size, 32);
+  const recordMat = new MeshStandardMaterial({
+    color: 16766720,
+    emissive: 14251782,
+    emissiveIntensity: 0.45,
+    metalness: 0.98,
+    roughness: 0.12
+  });
+  const goldenRecord = new Mesh(recordGeo, recordMat);
+  goldenRecord.position.set(size * 0.46, -size * 0.05, 0);
+  goldenRecord.rotation.z = Math.PI / 2;
+  group.add(goldenRecord);
+  const recordCenterGeo = new CylinderGeometry(size * 0.08, size * 0.08, 0.035 * size, 16);
+  const recordCenterMat = new MeshStandardMaterial({ color: 1579035, metalness: 0.9, roughness: 0.5 });
+  const recordCenter = new Mesh(recordCenterGeo, recordCenterMat);
+  recordCenter.position.copy(goldenRecord.position);
+  recordCenter.rotation.copy(goldenRecord.rotation);
+  group.add(recordCenter);
+  const boomGeo = new CylinderGeometry(0.025 * size, 0.025 * size, size * 3.2, 8);
+  const boomMat = new MeshStandardMaterial({ color: 10592682, metalness: 0.85, roughness: 0.3 });
+  const boomMesh = new Mesh(boomGeo, boomMat);
+  boomMesh.position.set(-size * 1.6, -size * 0.2, 0);
+  boomMesh.rotation.z = Math.PI / 2.3;
+  group.add(boomMesh);
+  const magCanisterGeo = new CylinderGeometry(size * 0.08, size * 0.08, size * 0.22, 12);
+  const magCanister = new Mesh(magCanisterGeo, recordMat);
+  magCanister.position.set(-size * 3.1, size * 0.3, 0);
+  group.add(magCanister);
+  const rtgGeo = new BoxGeometry(size * 0.7, size * 0.2, size * 0.2);
+  const rtgMat = new MeshStandardMaterial({ color: 4144966, metalness: 0.9, roughness: 0.4 });
+  const rtgMesh = new Mesh(rtgGeo, rtgMat);
+  rtgMesh.position.set(size * 0.7, -size * 0.4, size * 0.5);
+  group.add(rtgMesh);
+  const beaconLight = new PointLight(16096779, 1.8, 45, 1.2);
+  beaconLight.position.set(0, size * 1.1, 0);
+  group.add(beaconLight);
+  const haloGeo = new RingGeometry(size * 0.4, size * 0.55, 32);
+  const haloMat = new MeshBasicMaterial({
+    color: 16096779,
+    side: DoubleSide,
+    transparent: true,
+    opacity: 0.45
+  });
+  const signalHalo = new Mesh(haloGeo, haloMat);
+  signalHalo.position.set(0, size * 1.15, 0);
+  signalHalo.rotation.x = Math.PI / 2;
+  group.add(signalHalo);
+  return {
+    group,
+    goldenRecord,
+    beaconLight,
+    signalHalo,
+    update: (dt) => {
+      group.rotation.y += 0.05 * dt;
+      group.rotation.x += 0.02 * dt;
+      goldenRecord.rotation.y += 1.2 * dt;
+      const pulse = 0.5 + Math.sin(Date.now() * 0.004) * 0.5;
+      beaconLight.intensity = 1 + pulse * 1.5;
+      signalHalo.scale.setScalar(1 + pulse * 0.4);
+      signalHalo.material.opacity = 0.25 + pulse * 0.4;
+    }
+  };
+}
 
 // src/engine/audio.ts
 var audioListener = null;
@@ -32728,6 +32826,115 @@ function playWarpSnapSound() {
   impactGain.connect(ctx.destination);
   impactOsc.start(time);
   impactOsc.stop(time + 0.4);
+}
+function playHeartbeatPulse() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const time = ctx.currentTime;
+  const osc1 = ctx.createOscillator();
+  const gain1 = ctx.createGain();
+  const filter1 = ctx.createBiquadFilter();
+  osc1.type = "sine";
+  osc1.frequency.setValueAtTime(58, time);
+  if (osc1.frequency.exponentialRampToValueAtTime) {
+    osc1.frequency.exponentialRampToValueAtTime(32, time + 0.22);
+  }
+  filter1.type = "lowpass";
+  filter1.frequency.setValueAtTime(110, time);
+  gain1.gain.setValueAtTime(0, time);
+  gain1.gain.linearRampToValueAtTime(0.28, time + 0.04);
+  gain1.gain.exponentialRampToValueAtTime(0.001, time + 0.24);
+  osc1.connect(filter1);
+  filter1.connect(gain1);
+  gain1.connect(ctx.destination);
+  osc1.start(time);
+  osc1.stop(time + 0.26);
+  const osc2 = ctx.createOscillator();
+  const gain2 = ctx.createGain();
+  const filter2 = ctx.createBiquadFilter();
+  osc2.type = "sine";
+  osc2.frequency.setValueAtTime(48, time + 0.28);
+  if (osc2.frequency.exponentialRampToValueAtTime) {
+    osc2.frequency.exponentialRampToValueAtTime(26, time + 0.52);
+  }
+  filter2.type = "lowpass";
+  filter2.frequency.setValueAtTime(95, time + 0.28);
+  gain2.gain.setValueAtTime(0, time + 0.28);
+  gain2.gain.linearRampToValueAtTime(0.22, time + 0.32);
+  gain2.gain.exponentialRampToValueAtTime(0.001, time + 0.54);
+  osc2.connect(filter2);
+  filter2.connect(gain2);
+  gain2.connect(ctx.destination);
+  osc2.start(time + 0.28);
+  osc2.stop(time + 0.56);
+}
+function playVoyagerBeaconPing() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const time = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const bandpass = ctx.createBiquadFilter();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(1420, time);
+  if (osc.frequency.linearRampToValueAtTime) {
+    osc.frequency.linearRampToValueAtTime(1416, time + 0.18);
+  }
+  bandpass.type = "bandpass";
+  bandpass.frequency.setValueAtTime(1420, time);
+  bandpass.Q.setValueAtTime(8, time);
+  gain.gain.setValueAtTime(0, time);
+  gain.gain.linearRampToValueAtTime(0.12, time + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+  osc.connect(bandpass);
+  bandpass.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(time);
+  osc.stop(time + 0.25);
+}
+function playGoldenRecordAudio() {
+  const ctx = getAudioContext();
+  if (!ctx)
+    return;
+  const time = ctx.currentTime;
+  const bufferSize = Math.floor(ctx.sampleRate * 2.8);
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0;i < bufferSize; i++) {
+    const pop = Math.random() < 0.002 ? (Math.random() - 0.5) * 1.8 : 0;
+    data[i] = (Math.random() * 2 - 1) * 0.05 + pop;
+  }
+  const crackle = ctx.createBufferSource();
+  crackle.buffer = buffer;
+  const crackleFilter = ctx.createBiquadFilter();
+  crackleFilter.type = "bandpass";
+  crackleFilter.frequency.setValueAtTime(1800, time);
+  crackleFilter.Q.setValueAtTime(1.2, time);
+  const crackleGain = ctx.createGain();
+  crackleGain.gain.setValueAtTime(0.08, time);
+  crackleGain.gain.exponentialRampToValueAtTime(0.001, time + 2.8);
+  crackle.connect(crackleFilter);
+  crackleFilter.connect(crackleGain);
+  crackleGain.connect(ctx.destination);
+  crackle.start(time);
+  crackle.stop(time + 2.85);
+  const freqs = [261.63, 329.63, 392, 523.25];
+  freqs.forEach((freq, idx) => {
+    const osc = ctx.createOscillator();
+    const chordGain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(freq, time);
+    const startOffset = idx * 0.12;
+    chordGain.gain.setValueAtTime(0, time);
+    chordGain.gain.linearRampToValueAtTime(0.07, time + 0.4 + startOffset);
+    chordGain.gain.exponentialRampToValueAtTime(0.001, time + 3.2);
+    osc.connect(chordGain);
+    chordGain.connect(ctx.destination);
+    osc.start(time + startOffset);
+    osc.stop(time + 3.4);
+  });
 }
 
 // src/ui/party-grid.ts
@@ -34062,6 +34269,130 @@ function generateProceduralCandidates(seedHash, count = 2, bannedNames) {
   return candidates;
 }
 
+// src/ui/directives.ts
+var FTUE_DIRECTIVES = [
+  {
+    id: 0,
+    badge: "PHASE 1",
+    title: "Lebensfunke",
+    instruction: "Bewege die Najmafar mit [W/A/S/D] oder [Maus-Lenkung]",
+    hint: "Aktiviere den Bio-Schub und richte deine Sinnesorgane aus."
+  },
+  {
+    id: 1,
+    badge: "PHASE 2",
+    title: "Archaisches Signal",
+    instruction: "Folge dem goldenen Signal zur Sonde & Scanne mit [F]",
+    hint: "Ein uraltes Artefakt (Voyager 2) treibt in ca. 35 AE Entfernung."
+  },
+  {
+    id: 2,
+    badge: "PHASE 3",
+    title: "Nahrungsaufnahme",
+    instruction: "Fliege einen Planeten an & Halte [F] zum Spektralscan",
+    hint: "Finde Biomasse oder Silizium zur Selbstreparatur und Stärkung."
+  },
+  {
+    id: 3,
+    badge: "PHASE 4",
+    title: "Gegen die Leere",
+    instruction: "Scanne eine bewohnte Welt & führe Entführung durch [F]",
+    hint: "Übernehme ein intelligentes Wesen in deine Kokon-Matrix, um Einsamkeit zu senken."
+  },
+  {
+    id: 4,
+    badge: "PHASE 5",
+    title: "Die große Reise",
+    instruction: "Öffne die Sternenkarte mit [M] – Kurs zum Kern",
+    hint: "Sammle Chronos-Fragmente und erreiche Sagittarius A*."
+  }
+];
+var isCollapsed = false;
+function initDirectivesHUD() {
+  const toggleBtn = document.getElementById("toggle-directives-btn");
+  const container = document.getElementById("hud-directives");
+  if (toggleBtn && container) {
+    toggleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      isCollapsed = !isCollapsed;
+      container.classList.toggle("collapsed", isCollapsed);
+      toggleBtn.innerText = isCollapsed ? "\uD83D\uDCCB" : "➖";
+    });
+  }
+  renderDirectives();
+}
+function renderDirectives() {
+  const container = document.getElementById("directives-list");
+  if (!container)
+    return;
+  const currentStep = STATE.ftueStep || 0;
+  let html = "";
+  FTUE_DIRECTIVES.forEach((d) => {
+    const isDone = d.id < currentStep;
+    const isActive = d.id === currentStep;
+    const isLocked = d.id > currentStep;
+    const statusClass = isDone ? "done" : isActive ? "active" : "locked";
+    const checkmark = isDone ? "✔" : isActive ? "◉" : "○";
+    html += `
+            <div class="directive-card ${statusClass}" data-step="${d.id}">
+                <div class="directive-status-icon">${checkmark}</div>
+                <div class="directive-body">
+                    <div class="directive-header">
+                        <span class="directive-badge">${d.badge}</span>
+                        <span class="directive-title">${d.title}</span>
+                    </div>
+                    <div class="directive-instruction">${d.instruction}</div>
+                    ${isActive ? `<div class="directive-hint">${d.hint}</div>` : ""}
+                </div>
+            </div>
+        `;
+  });
+  container.innerHTML = html;
+}
+function advanceFtueStep(targetStep) {
+  const current = STATE.ftueStep || 0;
+  if (targetStep > current) {
+    STATE.ftueStep = targetStep;
+    const completedDirective = FTUE_DIRECTIVES[current];
+    if (completedDirective) {
+      addLogEntry("SYSTEM", `Direktive erfüllt: [${completedDirective.title}] ✔`);
+    }
+    if (targetStep >= FTUE_DIRECTIVES.length) {
+      STATE.ftueCompleted = true;
+      addLogEntry("SYSTEM", "Alle Einführungs-Direktiven abgeschlossen. Das Schicksal der Galaxie liegt in deinen Händen.");
+    }
+    renderDirectives();
+  }
+}
+function updateVoyagerHUDTracker() {
+  const trackerEl = document.getElementById("voyager-nav-tracker");
+  if (!trackerEl)
+    return;
+  if (!STATE.voyagerProbe || STATE.voyagerScanned) {
+    trackerEl.style.display = "none";
+    return;
+  }
+  const playerPos = STATE.playerPosition;
+  const probePos = STATE.voyagerProbe.position;
+  if (!playerPos || !probePos)
+    return;
+  const dx = probePos.x - playerPos.x;
+  const dz = probePos.z - playerPos.z;
+  const dist = Math.hypot(dx, dz);
+  trackerEl.style.display = "flex";
+  const distEl = document.getElementById("voyager-nav-dist");
+  const angleEl = document.getElementById("voyager-nav-arrow");
+  if (distEl) {
+    distEl.innerText = `${dist.toFixed(1)} AE`;
+  }
+  if (angleEl) {
+    const targetAngle = Math.atan2(dz, dx);
+    const heading = STATE.shipHeading || 0;
+    const relativeAngleDeg = (targetAngle - heading) * 180 / Math.PI;
+    angleEl.style.transform = `rotate(${relativeAngleDeg}deg)`;
+  }
+}
+
 // src/systems/scanner.ts
 function generatePlanetAttributes(p) {
   if (p.atmos && p.temp && p.bio && p.res && (p.type !== "Habitable" || p.species && p.species.candidates && p.species.candidates.length > 0)) {
@@ -34195,6 +34526,7 @@ function completeScanning() {
     if (planet.attributes.species && planet.attributes.species.population > 0) {
       addLogEntry("SYSTEM", `PSIO-DETEKTION: Intelligentes Leben (${planet.attributes.species.name}) auf ${planet.name} entdeckt! Psionischer Transfer [F] bereit.`);
     }
+    advanceFtueStep(3);
     updateScannerUI(planet, 10);
   }
   STATE.scanningPlanet = null;
@@ -35609,6 +35941,9 @@ var activeSunRays = null;
 function updateUniverseShaders(dt, cam) {
   activeCoronaUpdaters.forEach((fn) => fn(dt));
   activeJumpGates.forEach((jg) => jg.update(dt));
+  if (STATE.voyagerProbe && STATE.voyagerProbe.update) {
+    STATE.voyagerProbe.update(dt);
+  }
   if (activeSunRays && cam) {
     activeSunRays.update(dt, cam);
   }
@@ -35742,6 +36077,11 @@ function clearActiveSystem() {
   STATE.abductProgress = 0;
   clearFleet();
   clearJumpGates();
+  if (STATE.voyagerProbe && STATE.voyagerProbe.mesh) {
+    scene.remove(STATE.voyagerProbe.mesh);
+    disposeObject3D(STATE.voyagerProbe.mesh);
+    STATE.voyagerProbe = null;
+  }
   const badge = document.getElementById("target-lock-badge");
   const label = document.getElementById("target-label-text");
   if (badge)
@@ -36080,7 +36420,33 @@ function spawnPlanetsAndAsteroids() {
     STATE.asteroids.push(sourceObj);
   });
   initPlanetDefenseFleets();
+  if (STATE.currentSystemId === 1 || STATE.currentSystemId === 0) {
+    spawnVoyagerProbe();
+  }
   addLogEntry("NAV", `Sensoren initialisiert: ${activeSystem.name} [${activeSystem.sectorName || "Sektor"}].`);
+}
+function spawnVoyagerProbe() {
+  if (STATE.voyagerProbe && STATE.voyagerProbe.mesh) {
+    scene.remove(STATE.voyagerProbe.mesh);
+    disposeObject3D(STATE.voyagerProbe.mesh);
+    STATE.voyagerProbe = null;
+  }
+  const voyagerController = createVoyagerProbeMesh(2.2);
+  voyagerController.group.position.set(18, 0, 88);
+  scene.add(voyagerController.group);
+  const probeObj = {
+    mesh: voyagerController.group,
+    update: voyagerController.update,
+    type: "voyager_probe",
+    name: "Voyager 2 (Archaische Raumsonde)",
+    mass: 0.5,
+    radius: 2.2,
+    gravityRange: 10,
+    position: voyagerController.group.position,
+    isVoyager: true
+  };
+  STATE.voyagerProbe = probeObj;
+  STATE.gravitySources.push(probeObj);
 }
 function initiateSystemDeparture(fromSys, targetSys) {
   if (!targetSys)
@@ -37267,6 +37633,7 @@ function completeAbduction() {
         STATE.loneliness = Math.min(STATE.loneliness, instantTarget);
         addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.roleName || candidate.role}) in Kokon-Kammer transferiert.`);
         addLogEntry("CREW", `Traum-Matrix initialisiert: ${candidate.name} lindert deine Einsamkeit! (${Math.round(STATE.loneliness)}% Einsamkeit)`);
+        advanceFtueStep(4);
         renderCrewUI();
         updatePartyGrid();
         updateHUDStats();
@@ -37496,6 +37863,9 @@ function setupControls() {
     }
     if (key === "m") {
       toggleGalaxyMap();
+      if ((STATE.ftueStep || 0) >= 4) {
+        advanceFtueStep(5);
+      }
     }
     if (key === "q") {
       triggerPsionicSonar();
@@ -37525,6 +37895,28 @@ function setupControls() {
         toggleDeckModal(false);
     }
     if (key === "f") {
+      if (STATE.voyagerProbe && STATE.voyagerProbe.position) {
+        const voyagerDist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
+        if (voyagerDist <= 22) {
+          if (!STATE.voyagerScanned) {
+            STATE.voyagerScanned = true;
+            playGoldenRecordAudio();
+            STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
+            STATE.loneliness = Math.max(0, STATE.loneliness - 25);
+            advanceFtueStep(2);
+            addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
+            addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
+            addLogEntry("SYSTEM", "Mentale Feldstärke um +30% regeneriert. Die Einsamkeit weicht.");
+            addLogEntry("NAV", "Interstellare Vektoren freigeschaltet. Nächste habitable Welten auf Sensorik markiert.");
+            const hint = document.getElementById("flight-controls-hint");
+            if (hint)
+              hint.classList.add("hidden");
+            return;
+          } else {
+            addLogEntry("SYSTEM", "Voyager 2: Die Golden Record rotiert leise im Äther. Resonanz stabil.");
+          }
+        }
+      }
       if (STATE.nearestPlanet) {
         const isScanned = STATE.nearestPlanet.scanned || STATE.scannedPlanets && STATE.scannedPlanets[STATE.nearestPlanet.name];
         if (isScanned) {
@@ -37544,14 +37936,26 @@ function setupControls() {
         triggerHarvestStart();
       }
     }
-    if (key === "w" || e.key === "ArrowUp")
+    if (key === "w" || e.key === "ArrowUp") {
       STATE.keys.w = true;
-    if (key === "s" || e.key === "ArrowDown")
+      if ((STATE.ftueStep || 0) === 0)
+        advanceFtueStep(1);
+    }
+    if (key === "s" || e.key === "ArrowDown") {
       STATE.keys.s = true;
-    if (key === "a" || e.key === "ArrowLeft")
+      if ((STATE.ftueStep || 0) === 0)
+        advanceFtueStep(1);
+    }
+    if (key === "a" || e.key === "ArrowLeft") {
       STATE.keys.a = true;
-    if (key === "d" || e.key === "ArrowRight")
+      if ((STATE.ftueStep || 0) === 0)
+        advanceFtueStep(1);
+    }
+    if (key === "d" || e.key === "ArrowRight") {
       STATE.keys.d = true;
+      if ((STATE.ftueStep || 0) === 0)
+        advanceFtueStep(1);
+    }
   });
   window.addEventListener("keyup", (e) => {
     let key = e.key.toLowerCase();
@@ -38512,8 +38916,183 @@ function updateCollisions(dt) {
   }
 }
 
+// src/ui/prologue.ts
+var PROLOGUE_STORY = [
+  {
+    text: "Deine Heimatwelt ist weiter als das Licht entfernt...",
+    subtext: "Milliarden Parsec im toten Vakuum.",
+    duration: 3800,
+    heartbeat: true
+  },
+  {
+    text: "Du hast gesehen, wie Sterne sterben können.",
+    subtext: "Ganze Sonnenreiche verglüht zu schwarzer Asche.",
+    duration: 3800,
+    heartbeat: true
+  },
+  {
+    text: "Was bleiben wird, sind Säulen der Leere.",
+    subtext: "Ein Universum im Kältetod. Und du, der letzte Leviathan.",
+    duration: 4000,
+    heartbeat: true
+  },
+  {
+    text: "Und doch... durchdringt ein schwaches, archaisches Echo das Vakuum.",
+    subtext: "1420 MHz Mikrowellenstrahlung. Künstlich geordnet.",
+    duration: 4200,
+    heartbeat: false
+  },
+  {
+    text: "Ein Signal aus einer fernen Epoche.",
+    subtext: "Eine goldene Botschaft, driftend im interstellaren Eis.",
+    duration: 4000,
+    heartbeat: true
+  },
+  {
+    text: "Erwache, Najmafar.",
+    subtext: "Folge dem Signal der Kinder der Erde.",
+    duration: 3800,
+    heartbeat: true
+  }
+];
+var isPrologueActive = false;
+var prologueTimeout = null;
+var currentLineIndex = 0;
+var onCompleteCallback = null;
+function triggerPrologueSequence(onComplete) {
+  const overlay = document.getElementById("prologue-overlay");
+  if (!overlay) {
+    onComplete();
+    return;
+  }
+  const seenPrologue = sessionStorage.getItem("where_stars_die_prologue_seen");
+  if (seenPrologue === "true") {}
+  isPrologueActive = true;
+  onCompleteCallback = onComplete;
+  currentLineIndex = 0;
+  overlay.classList.remove("hidden");
+  overlay.classList.add("visible");
+  const textEl = document.getElementById("prologue-main-text");
+  const subTextEl = document.getElementById("prologue-sub-text");
+  const stepEl = document.getElementById("prologue-step-counter");
+  function showLine(index) {
+    if (!isPrologueActive)
+      return;
+    if (index >= PROLOGUE_STORY.length) {
+      finishPrologue();
+      return;
+    }
+    const line = PROLOGUE_STORY[index];
+    if (line.heartbeat) {
+      try {
+        playHeartbeatPulse();
+      } catch (e) {}
+    }
+    if (textEl) {
+      textEl.classList.remove("fade-in");
+      textEl.offsetWidth;
+      textEl.innerText = line.text;
+      textEl.classList.add("fade-in");
+    }
+    if (subTextEl) {
+      subTextEl.classList.remove("fade-in");
+      subTextEl.offsetWidth;
+      subTextEl.innerText = line.subtext || "";
+      subTextEl.classList.add("fade-in");
+    }
+    if (stepEl) {
+      stepEl.innerText = `${index + 1} / ${PROLOGUE_STORY.length}`;
+    }
+    prologueTimeout = setTimeout(() => {
+      currentLineIndex++;
+      showLine(currentLineIndex);
+    }, line.duration);
+  }
+  showLine(0);
+}
+function finishPrologue() {
+  if (!isPrologueActive)
+    return;
+  isPrologueActive = false;
+  if (prologueTimeout) {
+    clearTimeout(prologueTimeout);
+    prologueTimeout = null;
+  }
+  sessionStorage.setItem("where_stars_die_prologue_seen", "true");
+  const overlay = document.getElementById("prologue-overlay");
+  if (overlay) {
+    overlay.classList.remove("visible");
+    overlay.classList.add("fade-out");
+    setTimeout(() => {
+      overlay.classList.remove("fade-out");
+      overlay.classList.add("hidden");
+    }, 1200);
+  }
+  if (onCompleteCallback) {
+    const cb = onCompleteCallback;
+    onCompleteCallback = null;
+    cb();
+  }
+}
+function initPrologueListeners() {
+  const skipBtn = document.getElementById("skip-prologue-btn");
+  if (skipBtn) {
+    skipBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      finishPrologue();
+    });
+  }
+  const overlay = document.getElementById("prologue-overlay");
+  if (overlay) {
+    overlay.addEventListener("click", () => {
+      if (isPrologueActive) {
+        currentLineIndex++;
+        if (currentLineIndex >= PROLOGUE_STORY.length) {
+          finishPrologue();
+        } else {
+          if (prologueTimeout)
+            clearTimeout(prologueTimeout);
+          const textEl = document.getElementById("prologue-main-text");
+          const subTextEl = document.getElementById("prologue-sub-text");
+          const stepEl = document.getElementById("prologue-step-counter");
+          const line = PROLOGUE_STORY[currentLineIndex];
+          if (line.heartbeat)
+            playHeartbeatPulse();
+          if (textEl) {
+            textEl.classList.remove("fade-in");
+            textEl.offsetWidth;
+            textEl.innerText = line.text;
+            textEl.classList.add("fade-in");
+          }
+          if (subTextEl) {
+            subTextEl.classList.remove("fade-in");
+            subTextEl.offsetWidth;
+            subTextEl.innerText = line.subtext || "";
+            subTextEl.classList.add("fade-in");
+          }
+          if (stepEl)
+            stepEl.innerText = `${currentLineIndex + 1} / ${PROLOGUE_STORY.length}`;
+          prologueTimeout = setTimeout(() => {
+            currentLineIndex++;
+            if (currentLineIndex >= PROLOGUE_STORY.length)
+              finishPrologue();
+          }, line.duration);
+        }
+      }
+    });
+  }
+  window.addEventListener("keydown", (e) => {
+    if (!isPrologueActive)
+      return;
+    if (e.key === "Escape" || e.key === " " || e.key === "Enter") {
+      finishPrologue();
+    }
+  });
+}
+
 // src/main.ts
 var lastTime = 0;
+var voyagerBeaconTimer = 0;
 function animate(time) {
   if (time === undefined) {
     requestAnimationFrame(animate);
@@ -38545,6 +39124,17 @@ function animate(time) {
     updateExplosionEffects(dt);
     updateTrajectory();
     updateMinimap();
+    updateVoyagerHUDTracker();
+    if (STATE.voyagerProbe && !STATE.voyagerScanned) {
+      const probeDist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
+      if (probeDist < 85) {
+        voyagerBeaconTimer += dt;
+        if (voyagerBeaconTimer >= 3.8) {
+          voyagerBeaconTimer = 0;
+          playVoyagerBeaconPing();
+        }
+      }
+    }
     if (alienShipController) {
       alienShipController.update(dt);
     }
@@ -38582,6 +39172,8 @@ function init() {
   initDeckUI();
   initOptionsUI();
   initGameOverUI();
+  initPrologueListeners();
+  initDirectivesHUD();
   renderCrewUI();
   updateMutationUI();
   checkUniverseData();
@@ -38609,11 +39201,14 @@ function setupMenuListeners() {
           STATE.playerGroup.position.set(0, 0, 65);
         }
       }
-      if (!isMusicPlaying() && !isMusicUserMuted()) {
-        toggleMusic(true);
-      }
-      addLogEntry("SYSTEM", "Biologisches Raumschiff erwacht. Psionische Sensoren online.");
-      addLogEntry("CREW", "Capt. Miller: 'Systeme nominal. Wir fliegen mit vollem Schub!'");
+      renderDirectives();
+      triggerPrologueSequence(() => {
+        if (!isMusicPlaying() && !isMusicUserMuted()) {
+          toggleMusic(true);
+        }
+        addLogEntry("SYSTEM", "Biologisches Raumschiff erwacht. Psionische Sensoren online.");
+        addLogEntry("VOYAGER", "Schwaches Mikrowellen-Signal (1420 MHz) empfangen: VOYAGER 2 treibt im Sektor.");
+      });
     });
   }
   if (resumeBtn && mainMenu) {

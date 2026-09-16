@@ -5,6 +5,7 @@ import { addLogEntry, updateHUDStats } from '../ui/hud';
 import { calculateCrewBuffs, renderCrewUI } from './crew';
 import { updatePartyGrid } from '../ui/party-grid';
 import { updateScannerUI, generatePlanetAttributes } from './scanner';
+import { advanceFtueStep } from '../ui/directives';
 
 let abductOsc: OscillatorNode | null = null;
 let abductGain: GainNode | null = null;
@@ -132,6 +133,7 @@ export function completeAbduction() {
                 addLogEntry("SYSTEM", `PSIONISCHE ASSIMILATION ERFOLGREICH: ${candidate.name} (${candidate.roleName || candidate.role}) in Kokon-Kammer transferiert.`);
                 addLogEntry("CREW", `Traum-Matrix initialisiert: ${candidate.name} lindert deine Einsamkeit! (${Math.round(STATE.loneliness)}% Einsamkeit)`);
 
+                advanceFtueStep(4);
                 renderCrewUI();
                 updatePartyGrid();
                 updateHUDStats();

@@ -309,6 +309,24 @@
         <div id="compass-arrow-needle" class="compass-arrow">▲</div>
     </div>
 
+    <!-- Cinematic Prologue Overlay -->
+    <div id="prologue-overlay" class="prologue-overlay hidden">
+        <div class="prologue-stars-backdrop"></div>
+        <div class="prologue-vignette"></div>
+        <div class="prologue-content">
+            <div class="prologue-eyebrow">
+                <span class="prologue-pulse-dot"></span>
+                <span>CHRONIK DER LEERE &bull; VOYAGER-ECHO</span>
+            </div>
+            <h1 id="prologue-main-text" class="prologue-text">Deine Heimatwelt ist weiter als das Licht entfernt...</h1>
+            <p id="prologue-sub-text" class="prologue-subtext">Milliarden Parsec im toten Vakuum.</p>
+            <div class="prologue-footer">
+                <span id="prologue-step-counter" class="prologue-counter">1 / 6</span>
+                <button id="skip-prologue-btn" class="prologue-skip-btn">Überspringen [Leertaste / ESC]</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Telepathic Overlay Effect -->
     <div id="telepathic-overlay" class="inactive">
         <div class="telepathy-waves"></div>
@@ -393,6 +411,38 @@
                 <span id="chronos-count">0</span>/12</span>
             <button id="music-toggle-btn" class="mini-music-btn" title="Musik umschalten">🔇</button>
             <button id="hud-options-btn" class="mini-music-btn" title="Audio- & Spieloptionen [O]">⚙️</button>
+        </div>
+
+        <!-- FTUE Directives / Mission Log (Top-Right under system pill) -->
+        <aside id="hud-directives" class="hud-directives glass-panel">
+            <div class="directives-header">
+                <div class="directives-title-wrap">
+                    <span class="directives-pulse-dot"></span>
+                    <span class="directives-heading">DIREKTIVEN &bull; ERSTE SCHRITTE</span>
+                </div>
+                <button id="toggle-directives-btn" class="mini-icon-btn" title="Direktiven minimieren">➖</button>
+            </div>
+            <div id="directives-list" class="directives-list">
+                <!-- Dynamically populated by directives.ts -->
+            </div>
+        </aside>
+
+        <!-- Voyager 2 Signal Nav Pointer Widget -->
+        <div id="voyager-nav-tracker" class="voyager-nav-tracker glass-capsule" style="display: none;">
+            <span class="voyager-ping-icon">📡</span>
+            <div class="voyager-tracker-info">
+                <div class="voyager-tracker-title">VOYAGER 2 SIGNAL</div>
+                <div id="voyager-nav-dist" class="voyager-tracker-dist">35.2 AE</div>
+            </div>
+            <div id="voyager-nav-arrow" class="voyager-nav-arrow">▲</div>
+        </div>
+
+        <!-- Initial Flight Controls Hint Overlay (Floating in Viewport) -->
+        <div id="flight-controls-hint" class="flight-controls-hint">
+            <div class="control-key-pill"><span class="key-badge">W</span> Bio-Schub</div>
+            <div class="control-key-pill"><span class="key-badge">A / D</span> Ausrichten</div>
+            <div class="control-key-pill"><span class="key-badge">S</span> Bremsen</div>
+            <div class="control-key-pill"><span class="key-badge">F</span> Voyager-Scan / Resonanz</div>
         </div>
 
         <!-- 3. Contextual Slide-In Sensor Hologram (Left side, only slides in on orbit / target / proximity) -->

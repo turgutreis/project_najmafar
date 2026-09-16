@@ -874,3 +874,145 @@ export function playWarpSnapSound() {
     impactOsc.start(time);
     impactOsc.stop(time + 0.4);
 }
+
+// ----------------------------------------------------------------------------
+// PROLOGUE & VOYAGER 2 SFX (ANALOG CARRIER, GOLDEN RECORD & BIO-HEARTBEAT)
+// ----------------------------------------------------------------------------
+
+export function playHeartbeatPulse() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    // First contraction ("Lub")
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    const filter1 = ctx.createBiquadFilter();
+
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(58, time);
+    if (osc1.frequency.exponentialRampToValueAtTime) {
+        osc1.frequency.exponentialRampToValueAtTime(32, time + 0.22);
+    }
+    filter1.type = 'lowpass';
+    filter1.frequency.setValueAtTime(110, time);
+
+    gain1.gain.setValueAtTime(0, time);
+    gain1.gain.linearRampToValueAtTime(0.28, time + 0.04);
+    gain1.gain.exponentialRampToValueAtTime(0.001, time + 0.24);
+
+    osc1.connect(filter1);
+    filter1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(time);
+    osc1.stop(time + 0.26);
+
+    // Second contraction ("Dub") ~280ms later
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    const filter2 = ctx.createBiquadFilter();
+
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(48, time + 0.28);
+    if (osc2.frequency.exponentialRampToValueAtTime) {
+        osc2.frequency.exponentialRampToValueAtTime(26, time + 0.52);
+    }
+    filter2.type = 'lowpass';
+    filter2.frequency.setValueAtTime(95, time + 0.28);
+
+    gain2.gain.setValueAtTime(0, time + 0.28);
+    gain2.gain.linearRampToValueAtTime(0.22, time + 0.32);
+    gain2.gain.exponentialRampToValueAtTime(0.001, time + 0.54);
+
+    osc2.connect(filter2);
+    filter2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(time + 0.28);
+    osc2.stop(time + 0.56);
+}
+
+export function playVoyagerBeaconPing() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    // Archaic 1970s microwave radio carrier chirp (1420 MHz analog representation)
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const bandpass = ctx.createBiquadFilter();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1420, time);
+    if (osc.frequency.linearRampToValueAtTime) {
+        osc.frequency.linearRampToValueAtTime(1416, time + 0.18);
+    }
+
+    bandpass.type = 'bandpass';
+    bandpass.frequency.setValueAtTime(1420, time);
+    bandpass.Q.setValueAtTime(8, time);
+
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(0.12, time + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+
+    osc.connect(bandpass);
+    bandpass.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(time);
+    osc.stop(time + 0.25);
+}
+
+export function playGoldenRecordAudio() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+    const time = ctx.currentTime;
+
+    // 1. Vinyl surface crackle & analog needle contact
+    const bufferSize = Math.floor(ctx.sampleRate * 2.8);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+        // Occasional crackle pops mixed with pinkish noise
+        const pop = Math.random() < 0.002 ? (Math.random() - 0.5) * 1.8 : 0;
+        data[i] = (Math.random() * 2 - 1) * 0.05 + pop;
+    }
+
+    const crackle = ctx.createBufferSource();
+    crackle.buffer = buffer;
+    const crackleFilter = ctx.createBiquadFilter();
+    crackleFilter.type = 'bandpass';
+    crackleFilter.frequency.setValueAtTime(1800, time);
+    crackleFilter.Q.setValueAtTime(1.2, time);
+
+    const crackleGain = ctx.createGain();
+    crackleGain.gain.setValueAtTime(0.08, time);
+    crackleGain.gain.exponentialRampToValueAtTime(0.001, time + 2.8);
+
+    crackle.connect(crackleFilter);
+    crackleFilter.connect(crackleGain);
+    crackleGain.connect(ctx.destination);
+    crackle.start(time);
+    crackle.stop(time + 2.85);
+
+    // 2. Harmonic warm acoustic chord swell (C Major triad - 261.6Hz, 329.6Hz, 392Hz + 523.2Hz)
+    const freqs = [261.63, 329.63, 392.00, 523.25];
+    freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const chordGain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, time);
+
+        // Soft staggered entrance
+        const startOffset = idx * 0.12;
+        chordGain.gain.setValueAtTime(0, time);
+        chordGain.gain.linearRampToValueAtTime(0.07, time + 0.4 + startOffset);
+        chordGain.gain.exponentialRampToValueAtTime(0.001, time + 3.2);
+
+        osc.connect(chordGain);
+        chordGain.connect(ctx.destination);
+        osc.start(time + startOffset);
+        osc.stop(time + 3.4);
+    });
+}
+

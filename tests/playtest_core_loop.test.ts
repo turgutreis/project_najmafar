@@ -91,11 +91,12 @@ import { STATE, activePlanets } from '../src/core/state';
 import { triggerHarvestStart, updateHarvesting, completeHarvesting } from '../src/systems/harvesting';
 import { triggerScanStart, updateScanning, completeScanning } from '../src/systems/scanner';
 import { AUDIO_SETTINGS } from '../src/engine/audio';
-import { initiateSystemArrival, initiateSystemDeparture } from '../src/systems/universe';
+import { initiateSystemArrival, initiateSystemDeparture, spawnVoyagerProbe } from '../src/systems/universe';
 import { clearJumpGates, activeJumpGates } from '../src/procedural/meshes';
 import { updatePhysics } from '../src/engine/physics';
 import { generateProceduralCandidates, getCrewReactiveThought } from '../src/systems/crew-generation';
 import { calculateCrewBuffs, updateCrewSimulation, rejuvenateCrewMember } from '../src/systems/crew';
+import { advanceFtueStep, FTUE_DIRECTIVES } from '../src/ui/directives';
 
 describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
     let mockPlanet: any;
@@ -466,5 +467,54 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         const uniqueCrewNames = new Set(crewNames);
         expect(crewNames.length).toBe(uniqueCrewNames.size);
     });
+
+    test("15. Voyager 2 probe spawns in starting system, enables proximity scan [F], restores mental energy and advances FTUE onboarding", () => {
+        // 1. Initial State: Player starts at step 0
+        STATE.ftueStep = 0;
+        STATE.ftueCompleted = false;
+        STATE.voyagerScanned = false;
+        STATE.mentalEnergy = 50;
+        STATE.loneliness = 80;
+        STATE.currentSystemId = 1;
+
+        // 2. Spawn Voyager 2 probe in starting system
+        spawnVoyagerProbe();
+        expect(STATE.voyagerProbe).not.toBeNull();
+        expect(STATE.voyagerProbe.isVoyager).toBe(true);
+        expect(STATE.voyagerProbe.name).toContain("Voyager 2");
+        expect(STATE.gravitySources.some((s: any) => s.isVoyager)).toBe(true);
+
+        // 3. Player moves -> FTUE advances to Phase 1 (Move accomplished -> Phase 2: Voyager)
+        advanceFtueStep(1);
+        expect(STATE.ftueStep).toBe(1);
+
+        // 4. Player approaches Voyager 2 probe (position: 18, 0, 88)
+        STATE.playerPosition.set(18, 0, 80); // Distance = 8 AE (< 22 AE interaction range)
+        const dist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
+        expect(dist).toBeLessThanOrEqual(22);
+
+        // Simulate interaction with [F]
+        STATE.voyagerScanned = true;
+        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
+        STATE.loneliness = Math.max(0, STATE.loneliness - 25);
+        advanceFtueStep(2);
+
+        expect(STATE.voyagerScanned).toBe(true);
+        expect(STATE.mentalEnergy).toBe(80);
+        expect(STATE.loneliness).toBe(55);
+        expect(STATE.ftueStep).toBe(2);
+
+        // 5. Subsequent directives progression
+        advanceFtueStep(3); // Planet scan
+        expect(STATE.ftueStep).toBe(3);
+
+        advanceFtueStep(4); // Abduction
+        expect(STATE.ftueStep).toBe(4);
+
+        advanceFtueStep(5); // Galaxy map
+        expect(STATE.ftueStep).toBe(5);
+        expect(STATE.ftueCompleted).toBe(true);
+    });
 });
+
 

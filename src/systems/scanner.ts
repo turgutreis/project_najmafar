@@ -7,6 +7,7 @@ import { openDiplomacyComms } from '../systems/diplomacy';
 import { createScanVisuals, updateScanVisuals, removeScanVisuals } from '../procedural/meshes';
 import { SpeciesData, PlanetAttributes } from '../types/game';
 import { generateProceduralCandidates } from './crew-generation';
+import { advanceFtueStep } from '../ui/directives';
 
 export function generatePlanetAttributes(p: any) {
     if (p.atmos && p.temp && p.bio && p.res && (p.type !== 'Habitable' || (p.species && p.species.candidates && p.species.candidates.length > 0))) {
@@ -191,6 +192,7 @@ export function completeScanning() {
             addLogEntry("SYSTEM", `PSIO-DETEKTION: Intelligentes Leben (${planet.attributes.species.name}) auf ${planet.name} entdeckt! Psionischer Transfer [F] bereit.`);
         }
 
+        advanceFtueStep(3);
         updateScannerUI(planet, 10);
     }
 

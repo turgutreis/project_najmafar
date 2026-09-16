@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
 import { camera, renderer } from '../engine/scene';
-import { playLockOnSound, setThrusterSound, toggleMusic, isMusicPlaying, isMusicUserMuted, nextTrack, getCurrentTrack } from '../engine/audio';
+import { playLockOnSound, setThrusterSound, toggleMusic, isMusicPlaying, isMusicUserMuted, nextTrack, getCurrentTrack, playGoldenRecordAudio } from '../engine/audio';
 import { toggleGalaxyMap, isMapOpen } from '../systems/galaxy-map';
 import { triggerScanStart, resetDismissedScanner } from '../systems/scanner';
 import { triggerHarvestStart } from '../systems/harvesting';
@@ -12,6 +12,7 @@ import { buyMutation } from '../ui/deck';
 import { openDiplomacyComms, closeDiplomacyComms } from '../systems/diplomacy';
 import { toggleDeckModal, isDeckOpen } from '../ui/deck';
 import { toggleOptionsModal, isOptionsModalOpen, closeOptionsModal } from '../ui/options';
+import { advanceFtueStep } from '../ui/directives';
 
 const raycaster = new THREE.Raycaster();
 const mouseVec = new THREE.Vector2();
@@ -34,6 +35,9 @@ export function setupControls() {
         }
         if (key === 'm') {
             toggleGalaxyMap();
+            if ((STATE.ftueStep || 0) >= 4) {
+                advanceFtueStep(5);
+            }
         }
         if (key === 'q') {
             triggerPsionicSonar();
@@ -60,6 +64,31 @@ export function setupControls() {
             if (isDeckOpen()) toggleDeckModal(false);
         }
         if (key === 'f') {
+            // 1. Proximity interaction with Voyager 2 Space Probe (< 22 AE)
+            if (STATE.voyagerProbe && STATE.voyagerProbe.position) {
+                const voyagerDist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
+                if (voyagerDist <= 22) {
+                    if (!STATE.voyagerScanned) {
+                        STATE.voyagerScanned = true;
+                        playGoldenRecordAudio();
+                        STATE.mentalEnergy = Math.min(STATE.maxMentalEnergy, STATE.mentalEnergy + 30);
+                        STATE.loneliness = Math.max(0, STATE.loneliness - 25);
+                        advanceFtueStep(2);
+                        addLogEntry("SYSTEM", "Psionische Resonanz hergestellt: VOYAGER 2 (NASA, 1977).");
+                        addLogEntry("VOYAGER", "♫ 'Hello from the children of planet Earth...' – Analoges Signal dekodiert.");
+                        addLogEntry("SYSTEM", "Mentale Feldstärke um +30% regeneriert. Die Einsamkeit weicht.");
+                        addLogEntry("NAV", "Interstellare Vektoren freigeschaltet. Nächste habitable Welten auf Sensorik markiert.");
+
+                        const hint = document.getElementById('flight-controls-hint');
+                        if (hint) hint.classList.add('hidden');
+                        return;
+                    } else {
+                        addLogEntry("SYSTEM", "Voyager 2: Die Golden Record rotiert leise im Äther. Resonanz stabil.");
+                    }
+                }
+            }
+
+            // 2. Planetary scanning & abduction
             if (STATE.nearestPlanet) {
                 const isScanned = STATE.nearestPlanet.scanned || (STATE.scannedPlanets && STATE.scannedPlanets[STATE.nearestPlanet.name]);
                 if (isScanned) {
@@ -79,10 +108,22 @@ export function setupControls() {
                 triggerHarvestStart();
             }
         }
-        if (key === 'w' || e.key === 'ArrowUp') STATE.keys.w = true;
-        if (key === 's' || e.key === 'ArrowDown') STATE.keys.s = true;
-        if (key === 'a' || e.key === 'ArrowLeft') STATE.keys.a = true;
-        if (key === 'd' || e.key === 'ArrowRight') STATE.keys.d = true;
+        if (key === 'w' || e.key === 'ArrowUp') {
+            STATE.keys.w = true;
+            if ((STATE.ftueStep || 0) === 0) advanceFtueStep(1);
+        }
+        if (key === 's' || e.key === 'ArrowDown') {
+            STATE.keys.s = true;
+            if ((STATE.ftueStep || 0) === 0) advanceFtueStep(1);
+        }
+        if (key === 'a' || e.key === 'ArrowLeft') {
+            STATE.keys.a = true;
+            if ((STATE.ftueStep || 0) === 0) advanceFtueStep(1);
+        }
+        if (key === 'd' || e.key === 'ArrowRight') {
+            STATE.keys.d = true;
+            if ((STATE.ftueStep || 0) === 0) advanceFtueStep(1);
+        }
     });
 
     // Keyboard up

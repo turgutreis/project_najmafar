@@ -17,10 +17,13 @@ import { updateMinimap, updateSonarWave, initHUD, addLogEntry, updateHUDStats } 
 import { initDeckUI, updateMutationUI } from './ui/deck';
 import { initOptionsUI } from './ui/options';
 import { toggleGalaxyMap, warpToSystem, isMapOpen } from './systems/galaxy-map';
-import { toggleMusic, isMusicPlaying, isMusicUserMuted, initThreeAudio, attachShipAudio } from './engine/audio';
+import { toggleMusic, isMusicPlaying, isMusicUserMuted, initThreeAudio, attachShipAudio, playVoyagerBeaconPing } from './engine/audio';
 import { initGameOverUI, updateExplosionEffects } from './engine/game-over';
+import { triggerPrologueSequence, initPrologueListeners } from './ui/prologue';
+import { initDirectivesHUD, renderDirectives, updateVoyagerHUDTracker } from './ui/directives';
 
 let lastTime = 0;
+let voyagerBeaconTimer = 0;
 
 function animate(time: number) {
     if (time === undefined) {
@@ -71,6 +74,21 @@ function animate(time: number) {
         // Minimap 2D radar
         updateMinimap();
 
+        // FTUE & Voyager 2 directional tracking
+        updateVoyagerHUDTracker();
+
+        // Periodic Voyager 2 archaic carrier beacon chirp (when within 85 AE and not scanned)
+        if (STATE.voyagerProbe && !STATE.voyagerScanned) {
+            const probeDist = STATE.playerPosition.distanceTo(STATE.voyagerProbe.position);
+            if (probeDist < 85) {
+                voyagerBeaconTimer += dt;
+                if (voyagerBeaconTimer >= 3.8) {
+                    voyagerBeaconTimer = 0;
+                    playVoyagerBeaconPing();
+                }
+            }
+        }
+
         // Dynamic Alien Bio-Ship organic animation (undulating manta wings, breathing nucleus, mandibles, tendrils)
         if (alienShipController) {
             alienShipController.update(dt);
@@ -119,6 +137,8 @@ function init() {
     initDeckUI();
     initOptionsUI();
     initGameOverUI();
+    initPrologueListeners();
+    initDirectivesHUD();
     renderCrewUI();
     updateMutationUI();
 
@@ -155,12 +175,15 @@ function setupMenuListeners() {
                 }
             }
 
-            if (!isMusicPlaying() && !isMusicUserMuted()) {
-                toggleMusic(true);
-            }
+            renderDirectives();
 
-            addLogEntry("SYSTEM", "Biologisches Raumschiff erwacht. Psionische Sensoren online.");
-            addLogEntry("CREW", "Capt. Miller: 'Systeme nominal. Wir fliegen mit vollem Schub!'");
+            triggerPrologueSequence(() => {
+                if (!isMusicPlaying() && !isMusicUserMuted()) {
+                    toggleMusic(true);
+                }
+                addLogEntry("SYSTEM", "Biologisches Raumschiff erwacht. Psionische Sensoren online.");
+                addLogEntry("VOYAGER", "Schwaches Mikrowellen-Signal (1420 MHz) empfangen: VOYAGER 2 treibt im Sektor.");
+            });
         });
     }
 

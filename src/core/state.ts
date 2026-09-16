@@ -139,7 +139,13 @@ export const STATE: GameState = {
     systemDepartureTimer: 0.0,
     systemDepartureMaxTime: 1.6,
     systemDepartureDirection: new THREE.Vector3(1, 0, 0),
-    systemDepartureTarget: null
+    systemDepartureTarget: null,
+
+    // Voyager 2 & First-Time User Experience (FTUE)
+    voyagerProbe: null,
+    voyagerScanned: false,
+    ftueStep: 0,
+    ftueCompleted: false
 };
 
 export const activePlanets: PlanetEntry[] = [];
