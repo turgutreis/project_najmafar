@@ -304,26 +304,32 @@ export function createAlienBioShip(): AlienShipController {
                 Math.min(1.0, dt * 6.0)
             );
 
-            // B. Undulating Wing Motion (Deep, powerful manta stroke on thrust; cupping on brake)
+            // B. Undulating Wing Motion (Progressive traveling wave from shoulder to wingtips)
             const wingFreq = isThrusting ? (5.8 + Math.min(speedMagnitude * 0.22, 4.0)) : (2.4 + Math.min(speedMagnitude * 0.1, 1.8));
-            const wingAmp = isThrusting ? 0.38 : (isRetroBraking ? 0.12 : 0.20);
+            const wingAmp = isThrusting ? 0.42 : (isRetroBraking ? 0.12 : 0.22);
             const wingWave = Math.sin(animTime * wingFreq) * wingAmp;
+            const wingTipWave = Math.cos(animTime * wingFreq - 0.45) * (isThrusting ? 0.18 : 0.08);
 
             leftWing.rotation.x = wingWave;
-            leftWing.rotation.z = Math.cos(animTime * wingFreq) * (isThrusting ? 0.14 : 0.06);
+            leftWing.rotation.z = wingTipWave;
 
             rightWing.rotation.x = -wingWave;
-            rightWing.rotation.z = -Math.cos(animTime * wingFreq) * (isThrusting ? 0.14 : 0.06);
+            rightWing.rotation.z = -wingTipWave;
 
             // Wing pitch angle: Cups backwards during retro-braking, angles sleek during forward thrust
             const targetWingPitch = isRetroBraking ? -0.35 : (isThrusting ? 0.10 : 0.0);
             leftWing.rotation.y = THREE.MathUtils.lerp(leftWing.rotation.y, targetWingPitch, Math.min(1.0, dt * 8.0));
             rightWing.rotation.y = THREE.MathUtils.lerp(rightWing.rotation.y, -targetWingPitch, Math.min(1.0, dt * 8.0));
 
-            // C. Dorsal Carapace Plates Flaring (Biological Airbrakes on 'S')
+            // C. Dorsal Carapace Plates & Spine Wave (Wellenförmige Bio-Rückenbewegung)
+            const spineWaveFreq = wingFreq * 0.75;
+            coreMesh.position.y = Math.sin(animTime * spineWaveFreq) * 0.06;
+
             dorsalPlates.forEach((plate, idx) => {
-                const targetRotZ = isRetroBraking ? (-Math.PI / 2 - 0.38 * (idx + 1) * 0.18) : -Math.PI / 2;
-                const targetPosY = isRetroBraking ? (0.42 - idx * 0.02) : (0.28 - idx * 0.03);
+                const waveDelay = idx * 0.38;
+                const spinalWave = Math.sin(animTime * spineWaveFreq - waveDelay) * 0.04;
+                const targetRotZ = isRetroBraking ? (-Math.PI / 2 - 0.38 * (idx + 1) * 0.18) : (-Math.PI / 2 + spinalWave * 0.6);
+                const targetPosY = isRetroBraking ? (0.42 - idx * 0.02) : (0.28 - idx * 0.03 + spinalWave);
                 plate.rotation.z = THREE.MathUtils.lerp(plate.rotation.z, targetRotZ, Math.min(1.0, dt * 9.0));
                 plate.position.y = THREE.MathUtils.lerp(plate.position.y, targetPosY, Math.min(1.0, dt * 9.0));
             });
@@ -340,15 +346,15 @@ export function createAlienBioShip(): AlienShipController {
                 f.rotation.z = THREE.MathUtils.lerp(f.rotation.z, targetVentAngle * (idx === 1 ? 1.3 : 0.9), Math.min(1.0, dt * 8.0));
             });
 
-            // F. Twin Tail Tendril Physics Simulation (Streams back tightly on thrust)
+            // F. Twin Tail Tendril Physics Simulation (Streams back tightly on thrust with traveling wave)
             tendrils.forEach((tGroup, tIdx) => {
                 let currentJoint: any = tGroup;
                 let depth = 0;
                 while (currentJoint && currentJoint.children && currentJoint.children.length > 0) {
                     const next = currentJoint.children[0];
                     if (next) {
-                        const phase = animTime * (isThrusting ? 7.0 : 4.0) + depth * 0.6 + tIdx * Math.PI;
-                        const tendrilAmp = isThrusting ? 0.08 : 0.16;
+                        const phase = animTime * (isThrusting ? 7.0 : 3.8) + depth * 0.65 + tIdx * Math.PI;
+                        const tendrilAmp = isThrusting ? 0.10 : 0.18;
                         next.rotation.z = Math.sin(phase) * tendrilAmp;
                         next.rotation.y = Math.cos(phase * 0.8) * (tendrilAmp * 0.7);
                         currentJoint = next;
@@ -359,10 +365,10 @@ export function createAlienBioShip(): AlienShipController {
                 }
             });
 
-            // G. Spacetime Bio-Pulse Rings Emission (Quallen / Rochen-Pulse in Raumzeit)
+            // G. Spacetime Bio-Pulse Rings Emission (Wellenförmige Raumzeit-Ringe)
             if (isThrusting) {
                 pulseEmitTimer += dt;
-                const emitInterval = Math.max(0.12, 0.22 - Math.min(speedMagnitude * 0.005, 0.08));
+                const emitInterval = Math.max(0.12, 0.20 - Math.min(speedMagnitude * 0.005, 0.07));
                 if (pulseEmitTimer >= emitInterval) {
                     pulseEmitTimer = 0;
                     const forwardX = Math.cos(STATE.shipHeading);
@@ -372,7 +378,7 @@ export function createAlienBioShip(): AlienShipController {
                     const ringMat = new THREE.MeshBasicMaterial({
                         color: activeColor,
                         transparent: true,
-                        opacity: 0.85,
+                        opacity: 0.88,
                         side: THREE.DoubleSide,
                         blending: THREE.AdditiveBlending,
                         depthWrite: false
@@ -387,8 +393,8 @@ export function createAlienBioShip(): AlienShipController {
                     );
                     ringMesh.scale.set(0.65, 0.65, 0.65);
 
-                    // Counter-drift velocity
-                    const driftVel = new THREE.Vector3(-forwardX * 3.2, 0, -forwardZ * 3.2);
+                    // Counter-drift velocity with gentle wave dispersion
+                    const driftVel = new THREE.Vector3(-forwardX * 3.4, 0, -forwardZ * 3.4);
                     if (STATE.playerVelocity) {
                         driftVel.addScaledVector(STATE.playerVelocity, 0.15);
                     }
@@ -397,14 +403,14 @@ export function createAlienBioShip(): AlienShipController {
                     activePulseRings.push({
                         mesh: ringMesh,
                         life: 0,
-                        maxLife: 0.58,
+                        maxLife: 0.65,
                         velocity: driftVel,
                         mat: ringMat
                     });
                 }
             }
 
-            // Update & expand active bio-pulse rings
+            // Update & expand active bio-pulse rings with wave ripple undulation
             for (let i = activePulseRings.length - 1; i >= 0; i--) {
                 const ring = activePulseRings[i];
                 ring.life += dt;
@@ -414,10 +420,12 @@ export function createAlienBioShip(): AlienShipController {
                     ring.mat.dispose();
                     activePulseRings.splice(i, 1);
                 } else {
-                    const expandScale = THREE.MathUtils.lerp(0.65, 3.6, Math.pow(progress, 0.65));
+                    // Wave ripple in scale (like ripples spreading across a pond)
+                    const waveRipple = Math.sin(progress * Math.PI * 3.0) * 0.22;
+                    const expandScale = THREE.MathUtils.lerp(0.65, 4.2, Math.pow(progress, 0.6)) + waveRipple;
                     ring.mesh.scale.set(expandScale, expandScale, expandScale);
                     ring.mesh.position.addScaledVector(ring.velocity, dt);
-                    ring.mat.opacity = (1.0 - progress) * 0.85;
+                    ring.mat.opacity = Math.pow(1.0 - progress, 0.85) * (0.85 + Math.sin(progress * Math.PI * 4.0) * 0.12);
                 }
             }
         }

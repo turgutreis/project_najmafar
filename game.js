@@ -31537,18 +31537,23 @@ function createAlienBioShip() {
       biolumMat.emissive.setHex(activeColor);
       biolumMat.emissiveIntensity = MathUtils.lerp(biolumMat.emissiveIntensity, targetEmissive, Math.min(1, dt * 6));
       const wingFreq = isThrusting ? 5.8 + Math.min(speedMagnitude * 0.22, 4) : 2.4 + Math.min(speedMagnitude * 0.1, 1.8);
-      const wingAmp = isThrusting ? 0.38 : isRetroBraking ? 0.12 : 0.2;
+      const wingAmp = isThrusting ? 0.42 : isRetroBraking ? 0.12 : 0.22;
       const wingWave = Math.sin(animTime * wingFreq) * wingAmp;
+      const wingTipWave = Math.cos(animTime * wingFreq - 0.45) * (isThrusting ? 0.18 : 0.08);
       leftWing.rotation.x = wingWave;
-      leftWing.rotation.z = Math.cos(animTime * wingFreq) * (isThrusting ? 0.14 : 0.06);
+      leftWing.rotation.z = wingTipWave;
       rightWing.rotation.x = -wingWave;
-      rightWing.rotation.z = -Math.cos(animTime * wingFreq) * (isThrusting ? 0.14 : 0.06);
+      rightWing.rotation.z = -wingTipWave;
       const targetWingPitch = isRetroBraking ? -0.35 : isThrusting ? 0.1 : 0;
       leftWing.rotation.y = MathUtils.lerp(leftWing.rotation.y, targetWingPitch, Math.min(1, dt * 8));
       rightWing.rotation.y = MathUtils.lerp(rightWing.rotation.y, -targetWingPitch, Math.min(1, dt * 8));
+      const spineWaveFreq = wingFreq * 0.75;
+      coreMesh.position.y = Math.sin(animTime * spineWaveFreq) * 0.06;
       dorsalPlates.forEach((plate, idx) => {
-        const targetRotZ = isRetroBraking ? -Math.PI / 2 - 0.38 * (idx + 1) * 0.18 : -Math.PI / 2;
-        const targetPosY = isRetroBraking ? 0.42 - idx * 0.02 : 0.28 - idx * 0.03;
+        const waveDelay = idx * 0.38;
+        const spinalWave = Math.sin(animTime * spineWaveFreq - waveDelay) * 0.04;
+        const targetRotZ = isRetroBraking ? -Math.PI / 2 - 0.38 * (idx + 1) * 0.18 : -Math.PI / 2 + spinalWave * 0.6;
+        const targetPosY = isRetroBraking ? 0.42 - idx * 0.02 : 0.28 - idx * 0.03 + spinalWave;
         plate.rotation.z = MathUtils.lerp(plate.rotation.z, targetRotZ, Math.min(1, dt * 9));
         plate.position.y = MathUtils.lerp(plate.position.y, targetPosY, Math.min(1, dt * 9));
       });
@@ -31566,8 +31571,8 @@ function createAlienBioShip() {
         while (currentJoint && currentJoint.children && currentJoint.children.length > 0) {
           const next = currentJoint.children[0];
           if (next) {
-            const phase = animTime * (isThrusting ? 7 : 4) + depth * 0.6 + tIdx * Math.PI;
-            const tendrilAmp = isThrusting ? 0.08 : 0.16;
+            const phase = animTime * (isThrusting ? 7 : 3.8) + depth * 0.65 + tIdx * Math.PI;
+            const tendrilAmp = isThrusting ? 0.1 : 0.18;
             next.rotation.z = Math.sin(phase) * tendrilAmp;
             next.rotation.y = Math.cos(phase * 0.8) * (tendrilAmp * 0.7);
             currentJoint = next;
@@ -31579,7 +31584,7 @@ function createAlienBioShip() {
       });
       if (isThrusting) {
         pulseEmitTimer += dt;
-        const emitInterval = Math.max(0.12, 0.22 - Math.min(speedMagnitude * 0.005, 0.08));
+        const emitInterval = Math.max(0.12, 0.2 - Math.min(speedMagnitude * 0.005, 0.07));
         if (pulseEmitTimer >= emitInterval) {
           pulseEmitTimer = 0;
           const forwardX = Math.cos(STATE.shipHeading);
@@ -31588,7 +31593,7 @@ function createAlienBioShip() {
           const ringMat = new MeshBasicMaterial({
             color: activeColor,
             transparent: true,
-            opacity: 0.85,
+            opacity: 0.88,
             side: DoubleSide,
             blending: AdditiveBlending,
             depthWrite: false
@@ -31596,7 +31601,7 @@ function createAlienBioShip() {
           const ringMesh = new Mesh(pulseRingGeo, ringMat);
           ringMesh.position.set(STATE.playerPosition.x - forwardX * (3 * shipScale), 0.15, STATE.playerPosition.z - forwardZ * (3 * shipScale));
           ringMesh.scale.set(0.65, 0.65, 0.65);
-          const driftVel = new Vector3(-forwardX * 3.2, 0, -forwardZ * 3.2);
+          const driftVel = new Vector3(-forwardX * 3.4, 0, -forwardZ * 3.4);
           if (STATE.playerVelocity) {
             driftVel.addScaledVector(STATE.playerVelocity, 0.15);
           }
@@ -31604,7 +31609,7 @@ function createAlienBioShip() {
           activePulseRings.push({
             mesh: ringMesh,
             life: 0,
-            maxLife: 0.58,
+            maxLife: 0.65,
             velocity: driftVel,
             mat: ringMat
           });
@@ -31619,10 +31624,11 @@ function createAlienBioShip() {
           ring.mat.dispose();
           activePulseRings.splice(i, 1);
         } else {
-          const expandScale = MathUtils.lerp(0.65, 3.6, Math.pow(progress, 0.65));
+          const waveRipple = Math.sin(progress * Math.PI * 3) * 0.22;
+          const expandScale = MathUtils.lerp(0.65, 4.2, Math.pow(progress, 0.6)) + waveRipple;
           ring.mesh.scale.set(expandScale, expandScale, expandScale);
           ring.mesh.position.addScaledVector(ring.velocity, dt);
-          ring.mat.opacity = (1 - progress) * 0.85;
+          ring.mat.opacity = Math.pow(1 - progress, 0.85) * (0.85 + Math.sin(progress * Math.PI * 4) * 0.12);
         }
       }
     }
@@ -38616,7 +38622,7 @@ function processInput(dt) {
   }
   if (STATE.flightAssist) {
     if (!isThrusting && !isRetroBraking) {
-      STATE.currentDrag = 1.45;
+      STATE.currentDrag = 0.14;
     } else {
       STATE.currentDrag = STATE.drag;
     }

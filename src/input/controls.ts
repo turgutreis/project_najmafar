@@ -569,9 +569,9 @@ export function processInput(dt: number) {
 
     // 6. Space Drag & Flight Assist Integration
     if (STATE.flightAssist) {
-        // Flight Assist ON: Snappy retro-dampening when no keys are pressed
+        // Flight Assist ON: Gentle cosmic gliding when cruising (preserves space momentum)
         if (!isThrusting && !isRetroBraking) {
-            STATE.currentDrag = 1.45;
+            STATE.currentDrag = 0.14; // Smooth space glide instead of abrupt car-like braking
         } else {
             STATE.currentDrag = STATE.drag;
         }
