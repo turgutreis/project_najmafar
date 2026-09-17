@@ -6,6 +6,7 @@ import { toggleDeckModal } from './deck';
 import { toggleGalaxyMap } from '../systems/galaxy-map';
 import { toggleFlightAssist } from '../input/controls';
 import { triggerBioDischarge } from '../systems/fleet';
+import { projectedTrajectoryPoints } from '../engine/trajectory';
 
 let minimapCanvas: HTMLCanvasElement | null = null;
 let minimapCtx: CanvasRenderingContext2D | null = null;
@@ -362,6 +363,43 @@ export function updateMinimap() {
             minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
         }
     });
+
+    // Draw Projected Orbital Trajectory on Radar
+    if (projectedTrajectoryPoints && projectedTrajectoryPoints.length > 1) {
+        minimapCtx.save();
+        minimapCtx.lineWidth = 1.5;
+        for (let i = 0; i < projectedTrajectoryPoints.length - 1; i++) {
+            const p0 = projectedTrajectoryPoints[i];
+            const p1 = projectedTrajectoryPoints[i + 1];
+
+            const dx0 = p0.x - STATE.playerPosition.x;
+            const dz0 = p0.z - STATE.playerPosition.z;
+            const dx1 = p1.x - STATE.playerPosition.x;
+            const dz1 = p1.z - STATE.playerPosition.z;
+
+            // Only draw if within reasonable range
+            const dist0 = Math.hypot(dx0, dz0);
+            const dist1 = Math.hypot(dx1, dz1);
+            if (dist0 > range && dist1 > range) continue;
+
+            const sx0 = cx + dx0 * invRangeRadius;
+            const sy0 = cy + dz0 * invRangeRadius;
+            const sx1 = cx + dx1 * invRangeRadius;
+            const sy1 = cy + dz1 * invRangeRadius;
+
+            // Clamp line within minimap circle
+            const r0 = Math.hypot(sx0 - cx, sy0 - cy);
+            const r1 = Math.hypot(sx1 - cx, sy1 - cy);
+            if (r0 <= radius && r1 <= radius) {
+                minimapCtx.strokeStyle = p0.isGravityArc ? 'rgba(217, 70, 239, 0.85)' : 'rgba(56, 189, 248, 0.55)';
+                minimapCtx.beginPath();
+                minimapCtx.moveTo(sx0, sy0);
+                minimapCtx.lineTo(sx1, sy1);
+                minimapCtx.stroke();
+            }
+        }
+        minimapCtx.restore();
+    }
 
     // Draw Player Ship (Directional arrow)
     const heading = (STATE.playerGroup ? STATE.playerGroup.rotation.y : 0);

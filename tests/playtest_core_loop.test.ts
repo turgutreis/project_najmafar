@@ -99,6 +99,7 @@ import { calculateCrewBuffs, updateCrewSimulation, rejuvenateCrewMember } from '
 import { advanceFtueStep, FTUE_DIRECTIVES } from '../src/ui/directives';
 import { openVoyagerDialog, closeVoyagerDialog, isVoyagerDialogOpen } from '../src/ui/voyager-dialog';
 import { handleVoyagerScan, setLockedTarget } from '../src/input/controls';
+import { calculateGravityAndCheckCollision, TRAJECTORY_SEGMENTS } from '../src/engine/trajectory';
 
 describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
     let mockPlanet: any;
@@ -631,7 +632,61 @@ describe("🎮 CORE GAMEPLAY LOOP & RESOURCE ECONOMY PLAYTEST", () => {
         // Must decelerate significantly
         expect(speedAfterBrake).toBeLessThan(speedBeforeBrake * 0.4);
     });
+
+    test("18. Deep orbital trajectory prediction & gravity swing-by: Calculates multi-body gravitational deflection, periapsis approach and vacuum coasting", () => {
+        expect(TRAJECTORY_SEGMENTS).toBeGreaterThanOrEqual(120);
+
+        // 1. Setup ship coasting past a massive celestial body
+        // Ship starts at (-60, 0, 30) moving directly along +X with velocity (14, 0, 0)
+        STATE.playerPosition.set(-60, 0, 30);
+        STATE.playerVelocity.set(14, 0, 0);
+        STATE.isThrusting = false;
+        STATE.keys.w = false;
+        STATE.isRetroBraking = false;
+        STATE.keys.s = false;
+        STATE.flightAssist = true;
+
+        // Massive planet positioned at (0, 0, 0) with mass = 800 and gravityRange = 70
+        const massivePlanetSource: any = {
+            id: 'planet_gravity_well',
+            type: 'planet',
+            name: 'Gigantus',
+            position: new THREE.Vector3(0, 0, 0),
+            mass: 800,
+            radius: 8.0,
+            gravityRange: 70.0,
+            isAbsorbed: false
+        };
+        STATE.gravitySources = [massivePlanetSource];
+        STATE.gConstant = 15.0;
+
+        // 2. Trajectory Prediction Verification:
+        // calculateGravityAndCheckCollision at various points along trajectory
+        const testAcc = new THREE.Vector3();
+        const startCheck = calculateGravityAndCheckCollision(new THREE.Vector3(-60, 0, 30), 0, testAcc);
+        expect(startCheck.collided).toBe(false);
+        // Net acceleration points inward towards (0, 0, 0)
+        expect(testAcc.x).toBeGreaterThan(0);
+        expect(testAcc.z).toBeLessThan(0); // pulled towards z = 0
+
+        // 3. Physical trajectory integration over time (coasting past the planet)
+        const dt = 0.1;
+        const initialZ = STATE.playerPosition.z;
+        for (let step = 0; step < 28; step++) { // 2.8 seconds of flight to periapsis passage
+            updatePhysics(dt);
+        }
+
+        // As ship passes the planet at Z=30, the gravitational force pulls the ship towards Z=0 (swing-by deflection)
+        expect(STATE.playerPosition.z).toBeLessThan(initialZ); // Path deflected towards planet
+        expect(STATE.playerVelocity.z).toBeLessThan(-3.0);     // Gained strong negative Z velocity from gravitational assist!
+        expect(STATE.playerPosition.x).toBeGreaterThan(-10.0); // Advanced rapidly along X
+
+        // 4. Verify that in cruising mode, the ship glides without abrupt drag decay
+        // (speed should remain high and not drop to 0)
+        expect(STATE.playerVelocity.length()).toBeGreaterThan(15.0);
+    });
 });
+
 
 
 

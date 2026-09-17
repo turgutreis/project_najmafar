@@ -32150,9 +32150,8 @@ function onWindowResize() {
 }
 
 // src/engine/trajectory.ts
-var FLOW_SEGMENTS = 36;
-var FLOW_DT = 0.075;
-var DASH_RATIO = 0.72;
+var TRAJECTORY_SEGMENTS = 140;
+var DASH_RATIO = 0.75;
 var SOFTENING_SQ = 25;
 var trajectoryGeometry;
 var trajectoryLines;
@@ -32164,6 +32163,9 @@ var progradeDotMesh;
 var progradeChevronMesh;
 var progradeMaterial;
 var progradeDotMaterial;
+var periapsisGroup;
+var periapsisMaterial;
+var periapsisDotMaterial;
 var _predPos = new Vector3;
 var _predVel = new Vector3;
 var _predAcc = new Vector3;
@@ -32171,8 +32173,10 @@ var _segmentStart = new Vector3;
 var _segmentEnd = new Vector3;
 var _impactPos = new Vector3;
 var _reticleTargetPos = new Vector3;
+var _pePos = new Vector3;
+var projectedTrajectoryPoints = [];
 function initTrajectory() {
-  const vertexCount = FLOW_SEGMENTS * 2;
+  const vertexCount = TRAJECTORY_SEGMENTS * 2;
   trajectoryGeometry = new BufferGeometry;
   trajectoryPositions = new Float32Array(vertexCount * 3);
   trajectoryColors = new Float32Array(vertexCount * 3);
@@ -32222,12 +32226,43 @@ function initTrajectory() {
   progradeGroup.add(progradeChevronMesh);
   progradeGroup.visible = false;
   scene.add(progradeGroup);
+  periapsisGroup = new Group;
+  periapsisGroup.renderOrder = 1001;
+  periapsisMaterial = new MeshBasicMaterial({
+    color: 14239471,
+    transparent: true,
+    opacity: 0,
+    side: DoubleSide,
+    blending: AdditiveBlending,
+    depthWrite: false
+  });
+  periapsisDotMaterial = new MeshBasicMaterial({
+    color: 16096779,
+    transparent: true,
+    opacity: 0,
+    blending: AdditiveBlending,
+    depthWrite: false
+  });
+  const peRingGeo = new RingGeometry(0.6, 0.85, 4);
+  peRingGeo.rotateX(Math.PI / 2);
+  peRingGeo.rotateY(Math.PI / 4);
+  const peRingMesh = new Mesh(peRingGeo, periapsisMaterial);
+  periapsisGroup.add(peRingMesh);
+  const peDotGeo = new SphereGeometry(0.18, 12, 12);
+  const peDotMesh = new Mesh(peDotGeo, periapsisDotMaterial);
+  peDotMesh.position.y = 0.25;
+  periapsisGroup.add(peDotMesh);
+  periapsisGroup.visible = false;
+  scene.add(periapsisGroup);
 }
-function calculateGravityAndCheckCollision(pos, simTime, outAcc, outImpactPoint) {
+function calculateGravityAndCheckCollision(pos, simTime, outAcc, outImpactPoint, outClosestInfo) {
   outAcc.set(0, 0, 0);
   const sources = STATE.gravitySources;
   const count = sources.length;
   let collided = false;
+  let maxGravityRatio = 0;
+  let minDist = Infinity;
+  let closestSource = null;
   for (let s = 0;s < count; s++) {
     const source = sources[s];
     if (source.isAbsorbed)
@@ -32245,34 +32280,47 @@ function calculateGravityAndCheckCollision(pos, simTime, outAcc, outImpactPoint)
     const dx = sourceX - pos.x;
     const dz = sourceZ - pos.z;
     const distSq = dx * dx + dz * dz;
+    const distance = Math.max(0.01, Math.sqrt(distSq));
+    if (distance < minDist) {
+      minDist = distance;
+      closestSource = source;
+    }
     const impactClearance = source.type === "star" ? source.radius + 1.2 : source.radius + 0.6;
     if (distSq <= impactClearance * impactClearance) {
       collided = true;
       if (outImpactPoint) {
-        const dist = Math.max(0.01, Math.sqrt(distSq));
-        outImpactPoint.set(sourceX - dx / dist * impactClearance, 0.25, sourceZ - dz / dist * impactClearance);
+        outImpactPoint.set(sourceX - dx / distance * impactClearance, 0.25, sourceZ - dz / distance * impactClearance);
       }
       break;
     }
     const rangeSq = source.gravityRange * source.gravityRange;
     if (distSq < rangeSq) {
-      const distance = Math.sqrt(distSq);
       const forceStrength = STATE.gConstant * source.mass / (distSq + SOFTENING_SQ);
-      const invDist = 1 / Math.max(0.1, distance);
+      const invDist = 1 / distance;
       outAcc.x += dx * invDist * forceStrength;
       outAcc.z += dz * invDist * forceStrength;
+      const wellRatio = 1 - distance / source.gravityRange;
+      if (wellRatio > maxGravityRatio) {
+        maxGravityRatio = wellRatio;
+      }
     }
   }
-  return collided;
+  if (outClosestInfo && closestSource) {
+    outClosestInfo.source = closestSource;
+    outClosestInfo.dist = minDist;
+  }
+  return { collided, maxGravityRatio };
 }
 function updateTrajectory() {
-  if (!trajectoryLines || !progradeGroup)
+  if (!trajectoryLines || !progradeGroup || !periapsisGroup)
     return;
   const curSpeed = STATE.playerVelocity.length();
-  const speedFactor = Math.min(1, Math.max(0, (curSpeed - 0.8) / 4));
-  if (curSpeed < 0.6) {
+  const speedFactor = Math.min(1, Math.max(0, (curSpeed - 0.4) / 3));
+  if (curSpeed < 0.35) {
     trajectoryLines.visible = false;
     progradeGroup.visible = false;
+    periapsisGroup.visible = false;
+    projectedTrajectoryPoints.length = 0;
     return;
   }
   trajectoryLines.visible = true;
@@ -32281,9 +32329,16 @@ function updateTrajectory() {
   _predVel.copy(STATE.playerVelocity);
   let hasImpacted = false;
   _reticleTargetPos.copy(STATE.playerPosition);
+  const baseDt = MathUtils.clamp(3.6 / Math.max(1, curSpeed), 0.12, 0.26);
   const timeNow = Date.now() * 0.001;
-  const wavePhase = timeNow * 4.2 % (Math.PI * 2);
-  for (let seg = 0;seg < FLOW_SEGMENTS; seg++) {
+  const wavePhase = timeNow * 4.5 % (Math.PI * 2);
+  let bestPeFound = false;
+  let bestPeDist = Infinity;
+  let lastDistToSource = Infinity;
+  let hasApproached = false;
+  projectedTrajectoryPoints.length = 0;
+  projectedTrajectoryPoints.push({ x: _predPos.x, z: _predPos.z, isGravityArc: false });
+  for (let seg = 0;seg < TRAJECTORY_SEGMENTS; seg++) {
     const v0 = seg * 2;
     const v1 = seg * 2 + 1;
     if (hasImpacted) {
@@ -32301,26 +32356,40 @@ function updateTrajectory() {
       trajectoryColors[v1 * 3 + 2] = 0;
       continue;
     }
-    const simTime = seg * FLOW_DT;
+    const simTime = seg * baseDt;
     _segmentStart.copy(_predPos);
-    if (calculateGravityAndCheckCollision(_segmentStart, simTime, _predAcc, _impactPos)) {
+    const closestInfo = { source: null, dist: Infinity };
+    const gCheck = calculateGravityAndCheckCollision(_segmentStart, simTime, _predAcc, _impactPos, closestInfo);
+    if (closestInfo.source && closestInfo.dist < closestInfo.source.gravityRange) {
+      if (closestInfo.dist < lastDistToSource) {
+        hasApproached = true;
+      } else if (hasApproached && !bestPeFound && closestInfo.dist < closestInfo.source.gravityRange * 0.85) {
+        bestPeFound = true;
+        bestPeDist = closestInfo.dist;
+        _pePos.copy(_segmentStart);
+      }
+      lastDistToSource = closestInfo.dist;
+    }
+    const isGravityArc = gCheck.maxGravityRatio > 0.12;
+    if (gCheck.collided) {
       hasImpacted = true;
       _segmentStart.copy(_impactPos);
       _segmentEnd.copy(_impactPos);
       _reticleTargetPos.copy(_impactPos);
     } else {
-      const dashDt = FLOW_DT * DASH_RATIO;
+      const dashDt = baseDt * DASH_RATIO;
       _predVel.addScaledVector(_predAcc, dashDt);
       _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * dashDt));
       _predPos.addScaledVector(_predVel, dashDt);
       _segmentEnd.copy(_predPos);
       _reticleTargetPos.copy(_segmentEnd);
-      if (calculateGravityAndCheckCollision(_segmentEnd, simTime + dashDt, _predAcc, _impactPos)) {
+      const endCheck = calculateGravityAndCheckCollision(_segmentEnd, simTime + dashDt, _predAcc, _impactPos);
+      if (endCheck.collided) {
         hasImpacted = true;
         _segmentEnd.copy(_impactPos);
         _reticleTargetPos.copy(_impactPos);
       } else {
-        const gapDt = FLOW_DT * (1 - DASH_RATIO);
+        const gapDt = baseDt * (1 - DASH_RATIO);
         calculateGravityAndCheckCollision(_predPos, simTime + dashDt, _predAcc);
         _predVel.addScaledVector(_predAcc, gapDt);
         _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * gapDt));
@@ -32333,15 +32402,26 @@ function updateTrajectory() {
     trajectoryPositions[v1 * 3 + 0] = _segmentEnd.x;
     trajectoryPositions[v1 * 3 + 1] = 0.25;
     trajectoryPositions[v1 * 3 + 2] = _segmentEnd.z;
-    const progress = seg / FLOW_SEGMENTS;
-    const distFade = Math.pow(1 - progress, 1.4);
-    const nearFade = Math.min(1, seg * 0.4);
-    const flowWave = Math.sin(seg * 0.5 - wavePhase);
-    const pulseBoost = flowWave > 0 ? flowWave * 0.45 : 0;
-    const totalAlpha = (distFade * nearFade * 0.75 + pulseBoost * 0.35) * speedFactor;
-    const r = 0.12 * totalAlpha;
-    const g = 0.85 * totalAlpha;
-    const b = 0.95 * totalAlpha;
+    if (seg % 2 === 0 || hasImpacted) {
+      projectedTrajectoryPoints.push({
+        x: _segmentEnd.x,
+        z: _segmentEnd.z,
+        isGravityArc
+      });
+    }
+    const progress = seg / TRAJECTORY_SEGMENTS;
+    const distFade = Math.pow(1 - progress, 1.15);
+    const nearFade = Math.min(1, seg * 0.3);
+    const flowWave = Math.sin(seg * 0.42 - wavePhase);
+    const pulseBoost = flowWave > 0 ? flowWave * 0.4 : 0;
+    const totalAlpha = (distFade * nearFade * 0.8 + pulseBoost * 0.3) * speedFactor;
+    const gravBoost = MathUtils.clamp(gCheck.maxGravityRatio * 1.5, 0, 1);
+    const baseR = MathUtils.lerp(0.12, 0.88, gravBoost);
+    const baseG = MathUtils.lerp(0.85, 0.28, gravBoost);
+    const baseB = MathUtils.lerp(0.95, 0.98, gravBoost);
+    const r = baseR * totalAlpha;
+    const g = baseG * totalAlpha;
+    const b = baseB * totalAlpha;
     trajectoryColors[v0 * 3 + 0] = r;
     trajectoryColors[v0 * 3 + 1] = g;
     trajectoryColors[v0 * 3 + 2] = b;
@@ -32353,7 +32433,7 @@ function updateTrajectory() {
   trajectoryGeometry.attributes.color.needsUpdate = true;
   if (progradeGroup) {
     progradeGroup.position.set(_reticleTargetPos.x, 0.25, _reticleTargetPos.z);
-    const velHeading = Math.atan2(-STATE.playerVelocity.z, STATE.playerVelocity.x);
+    const velHeading = Math.atan2(-_predVel.z, _predVel.x);
     progradeGroup.rotation.y = velHeading - Math.PI / 2;
     const reticleAlpha = speedFactor * (hasImpacted ? 0.95 : 0.8);
     const pulseScale = 1 + Math.sin(timeNow * 6) * 0.08;
@@ -32367,6 +32447,19 @@ function updateTrajectory() {
     }
     progradeMaterial.opacity = reticleAlpha;
     progradeDotMaterial.opacity = reticleAlpha;
+  }
+  if (periapsisGroup) {
+    if (bestPeFound && !hasImpacted) {
+      periapsisGroup.visible = true;
+      periapsisGroup.position.set(_pePos.x, 0.25, _pePos.z);
+      const pePulse = 1 + Math.sin(timeNow * 7.5) * 0.15;
+      periapsisGroup.scale.set(pePulse, pePulse, pePulse);
+      const peAlpha = speedFactor * 0.9;
+      periapsisMaterial.opacity = peAlpha;
+      periapsisDotMaterial.opacity = peAlpha;
+    } else {
+      periapsisGroup.visible = false;
+    }
   }
 }
 
@@ -35457,6 +35550,36 @@ function updateMinimap() {
       minimapCtx.fillRect(sx - 1, sy - 1, 2, 2);
     }
   });
+  if (projectedTrajectoryPoints && projectedTrajectoryPoints.length > 1) {
+    minimapCtx.save();
+    minimapCtx.lineWidth = 1.5;
+    for (let i = 0;i < projectedTrajectoryPoints.length - 1; i++) {
+      const p0 = projectedTrajectoryPoints[i];
+      const p1 = projectedTrajectoryPoints[i + 1];
+      const dx0 = p0.x - STATE.playerPosition.x;
+      const dz0 = p0.z - STATE.playerPosition.z;
+      const dx1 = p1.x - STATE.playerPosition.x;
+      const dz1 = p1.z - STATE.playerPosition.z;
+      const dist0 = Math.hypot(dx0, dz0);
+      const dist1 = Math.hypot(dx1, dz1);
+      if (dist0 > range && dist1 > range)
+        continue;
+      const sx0 = cx + dx0 * invRangeRadius;
+      const sy0 = cy + dz0 * invRangeRadius;
+      const sx1 = cx + dx1 * invRangeRadius;
+      const sy1 = cy + dz1 * invRangeRadius;
+      const r0 = Math.hypot(sx0 - cx, sy0 - cy);
+      const r1 = Math.hypot(sx1 - cx, sy1 - cy);
+      if (r0 <= radius && r1 <= radius) {
+        minimapCtx.strokeStyle = p0.isGravityArc ? "rgba(217, 70, 239, 0.85)" : "rgba(56, 189, 248, 0.55)";
+        minimapCtx.beginPath();
+        minimapCtx.moveTo(sx0, sy0);
+        minimapCtx.lineTo(sx1, sy1);
+        minimapCtx.stroke();
+      }
+    }
+    minimapCtx.restore();
+  }
   const heading = STATE.playerGroup ? STATE.playerGroup.rotation.y : 0;
   minimapCtx.save();
   minimapCtx.translate(cx, cy);
@@ -38751,7 +38874,7 @@ function processInput(dt) {
   }
   if (STATE.flightAssist) {
     if (!isThrusting && !isRetroBraking) {
-      STATE.currentDrag = 0.14;
+      STATE.currentDrag = 0.008;
     } else {
       STATE.currentDrag = STATE.drag;
     }

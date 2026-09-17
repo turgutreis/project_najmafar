@@ -2,9 +2,8 @@ import * as THREE from 'three';
 import { STATE, activePlanets } from '../core/state';
 import { scene } from './scene';
 
-const FLOW_SEGMENTS = 36;
-const FLOW_DT = 0.075;
-const DASH_RATIO = 0.72;
+export const TRAJECTORY_SEGMENTS = 140;
+const DASH_RATIO = 0.75;
 const SOFTENING_SQ = 25.0;
 
 let trajectoryGeometry: THREE.BufferGeometry;
@@ -20,6 +19,11 @@ let progradeChevronMesh: THREE.Mesh;
 let progradeMaterial: THREE.MeshBasicMaterial;
 let progradeDotMaterial: THREE.MeshBasicMaterial;
 
+// Holographic Periapsis (PE) Swing-By Reticle
+let periapsisGroup: THREE.Group;
+let periapsisMaterial: THREE.MeshBasicMaterial;
+let periapsisDotMaterial: THREE.MeshBasicMaterial;
+
 const _predPos = new THREE.Vector3();
 const _predVel = new THREE.Vector3();
 const _predAcc = new THREE.Vector3();
@@ -27,9 +31,13 @@ const _segmentStart = new THREE.Vector3();
 const _segmentEnd = new THREE.Vector3();
 const _impactPos = new THREE.Vector3();
 const _reticleTargetPos = new THREE.Vector3();
+const _pePos = new THREE.Vector3();
+
+// Exported trajectory coordinates for Minimap / HUD Radar
+export const projectedTrajectoryPoints: { x: number; z: number; isGravityArc: boolean }[] = [];
 
 export function initTrajectory() {
-    const vertexCount = FLOW_SEGMENTS * 2;
+    const vertexCount = TRAJECTORY_SEGMENTS * 2;
     trajectoryGeometry = new THREE.BufferGeometry();
     trajectoryPositions = new Float32Array(vertexCount * 3);
     trajectoryColors = new Float32Array(vertexCount * 3);
@@ -51,7 +59,7 @@ export function initTrajectory() {
     trajectoryLines.renderOrder = 999;
     scene.add(trajectoryLines);
 
-    // Build Holographic Prograde Marker Reticle
+    // 1. Build Holographic Prograde Marker Reticle
     progradeGroup = new THREE.Group();
     progradeGroup.renderOrder = 1000;
 
@@ -93,17 +101,63 @@ export function initTrajectory() {
 
     progradeGroup.visible = false;
     scene.add(progradeGroup);
+
+    // 2. Build Holographic Periapsis (PE) Swing-By Reticle
+    periapsisGroup = new THREE.Group();
+    periapsisGroup.renderOrder = 1001;
+
+    periapsisMaterial = new THREE.MeshBasicMaterial({
+        color: 0xd946ef,
+        transparent: true,
+        opacity: 0.0,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+
+    periapsisDotMaterial = new THREE.MeshBasicMaterial({
+        color: 0xf59e0b,
+        transparent: true,
+        opacity: 0.0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+
+    // Diamond Reticle
+    const peRingGeo = new THREE.RingGeometry(0.6, 0.85, 4);
+    peRingGeo.rotateX(Math.PI / 2);
+    peRingGeo.rotateY(Math.PI / 4); // 45 deg tilt for diamond icon
+    const peRingMesh = new THREE.Mesh(peRingGeo, periapsisMaterial);
+    periapsisGroup.add(peRingMesh);
+
+    // Pulsing inner beacon
+    const peDotGeo = new THREE.SphereGeometry(0.18, 12, 12);
+    const peDotMesh = new THREE.Mesh(peDotGeo, periapsisDotMaterial);
+    peDotMesh.position.y = 0.25;
+    periapsisGroup.add(peDotMesh);
+
+    periapsisGroup.visible = false;
+    scene.add(periapsisGroup);
 }
 
 /**
  * Calculates net gravity at pos and checks if pos collides with any solid body.
- * Returns true if position penetrated a planetary or stellar body.
+ * Also returns the strongest gravity influence factor (0 = flat space, 1 = intense well).
  */
-function calculateGravityAndCheckCollision(pos: THREE.Vector3, simTime: number, outAcc: THREE.Vector3, outImpactPoint?: THREE.Vector3): boolean {
+export function calculateGravityAndCheckCollision(
+    pos: THREE.Vector3,
+    simTime: number,
+    outAcc: THREE.Vector3,
+    outImpactPoint?: THREE.Vector3,
+    outClosestInfo?: { source: any; dist: number }
+): { collided: boolean; maxGravityRatio: number } {
     outAcc.set(0, 0, 0);
     const sources = STATE.gravitySources;
     const count = sources.length;
     let collided = false;
+    let maxGravityRatio = 0;
+    let minDist = Infinity;
+    let closestSource: any = null;
 
     for (let s = 0; s < count; s++) {
         const source = sources[s];
@@ -125,17 +179,22 @@ function calculateGravityAndCheckCollision(pos: THREE.Vector3, simTime: number, 
         const dx = sourceX - pos.x;
         const dz = sourceZ - pos.z;
         const distSq = dx * dx + dz * dz;
+        const distance = Math.max(0.01, Math.sqrt(distSq));
+
+        if (distance < minDist) {
+            minDist = distance;
+            closestSource = source;
+        }
 
         // Physical collision boundary (Atmosphere / Surface clearance)
         const impactClearance = source.type === 'star' ? source.radius + 1.2 : source.radius + 0.6;
         if (distSq <= impactClearance * impactClearance) {
             collided = true;
             if (outImpactPoint) {
-                const dist = Math.max(0.01, Math.sqrt(distSq));
                 outImpactPoint.set(
-                    sourceX - (dx / dist) * impactClearance,
+                    sourceX - (dx / distance) * impactClearance,
                     0.25,
-                    sourceZ - (dz / dist) * impactClearance
+                    sourceZ - (dz / distance) * impactClearance
                 );
             }
             break;
@@ -143,29 +202,41 @@ function calculateGravityAndCheckCollision(pos: THREE.Vector3, simTime: number, 
 
         const rangeSq = source.gravityRange * source.gravityRange;
         if (distSq < rangeSq) {
-            const distance = Math.sqrt(distSq);
             // Softened Plummer gravity: F = G*M / (r^2 + r_soft^2)
             const forceStrength = (STATE.gConstant * source.mass) / (distSq + SOFTENING_SQ);
-            const invDist = 1 / Math.max(0.1, distance);
+            const invDist = 1 / distance;
 
             outAcc.x += dx * invDist * forceStrength;
             outAcc.z += dz * invDist * forceStrength;
+
+            const wellRatio = 1.0 - (distance / source.gravityRange);
+            if (wellRatio > maxGravityRatio) {
+                maxGravityRatio = wellRatio;
+            }
         }
     }
 
-    return collided;
+    if (outClosestInfo && closestSource) {
+        outClosestInfo.source = closestSource;
+        outClosestInfo.dist = minDist;
+    }
+
+    return { collided, maxGravityRatio };
 }
 
 export function updateTrajectory() {
-    if (!trajectoryLines || !progradeGroup) return;
+    if (!trajectoryLines || !progradeGroup || !periapsisGroup) return;
 
     const curSpeed = STATE.playerVelocity.length();
-    const speedFactor = Math.min(1.0, Math.max(0, (curSpeed - 0.8) / 4.0)); // 0 when parked, 1 when cruising
+    // Smooth visibility threshold (fades in as speed exceeds 0.4)
+    const speedFactor = Math.min(1.0, Math.max(0, (curSpeed - 0.4) / 3.0));
 
-    // If practically stopped, hide the trajectory completely
-    if (curSpeed < 0.6) {
+    // If practically parked, hide trajectory
+    if (curSpeed < 0.35) {
         trajectoryLines.visible = false;
         progradeGroup.visible = false;
+        periapsisGroup.visible = false;
+        projectedTrajectoryPoints.length = 0;
         return;
     }
 
@@ -178,11 +249,24 @@ export function updateTrajectory() {
     let hasImpacted = false;
     _reticleTargetPos.copy(STATE.playerPosition);
 
+    // Deep orbital time-step: scales adaptively with ship speed to ensure broad coverage
+    // Predicts 20 to 35 seconds into the future across hundreds of space units!
+    const baseDt = THREE.MathUtils.clamp(3.6 / Math.max(1.0, curSpeed), 0.12, 0.26);
+
     // Traveling wave phase for flowing energy beads
     const timeNow = Date.now() * 0.001;
-    const wavePhase = (timeNow * 4.2) % (Math.PI * 2);
+    const wavePhase = (timeNow * 4.5) % (Math.PI * 2);
 
-    for (let seg = 0; seg < FLOW_SEGMENTS; seg++) {
+    // Periapsis tracking (closest approach during orbital swingby)
+    let bestPeFound = false;
+    let bestPeDist = Infinity;
+    let lastDistToSource = Infinity;
+    let hasApproached = false;
+
+    projectedTrajectoryPoints.length = 0;
+    projectedTrajectoryPoints.push({ x: _predPos.x, z: _predPos.z, isGravityArc: false });
+
+    for (let seg = 0; seg < TRAJECTORY_SEGMENTS; seg++) {
         const v0 = seg * 2;
         const v1 = seg * 2 + 1;
 
@@ -205,18 +289,36 @@ export function updateTrajectory() {
             continue;
         }
 
-        const simTime = seg * FLOW_DT;
+        const simTime = seg * baseDt;
 
         // 1. Segment Start
         _segmentStart.copy(_predPos);
 
-        if (calculateGravityAndCheckCollision(_segmentStart, simTime, _predAcc, _impactPos)) {
+        const closestInfo = { source: null as any, dist: Infinity };
+        const gCheck = calculateGravityAndCheckCollision(_segmentStart, simTime, _predAcc, _impactPos, closestInfo);
+
+        // Check for Periapsis (local minimum distance inside a gravity well)
+        if (closestInfo.source && closestInfo.dist < closestInfo.source.gravityRange) {
+            if (closestInfo.dist < lastDistToSource) {
+                hasApproached = true;
+            } else if (hasApproached && !bestPeFound && closestInfo.dist < closestInfo.source.gravityRange * 0.85) {
+                // Distance was decreasing and is now increasing: this is the Periapsis!
+                bestPeFound = true;
+                bestPeDist = closestInfo.dist;
+                _pePos.copy(_segmentStart);
+            }
+            lastDistToSource = closestInfo.dist;
+        }
+
+        const isGravityArc = gCheck.maxGravityRatio > 0.12;
+
+        if (gCheck.collided) {
             hasImpacted = true;
             _segmentStart.copy(_impactPos);
             _segmentEnd.copy(_impactPos);
             _reticleTargetPos.copy(_impactPos);
         } else {
-            const dashDt = FLOW_DT * DASH_RATIO;
+            const dashDt = baseDt * DASH_RATIO;
             _predVel.addScaledVector(_predAcc, dashDt);
             _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * dashDt));
             _predPos.addScaledVector(_predVel, dashDt);
@@ -225,12 +327,13 @@ export function updateTrajectory() {
             _segmentEnd.copy(_predPos);
             _reticleTargetPos.copy(_segmentEnd);
 
-            if (calculateGravityAndCheckCollision(_segmentEnd, simTime + dashDt, _predAcc, _impactPos)) {
+            const endCheck = calculateGravityAndCheckCollision(_segmentEnd, simTime + dashDt, _predAcc, _impactPos);
+            if (endCheck.collided) {
                 hasImpacted = true;
                 _segmentEnd.copy(_impactPos);
                 _reticleTargetPos.copy(_impactPos);
             } else {
-                const gapDt = FLOW_DT * (1.0 - DASH_RATIO);
+                const gapDt = baseDt * (1.0 - DASH_RATIO);
                 calculateGravityAndCheckCollision(_predPos, simTime + dashDt, _predAcc);
                 _predVel.addScaledVector(_predAcc, gapDt);
                 _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * gapDt));
@@ -247,21 +350,38 @@ export function updateTrajectory() {
         trajectoryPositions[v1 * 3 + 1] = 0.25;
         trajectoryPositions[v1 * 3 + 2] = _segmentEnd.z;
 
-        // Dynamic Flowing Light-Pulse Calculation
-        const progress = seg / FLOW_SEGMENTS;
-        const distFade = Math.pow(1.0 - progress, 1.4); // Smooth taper toward the tip
-        const nearFade = Math.min(1.0, seg * 0.4);      // Smooth start right at ship
+        // Record point for Minimap (every 2nd segment or impact)
+        if (seg % 2 === 0 || hasImpacted) {
+            projectedTrajectoryPoints.push({
+                x: _segmentEnd.x,
+                z: _segmentEnd.z,
+                isGravityArc
+            });
+        }
 
-        // Sine wave traveling forward along the stream
-        const flowWave = Math.sin(seg * 0.5 - wavePhase);
-        const pulseBoost = (flowWave > 0 ? flowWave * 0.45 : 0.0);
+        // Dynamic Flowing Light-Pulse & Gravity Shift Calculation
+        const progress = seg / TRAJECTORY_SEGMENTS;
+        const distFade = Math.pow(1.0 - progress, 1.15); // Long graceful taper into deep space
+        const nearFade = Math.min(1.0, seg * 0.3);      // Soft start near ship
 
-        const totalAlpha = (distFade * nearFade * 0.75 + pulseBoost * 0.35) * speedFactor;
+        // Sine wave traveling along the trajectory line
+        const flowWave = Math.sin(seg * 0.42 - wavePhase);
+        const pulseBoost = (flowWave > 0 ? flowWave * 0.40 : 0.0);
 
-        // Glowing Bioluminescent Cyan / Teal Palette
-        const r = 0.12 * totalAlpha;
-        const g = 0.85 * totalAlpha;
-        const b = 0.95 * totalAlpha;
+        const totalAlpha = (distFade * nearFade * 0.80 + pulseBoost * 0.30) * speedFactor;
+
+        // Color Spectrum: Shifts from Bioluminescent Cyan to Psionic Violet/Gold inside gravity wells!
+        const gravBoost = THREE.MathUtils.clamp(gCheck.maxGravityRatio * 1.5, 0.0, 1.0);
+
+        // Standard: Cyan (0.12, 0.85, 0.95)
+        // In Gravity Well: Radiant Violet/Magenta (0.85, 0.25, 0.98)
+        const baseR = THREE.MathUtils.lerp(0.12, 0.88, gravBoost);
+        const baseG = THREE.MathUtils.lerp(0.85, 0.28, gravBoost);
+        const baseB = THREE.MathUtils.lerp(0.95, 0.98, gravBoost);
+
+        const r = baseR * totalAlpha;
+        const g = baseG * totalAlpha;
+        const b = baseB * totalAlpha;
 
         trajectoryColors[v0 * 3 + 0] = r;
         trajectoryColors[v0 * 3 + 1] = g;
@@ -275,30 +395,45 @@ export function updateTrajectory() {
     trajectoryGeometry.attributes.position.needsUpdate = true;
     trajectoryGeometry.attributes.color.needsUpdate = true;
 
-    // Update Prograde Reticle Position & Animation
+    // 3. Update Prograde Reticle (Target Point or Impact Warning)
     if (progradeGroup) {
         progradeGroup.position.set(_reticleTargetPos.x, 0.25, _reticleTargetPos.z);
-        
-        // Orient reticle along velocity vector
-        const velHeading = Math.atan2(-STATE.playerVelocity.z, STATE.playerVelocity.x);
+
+        const velHeading = Math.atan2(-_predVel.z, _predVel.x);
         progradeGroup.rotation.y = velHeading - Math.PI / 2;
 
-        // Pulsing scale & opacity
         const reticleAlpha = speedFactor * (hasImpacted ? 0.95 : 0.80);
         const pulseScale = (1.0 + Math.sin(timeNow * 6.0) * 0.08);
         progradeGroup.scale.set(pulseScale, pulseScale, pulseScale);
 
         if (hasImpacted) {
-            // Hazard warning color (Amber/Crimson)
+            // Collision Alert: Crimson Crosshair
             progradeMaterial.color.setHex(0xf43f5e);
             progradeDotMaterial.color.setHex(0xf59e0b);
         } else {
-            // Prograde Navigation color (Cyan/Emerald)
+            // Prograde Navigation: Electric Cyan
             progradeMaterial.color.setHex(0x38bdf8);
             progradeDotMaterial.color.setHex(0x10b981);
         }
 
         progradeMaterial.opacity = reticleAlpha;
         progradeDotMaterial.opacity = reticleAlpha;
+    }
+
+    // 4. Update Periapsis (PE) Swing-By Reticle
+    if (periapsisGroup) {
+        if (bestPeFound && !hasImpacted) {
+            periapsisGroup.visible = true;
+            periapsisGroup.position.set(_pePos.x, 0.25, _pePos.z);
+
+            const pePulse = 1.0 + Math.sin(timeNow * 7.5) * 0.15;
+            periapsisGroup.scale.set(pePulse, pePulse, pePulse);
+
+            const peAlpha = speedFactor * 0.90;
+            periapsisMaterial.opacity = peAlpha;
+            periapsisDotMaterial.opacity = peAlpha;
+        } else {
+            periapsisGroup.visible = false;
+        }
     }
 }

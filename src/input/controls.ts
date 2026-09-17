@@ -569,9 +569,9 @@ export function processInput(dt: number) {
 
     // 6. Space Drag & Flight Assist Integration
     if (STATE.flightAssist) {
-        // Flight Assist ON: Gentle cosmic gliding when cruising (preserves space momentum)
+        // Flight Assist ON: True vacuum inertia coasting when cruising (allows natural orbital swing-bys)
         if (!isThrusting && !isRetroBraking) {
-            STATE.currentDrag = 0.14; // Smooth space glide instead of abrupt car-like braking
+            STATE.currentDrag = 0.008; // Long-range cosmic glide without phantom friction
         } else {
             STATE.currentDrag = STATE.drag;
         }
