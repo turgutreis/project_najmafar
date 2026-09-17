@@ -31025,11 +31025,7 @@ function createAlienBioShip() {
   if (scene) {
     scene.add(pulseRingsGroup);
   }
-  const activePulseRings = [];
-  const pulseRingGeo = new RingGeometry(0.85, 1.4, 36);
-  pulseRingGeo.rotateX(Math.PI / 2);
-  const pulseInnerEchoGeo = new RingGeometry(0.42, 0.72, 28);
-  pulseInnerEchoGeo.rotateX(Math.PI / 2);
+  const activeSpacetimeWaves = [];
   let pulseEmitTimer = 0;
   let animTime = 0;
   return {
@@ -31046,8 +31042,8 @@ function createAlienBioShip() {
     tendrils,
     pulseRingsGroup,
     getRipples: () => {
-      return activePulseRings.map((r) => ({
-        position: r.group.position,
+      return activeSpacetimeWaves.map((r) => ({
+        position: r.position,
         progress: r.life / r.maxLife,
         worldRadius: r.currentRadius
       }));
@@ -31133,61 +31129,30 @@ function createAlienBioShip() {
           const forwardX = Math.cos(STATE.shipHeading);
           const forwardZ = -Math.sin(STATE.shipHeading);
           const shipScale = STATE.playerGroup ? STATE.playerGroup.scale.x : 0.42;
-          const ringGroup = new Group;
-          const ringMat1 = new MeshBasicMaterial({
-            color: activeColor,
-            transparent: true,
-            opacity: 0.55,
-            side: DoubleSide,
-            blending: AdditiveBlending,
-            depthWrite: false
-          });
-          const ringMat2 = new MeshBasicMaterial({
-            color: 3718648,
-            transparent: true,
-            opacity: 0.35,
-            side: DoubleSide,
-            blending: AdditiveBlending,
-            depthWrite: false
-          });
-          const mesh1 = new Mesh(pulseRingGeo, ringMat1);
-          const mesh2 = new Mesh(pulseInnerEchoGeo, ringMat2);
-          ringGroup.add(mesh1);
-          ringGroup.add(mesh2);
-          ringGroup.position.set(STATE.playerPosition.x - forwardX * (3.8 * shipScale), -0.35, STATE.playerPosition.z - forwardZ * (3.8 * shipScale));
-          ringGroup.scale.set(0.65, 0.65, 0.65);
           const driftVel = new Vector3(-forwardX * 3.4, 0, -forwardZ * 3.4);
           if (STATE.playerVelocity) {
             driftVel.addScaledVector(STATE.playerVelocity, 0.15);
           }
-          pulseRingsGroup.add(ringGroup);
-          activePulseRings.push({
-            group: ringGroup,
+          activeSpacetimeWaves.push({
+            position: new Vector3(STATE.playerPosition.x - forwardX * (3.8 * shipScale), 0, STATE.playerPosition.z - forwardZ * (3.8 * shipScale)),
             life: 0,
-            maxLife: 0.68,
+            maxLife: 0.65,
             velocity: driftVel,
-            currentRadius: 1.2,
-            mats: [ringMat1, ringMat2]
+            currentRadius: 1.2
           });
         }
       }
-      for (let i = activePulseRings.length - 1;i >= 0; i--) {
-        const ring = activePulseRings[i];
-        ring.life += dt;
-        const progress = ring.life / ring.maxLife;
+      for (let i = activeSpacetimeWaves.length - 1;i >= 0; i--) {
+        const wave = activeSpacetimeWaves[i];
+        wave.life += dt;
+        const progress = wave.life / wave.maxLife;
         if (progress >= 1) {
-          pulseRingsGroup.remove(ring.group);
-          ring.mats.forEach((m) => m.dispose());
-          activePulseRings.splice(i, 1);
+          activeSpacetimeWaves.splice(i, 1);
         } else {
           const waveRipple = Math.sin(progress * Math.PI * 3) * 0.25;
           const expandScale = MathUtils.lerp(0.65, 4.8, Math.pow(progress, 0.58)) + waveRipple;
-          ring.currentRadius = expandScale * 1.5;
-          ring.group.scale.set(expandScale, expandScale, expandScale);
-          ring.group.position.addScaledVector(ring.velocity, dt);
-          const alpha = Math.pow(1 - progress, 0.85) * (0.5 + Math.sin(progress * Math.PI * 4) * 0.08);
-          ring.mats[0].opacity = alpha;
-          ring.mats[1].opacity = alpha * 0.55;
+          wave.currentRadius = expandScale * 1.5;
+          wave.position.addScaledVector(wave.velocity, dt);
         }
       }
     }
@@ -31856,7 +31821,7 @@ var SpacetimeDistortionShader = {
                 vec2 dVec = (uv - r.xy) * aspect;
                 float dist = length(dVec);
                 float diff = dist - r.z;
-                float waveWidth = 0.022; // Refined, clean wavefront band
+                float waveWidth = 0.040; // Broad, soft optical wave distortion instead of thin sharp ring
 
                 if (abs(diff) < waveWidth && dist > 0.0005) {
                     float waveProgress = clamp(r.z / 0.35, 0.0, 1.0);
@@ -31864,7 +31829,7 @@ var SpacetimeDistortionShader = {
                     float waveShape = sin(diff / waveWidth * 3.14159);
                     
                     // Subtle, authentic optical refraction ripple across background stars
-                    float displaceMag = waveShape * strength * 0.0035;
+                    float displaceMag = waveShape * strength * 0.003;
                     totalOffset += (dVec / dist) * displaceMag / aspect;
                 }
             }

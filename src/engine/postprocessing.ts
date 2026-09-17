@@ -64,7 +64,7 @@ export const SpacetimeDistortionShader = {
                 vec2 dVec = (uv - r.xy) * aspect;
                 float dist = length(dVec);
                 float diff = dist - r.z;
-                float waveWidth = 0.022; // Refined, clean wavefront band
+                float waveWidth = 0.040; // Broad, soft optical wave distortion instead of thin sharp ring
 
                 if (abs(diff) < waveWidth && dist > 0.0005) {
                     float waveProgress = clamp(r.z / 0.35, 0.0, 1.0);
@@ -72,7 +72,7 @@ export const SpacetimeDistortionShader = {
                     float waveShape = sin(diff / waveWidth * 3.14159);
                     
                     // Subtle, authentic optical refraction ripple across background stars
-                    float displaceMag = waveShape * strength * 0.0035;
+                    float displaceMag = waveShape * strength * 0.003;
                     totalOffset += (dVec / dist) * displaceMag / aspect;
                 }
             }
