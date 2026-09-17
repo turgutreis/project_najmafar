@@ -30308,472 +30308,6 @@ class OutputPass extends Pass {
   }
 }
 
-// src/engine/postprocessing.ts
-var composer = null;
-var bloomPass = null;
-function initPostProcessing() {
-  if (!renderer || !scene || !camera)
-    return;
-  composer = new EffectComposer(renderer);
-  const renderPass = new RenderPass(scene, camera);
-  composer.addPass(renderPass);
-  const bloomResolution = new Vector2(window.innerWidth, window.innerHeight);
-  bloomPass = new UnrealBloomPass(bloomResolution, 0.55, 0.28, 0.88);
-  composer.addPass(bloomPass);
-  const outputPass = new OutputPass;
-  composer.addPass(outputPass);
-}
-function resizePostProcessing(width, height) {
-  if (composer) {
-    composer.setSize(width, height);
-  }
-  if (bloomPass) {
-    bloomPass.resolution.set(width, height);
-  }
-}
-function renderPostProcessing() {
-  if (composer) {
-    composer.render();
-  } else if (renderer && scene && camera) {
-    renderer.render(scene, camera);
-  }
-}
-
-// src/engine/starfield.ts
-function createRealisticStarfield() {
-  const group = new Group;
-  const microCount = 4500;
-  const microGeo = new BufferGeometry;
-  const microPos = new Float32Array(microCount * 3);
-  const microCol = new Float32Array(microCount * 3);
-  for (let i = 0;i < microCount; i++) {
-    const r = Math.sqrt(Math.random()) * 650;
-    const theta = Math.random() * Math.PI * 2;
-    microPos[i * 3] = Math.cos(theta) * r;
-    microPos[i * 3 + 1] = -180 - Math.random() * 120;
-    microPos[i * 3 + 2] = Math.sin(theta) * r;
-    const rand = Math.random();
-    if (rand < 0.4) {
-      microCol[i * 3] = 0.95;
-      microCol[i * 3 + 1] = 0.95;
-      microCol[i * 3 + 2] = 1;
-    } else if (rand < 0.65) {
-      microCol[i * 3] = 1;
-      microCol[i * 3 + 1] = 0.9;
-      microCol[i * 3 + 2] = 0.65;
-    } else if (rand < 0.85) {
-      microCol[i * 3] = 0.45;
-      microCol[i * 3 + 1] = 0.85;
-      microCol[i * 3 + 2] = 1;
-    } else {
-      microCol[i * 3] = 1;
-      microCol[i * 3 + 1] = 0.55;
-      microCol[i * 3 + 2] = 0.45;
-    }
-  }
-  microGeo.setAttribute("position", new BufferAttribute(microPos, 3));
-  microGeo.setAttribute("color", new BufferAttribute(microCol, 3));
-  const microMat = new PointsMaterial({
-    size: 0.55,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.75,
-    depthWrite: false
-  });
-  const microPoints = new Points(microGeo, microMat);
-  group.add(microPoints);
-  const midCount = 1200;
-  const midGeo = new BufferGeometry;
-  const midPos = new Float32Array(midCount * 3);
-  const midCol = new Float32Array(midCount * 3);
-  for (let i = 0;i < midCount; i++) {
-    const r = Math.sqrt(Math.random()) * 600;
-    const theta = Math.random() * Math.PI * 2;
-    midPos[i * 3] = Math.cos(theta) * r;
-    midPos[i * 3 + 1] = -140 - Math.random() * 60;
-    midPos[i * 3 + 2] = Math.sin(theta) * r;
-    const rand = Math.random();
-    if (rand < 0.35) {
-      midCol[i * 3] = 1;
-      midCol[i * 3 + 1] = 1;
-      midCol[i * 3 + 2] = 1;
-    } else if (rand < 0.6) {
-      midCol[i * 3] = 0.35;
-      midCol[i * 3 + 1] = 0.88;
-      midCol[i * 3 + 2] = 1;
-    } else if (rand < 0.85) {
-      midCol[i * 3] = 1;
-      midCol[i * 3 + 1] = 0.82;
-      midCol[i * 3 + 2] = 0.35;
-    } else {
-      midCol[i * 3] = 0.95;
-      midCol[i * 3 + 1] = 0.45;
-      midCol[i * 3 + 2] = 0.85;
-    }
-  }
-  midGeo.setAttribute("position", new BufferAttribute(midPos, 3));
-  midGeo.setAttribute("color", new BufferAttribute(midCol, 3));
-  const midMat = new PointsMaterial({
-    size: 1.1,
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.9,
-    depthWrite: false
-  });
-  const midPoints = new Points(midGeo, midMat);
-  group.add(midPoints);
-  const beaconCount = 120;
-  const beaconGeo = new BufferGeometry;
-  const beaconPos = new Float32Array(beaconCount * 3);
-  const beaconCol = new Float32Array(beaconCount * 3);
-  for (let i = 0;i < beaconCount; i++) {
-    const r = Math.sqrt(Math.random()) * 550;
-    const theta = Math.random() * Math.PI * 2;
-    beaconPos[i * 3] = Math.cos(theta) * r;
-    beaconPos[i * 3 + 1] = -110 - Math.random() * 40;
-    beaconPos[i * 3 + 2] = Math.sin(theta) * r;
-    const rand = Math.random();
-    if (rand < 0.4) {
-      beaconCol[i * 3] = 0.5;
-      beaconCol[i * 3 + 1] = 0.95;
-      beaconCol[i * 3 + 2] = 1;
-    } else if (rand < 0.7) {
-      beaconCol[i * 3] = 1;
-      beaconCol[i * 3 + 1] = 0.88;
-      beaconCol[i * 3 + 2] = 0.3;
-    } else {
-      beaconCol[i * 3] = 1;
-      beaconCol[i * 3 + 1] = 1;
-      beaconCol[i * 3 + 2] = 1;
-    }
-  }
-  beaconGeo.setAttribute("position", new BufferAttribute(beaconPos, 3));
-  beaconGeo.setAttribute("color", new BufferAttribute(beaconCol, 3));
-  const beaconMat = new PointsMaterial({
-    size: 1.7,
-    vertexColors: true,
-    transparent: true,
-    opacity: 1,
-    depthWrite: false
-  });
-  const beaconPoints = new Points(beaconGeo, beaconMat);
-  group.add(beaconPoints);
-  const nebulaCanvas = document.createElement("canvas");
-  nebulaCanvas.width = 256;
-  nebulaCanvas.height = 256;
-  const nCtx = nebulaCanvas.getContext("2d");
-  const gradient = nCtx.createRadialGradient(128, 128, 10, 128, 128, 128);
-  gradient.addColorStop(0, "rgba(168, 85, 247, 0.45)");
-  gradient.addColorStop(0.35, "rgba(56, 189, 248, 0.25)");
-  gradient.addColorStop(0.7, "rgba(15, 23, 42, 0.12)");
-  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-  nCtx.fillStyle = gradient;
-  nCtx.fillRect(0, 0, 256, 256);
-  const nebulaTex = new CanvasTexture(nebulaCanvas);
-  const nebulaGeo = new PlaneGeometry(350, 350);
-  nebulaGeo.rotateX(-Math.PI / 2);
-  const nebulaColors = [6514417, 440020, 14239471, 3900150];
-  const nebulaMeshes = [];
-  for (let k = 0;k < 6; k++) {
-    const nMat = new MeshBasicMaterial({
-      map: nebulaTex,
-      color: nebulaColors[k % nebulaColors.length],
-      transparent: true,
-      opacity: 0.16,
-      depthWrite: false,
-      blending: AdditiveBlending,
-      side: DoubleSide
-    });
-    const nMesh = new Mesh(nebulaGeo, nMat);
-    const ang = k / 6 * Math.PI * 2 + 0.4;
-    const dist = 120 + k % 3 * 110;
-    nMesh.position.set(Math.cos(ang) * dist, -240 - k * 15, Math.sin(ang) * dist);
-    nMesh.rotation.y = k * 1.1;
-    group.add(nMesh);
-    nebulaMeshes.push(nMesh);
-  }
-  let totalTime = 0;
-  return {
-    group,
-    update: (dt, playerPos) => {
-      totalTime += dt;
-      group.rotation.y = totalTime * 0.0015;
-      if (playerPos) {
-        microPoints.position.x = playerPos.x * 0.015;
-        microPoints.position.z = playerPos.z * 0.015;
-        midPoints.position.x = playerPos.x * 0.035;
-        midPoints.position.z = playerPos.z * 0.035;
-        beaconPoints.position.x = playerPos.x * 0.06;
-        beaconPoints.position.z = playerPos.z * 0.06;
-      }
-    },
-    dispose: () => {
-      microGeo.dispose();
-      microMat.dispose();
-      midGeo.dispose();
-      midMat.dispose();
-      beaconGeo.dispose();
-      beaconMat.dispose();
-      nebulaGeo.dispose();
-      nebulaTex.dispose();
-      nebulaMeshes.forEach((m) => m.material.dispose());
-    }
-  };
-}
-
-// src/engine/scene.ts
-var scene = new Scene;
-var camera;
-var renderer;
-var starfieldController = null;
-function initScene(container) {
-  const target = container || document.getElementById("canvas-container") || document.body;
-  scene = new Scene;
-  camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 65, 0);
-  camera.lookAt(0, 0, 0);
-  renderer = new WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(66312, 1);
-  renderer.toneMapping = ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
-  target.appendChild(renderer.domElement);
-  const ambientLight = new AmbientLight(396312, 0.18);
-  scene.add(ambientLight);
-  starfieldController = createRealisticStarfield();
-  scene.add(starfieldController.group);
-  window.addEventListener("resize", onWindowResize);
-}
-function onWindowResize() {
-  if (!camera || !renderer)
-    return;
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  resizePostProcessing(window.innerWidth, window.innerHeight);
-}
-
-// src/engine/trajectory.ts
-var FLOW_SEGMENTS = 36;
-var FLOW_DT = 0.075;
-var DASH_RATIO = 0.72;
-var SOFTENING_SQ = 25;
-var trajectoryGeometry;
-var trajectoryLines;
-var trajectoryPositions;
-var trajectoryColors;
-var progradeGroup;
-var progradeRingMesh;
-var progradeDotMesh;
-var progradeChevronMesh;
-var progradeMaterial;
-var progradeDotMaterial;
-var _predPos = new Vector3;
-var _predVel = new Vector3;
-var _predAcc = new Vector3;
-var _segmentStart = new Vector3;
-var _segmentEnd = new Vector3;
-var _impactPos = new Vector3;
-var _reticleTargetPos = new Vector3;
-function initTrajectory() {
-  const vertexCount = FLOW_SEGMENTS * 2;
-  trajectoryGeometry = new BufferGeometry;
-  trajectoryPositions = new Float32Array(vertexCount * 3);
-  trajectoryColors = new Float32Array(vertexCount * 3);
-  trajectoryGeometry.setAttribute("position", new BufferAttribute(trajectoryPositions, 3));
-  trajectoryGeometry.setAttribute("color", new BufferAttribute(trajectoryColors, 3));
-  const lineMaterial = new LineBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.95,
-    linewidth: 2,
-    blending: AdditiveBlending,
-    depthWrite: false
-  });
-  trajectoryLines = new LineSegments(trajectoryGeometry, lineMaterial);
-  trajectoryLines.frustumCulled = false;
-  trajectoryLines.renderOrder = 999;
-  scene.add(trajectoryLines);
-  progradeGroup = new Group;
-  progradeGroup.renderOrder = 1000;
-  progradeMaterial = new MeshBasicMaterial({
-    color: 3718648,
-    transparent: true,
-    opacity: 0,
-    side: DoubleSide,
-    blending: AdditiveBlending,
-    depthWrite: false
-  });
-  progradeDotMaterial = new MeshBasicMaterial({
-    color: 1096065,
-    transparent: true,
-    opacity: 0,
-    blending: AdditiveBlending,
-    depthWrite: false
-  });
-  const ringGeo = new RingGeometry(0.65, 0.85, 32);
-  ringGeo.rotateX(Math.PI / 2);
-  progradeRingMesh = new Mesh(ringGeo, progradeMaterial);
-  progradeGroup.add(progradeRingMesh);
-  const dotGeo = new SphereGeometry(0.22, 16, 16);
-  progradeDotMesh = new Mesh(dotGeo, progradeDotMaterial);
-  progradeDotMesh.position.y = 0.25;
-  progradeGroup.add(progradeDotMesh);
-  const chevronGeo = new ConeGeometry(0.35, 0.8, 4);
-  chevronGeo.rotateX(Math.PI / 2);
-  progradeChevronMesh = new Mesh(chevronGeo, progradeMaterial);
-  progradeChevronMesh.position.set(0, 0.25, 0.95);
-  progradeGroup.add(progradeChevronMesh);
-  progradeGroup.visible = false;
-  scene.add(progradeGroup);
-}
-function calculateGravityAndCheckCollision(pos, simTime, outAcc, outImpactPoint) {
-  outAcc.set(0, 0, 0);
-  const sources = STATE.gravitySources;
-  const count = sources.length;
-  let collided = false;
-  for (let s = 0;s < count; s++) {
-    const source = sources[s];
-    if (source.isAbsorbed)
-      continue;
-    let sourceX = source.position.x;
-    let sourceZ = source.position.z;
-    if (source.type === "planet") {
-      const planetEntry = activePlanets.find((p) => p.source === source);
-      if (planetEntry && !planetEntry.isMoon) {
-        const futureAngle = planetEntry.angle + planetEntry.speed * simTime;
-        sourceX = planetEntry.distance * Math.cos(futureAngle);
-        sourceZ = planetEntry.distance * Math.sin(futureAngle);
-      }
-    }
-    const dx = sourceX - pos.x;
-    const dz = sourceZ - pos.z;
-    const distSq = dx * dx + dz * dz;
-    const impactClearance = source.type === "star" ? source.radius + 1.2 : source.radius + 0.6;
-    if (distSq <= impactClearance * impactClearance) {
-      collided = true;
-      if (outImpactPoint) {
-        const dist = Math.max(0.01, Math.sqrt(distSq));
-        outImpactPoint.set(sourceX - dx / dist * impactClearance, 0.25, sourceZ - dz / dist * impactClearance);
-      }
-      break;
-    }
-    const rangeSq = source.gravityRange * source.gravityRange;
-    if (distSq < rangeSq) {
-      const distance = Math.sqrt(distSq);
-      const forceStrength = STATE.gConstant * source.mass / (distSq + SOFTENING_SQ);
-      const invDist = 1 / Math.max(0.1, distance);
-      outAcc.x += dx * invDist * forceStrength;
-      outAcc.z += dz * invDist * forceStrength;
-    }
-  }
-  return collided;
-}
-function updateTrajectory() {
-  if (!trajectoryLines || !progradeGroup)
-    return;
-  const curSpeed = STATE.playerVelocity.length();
-  const speedFactor = Math.min(1, Math.max(0, (curSpeed - 0.8) / 4));
-  if (curSpeed < 0.6) {
-    trajectoryLines.visible = false;
-    progradeGroup.visible = false;
-    return;
-  }
-  trajectoryLines.visible = true;
-  progradeGroup.visible = true;
-  _predPos.copy(STATE.playerPosition);
-  _predVel.copy(STATE.playerVelocity);
-  let hasImpacted = false;
-  _reticleTargetPos.copy(STATE.playerPosition);
-  const timeNow = Date.now() * 0.001;
-  const wavePhase = timeNow * 4.2 % (Math.PI * 2);
-  for (let seg = 0;seg < FLOW_SEGMENTS; seg++) {
-    const v0 = seg * 2;
-    const v1 = seg * 2 + 1;
-    if (hasImpacted) {
-      trajectoryPositions[v0 * 3 + 0] = _impactPos.x;
-      trajectoryPositions[v0 * 3 + 1] = 0.25;
-      trajectoryPositions[v0 * 3 + 2] = _impactPos.z;
-      trajectoryPositions[v1 * 3 + 0] = _impactPos.x;
-      trajectoryPositions[v1 * 3 + 1] = 0.25;
-      trajectoryPositions[v1 * 3 + 2] = _impactPos.z;
-      trajectoryColors[v0 * 3 + 0] = 0;
-      trajectoryColors[v0 * 3 + 1] = 0;
-      trajectoryColors[v0 * 3 + 2] = 0;
-      trajectoryColors[v1 * 3 + 0] = 0;
-      trajectoryColors[v1 * 3 + 1] = 0;
-      trajectoryColors[v1 * 3 + 2] = 0;
-      continue;
-    }
-    const simTime = seg * FLOW_DT;
-    _segmentStart.copy(_predPos);
-    if (calculateGravityAndCheckCollision(_segmentStart, simTime, _predAcc, _impactPos)) {
-      hasImpacted = true;
-      _segmentStart.copy(_impactPos);
-      _segmentEnd.copy(_impactPos);
-      _reticleTargetPos.copy(_impactPos);
-    } else {
-      const dashDt = FLOW_DT * DASH_RATIO;
-      _predVel.addScaledVector(_predAcc, dashDt);
-      _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * dashDt));
-      _predPos.addScaledVector(_predVel, dashDt);
-      _segmentEnd.copy(_predPos);
-      _reticleTargetPos.copy(_segmentEnd);
-      if (calculateGravityAndCheckCollision(_segmentEnd, simTime + dashDt, _predAcc, _impactPos)) {
-        hasImpacted = true;
-        _segmentEnd.copy(_impactPos);
-        _reticleTargetPos.copy(_impactPos);
-      } else {
-        const gapDt = FLOW_DT * (1 - DASH_RATIO);
-        calculateGravityAndCheckCollision(_predPos, simTime + dashDt, _predAcc);
-        _predVel.addScaledVector(_predAcc, gapDt);
-        _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * gapDt));
-        _predPos.addScaledVector(_predVel, gapDt);
-      }
-    }
-    trajectoryPositions[v0 * 3 + 0] = _segmentStart.x;
-    trajectoryPositions[v0 * 3 + 1] = 0.25;
-    trajectoryPositions[v0 * 3 + 2] = _segmentStart.z;
-    trajectoryPositions[v1 * 3 + 0] = _segmentEnd.x;
-    trajectoryPositions[v1 * 3 + 1] = 0.25;
-    trajectoryPositions[v1 * 3 + 2] = _segmentEnd.z;
-    const progress = seg / FLOW_SEGMENTS;
-    const distFade = Math.pow(1 - progress, 1.4);
-    const nearFade = Math.min(1, seg * 0.4);
-    const flowWave = Math.sin(seg * 0.5 - wavePhase);
-    const pulseBoost = flowWave > 0 ? flowWave * 0.45 : 0;
-    const totalAlpha = (distFade * nearFade * 0.75 + pulseBoost * 0.35) * speedFactor;
-    const r = 0.12 * totalAlpha;
-    const g = 0.85 * totalAlpha;
-    const b = 0.95 * totalAlpha;
-    trajectoryColors[v0 * 3 + 0] = r;
-    trajectoryColors[v0 * 3 + 1] = g;
-    trajectoryColors[v0 * 3 + 2] = b;
-    trajectoryColors[v1 * 3 + 0] = r;
-    trajectoryColors[v1 * 3 + 1] = g;
-    trajectoryColors[v1 * 3 + 2] = b;
-  }
-  trajectoryGeometry.attributes.position.needsUpdate = true;
-  trajectoryGeometry.attributes.color.needsUpdate = true;
-  if (progradeGroup) {
-    progradeGroup.position.set(_reticleTargetPos.x, 0.25, _reticleTargetPos.z);
-    const velHeading = Math.atan2(-STATE.playerVelocity.z, STATE.playerVelocity.x);
-    progradeGroup.rotation.y = velHeading - Math.PI / 2;
-    const reticleAlpha = speedFactor * (hasImpacted ? 0.95 : 0.8);
-    const pulseScale = 1 + Math.sin(timeNow * 6) * 0.08;
-    progradeGroup.scale.set(pulseScale, pulseScale, pulseScale);
-    if (hasImpacted) {
-      progradeMaterial.color.setHex(16007006);
-      progradeDotMaterial.color.setHex(16096779);
-    } else {
-      progradeMaterial.color.setHex(3718648);
-      progradeDotMaterial.color.setHex(1096065);
-    }
-    progradeMaterial.opacity = reticleAlpha;
-    progradeDotMaterial.opacity = reticleAlpha;
-  }
-}
-
 // src/procedural/textures.ts
 function pseudoNoise(x, y, seed = 1) {
   const n = Math.sin(x * 12.9898 + y * 78.233 + seed * 43.123) * 43758.5453;
@@ -31492,8 +31026,10 @@ function createAlienBioShip() {
     scene.add(pulseRingsGroup);
   }
   const activePulseRings = [];
-  const pulseRingGeo = new RingGeometry(0.8, 1.3, 32);
+  const pulseRingGeo = new RingGeometry(0.85, 1.4, 36);
   pulseRingGeo.rotateX(Math.PI / 2);
+  const pulseInnerEchoGeo = new RingGeometry(0.42, 0.72, 28);
+  pulseInnerEchoGeo.rotateX(Math.PI / 2);
   let pulseEmitTimer = 0;
   let animTime = 0;
   return {
@@ -31509,6 +31045,13 @@ function createAlienBioShip() {
     dorsalPlates,
     tendrils,
     pulseRingsGroup,
+    getRipples: () => {
+      return activePulseRings.map((r) => ({
+        position: r.group.position,
+        progress: r.life / r.maxLife,
+        worldRadius: r.currentRadius
+      }));
+    },
     update: (dt) => {
       animTime += dt;
       if (scene && pulseRingsGroup.parent !== scene) {
@@ -31590,28 +31133,41 @@ function createAlienBioShip() {
           const forwardX = Math.cos(STATE.shipHeading);
           const forwardZ = -Math.sin(STATE.shipHeading);
           const shipScale = STATE.playerGroup ? STATE.playerGroup.scale.x : 0.42;
-          const ringMat = new MeshBasicMaterial({
+          const ringGroup = new Group;
+          const ringMat1 = new MeshBasicMaterial({
             color: activeColor,
             transparent: true,
-            opacity: 0.88,
+            opacity: 0.9,
             side: DoubleSide,
             blending: AdditiveBlending,
             depthWrite: false
           });
-          const ringMesh = new Mesh(pulseRingGeo, ringMat);
-          ringMesh.position.set(STATE.playerPosition.x - forwardX * (3 * shipScale), 0.15, STATE.playerPosition.z - forwardZ * (3 * shipScale));
-          ringMesh.scale.set(0.65, 0.65, 0.65);
+          const ringMat2 = new MeshBasicMaterial({
+            color: 3718648,
+            transparent: true,
+            opacity: 0.6,
+            side: DoubleSide,
+            blending: AdditiveBlending,
+            depthWrite: false
+          });
+          const mesh1 = new Mesh(pulseRingGeo, ringMat1);
+          const mesh2 = new Mesh(pulseInnerEchoGeo, ringMat2);
+          ringGroup.add(mesh1);
+          ringGroup.add(mesh2);
+          ringGroup.position.set(STATE.playerPosition.x - forwardX * (3 * shipScale), 0.15, STATE.playerPosition.z - forwardZ * (3 * shipScale));
+          ringGroup.scale.set(0.65, 0.65, 0.65);
           const driftVel = new Vector3(-forwardX * 3.4, 0, -forwardZ * 3.4);
           if (STATE.playerVelocity) {
             driftVel.addScaledVector(STATE.playerVelocity, 0.15);
           }
-          pulseRingsGroup.add(ringMesh);
+          pulseRingsGroup.add(ringGroup);
           activePulseRings.push({
-            mesh: ringMesh,
+            group: ringGroup,
             life: 0,
-            maxLife: 0.65,
+            maxLife: 0.68,
             velocity: driftVel,
-            mat: ringMat
+            currentRadius: 1.2,
+            mats: [ringMat1, ringMat2]
           });
         }
       }
@@ -31620,15 +31176,18 @@ function createAlienBioShip() {
         ring.life += dt;
         const progress = ring.life / ring.maxLife;
         if (progress >= 1) {
-          pulseRingsGroup.remove(ring.mesh);
-          ring.mat.dispose();
+          pulseRingsGroup.remove(ring.group);
+          ring.mats.forEach((m) => m.dispose());
           activePulseRings.splice(i, 1);
         } else {
-          const waveRipple = Math.sin(progress * Math.PI * 3) * 0.22;
-          const expandScale = MathUtils.lerp(0.65, 4.2, Math.pow(progress, 0.6)) + waveRipple;
-          ring.mesh.scale.set(expandScale, expandScale, expandScale);
-          ring.mesh.position.addScaledVector(ring.velocity, dt);
-          ring.mat.opacity = Math.pow(1 - progress, 0.85) * (0.85 + Math.sin(progress * Math.PI * 4) * 0.12);
+          const waveRipple = Math.sin(progress * Math.PI * 3) * 0.25;
+          const expandScale = MathUtils.lerp(0.65, 4.8, Math.pow(progress, 0.58)) + waveRipple;
+          ring.currentRadius = expandScale * 1.5;
+          ring.group.scale.set(expandScale, expandScale, expandScale);
+          ring.group.position.addScaledVector(ring.velocity, dt);
+          const alpha = Math.pow(1 - progress, 0.85) * (0.85 + Math.sin(progress * Math.PI * 4) * 0.12);
+          ring.mats[0].opacity = alpha;
+          ring.mats[1].opacity = alpha * 0.65;
         }
       }
     }
@@ -32239,6 +31798,616 @@ function createVoyagerProbeMesh(size = 2.2) {
       signalHalo.material.opacity = 0.25 + pulse * 0.4;
     }
   };
+}
+
+// src/engine/postprocessing.ts
+var composer = null;
+var bloomPass = null;
+var distortionPass = null;
+var SpacetimeDistortionShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    uResolution: { value: new Vector2(1920, 1080) },
+    uTime: { value: 0 },
+    uWarpBubblePos: { value: new Vector2(0.5, 0.5) },
+    uWarpIntensity: { value: 0 },
+    uRippleCount: { value: 0 },
+    uRipples: {
+      value: [
+        new Vector3(0, 0, 0),
+        new Vector3(0, 0, 0),
+        new Vector3(0, 0, 0),
+        new Vector3(0, 0, 0),
+        new Vector3(0, 0, 0),
+        new Vector3(0, 0, 0),
+        new Vector3(0, 0, 0),
+        new Vector3(0, 0, 0)
+      ]
+    }
+  },
+  vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+  fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform vec2 uResolution;
+        uniform float uTime;
+        uniform vec2 uWarpBubblePos;
+        uniform float uWarpIntensity;
+        uniform int uRippleCount;
+        uniform vec3 uRipples[8];
+        varying vec2 vUv;
+
+        void main() {
+            vec2 aspect = vec2(uResolution.x / max(1.0, uResolution.y), 1.0);
+            vec2 uv = vUv;
+            vec2 totalOffset = vec2(0.0);
+
+            // 1. Spacetime Warp Bubble surrounding the accelerating bio-ship
+            if (uWarpIntensity > 0.001) {
+                vec2 dVec = (uv - uWarpBubblePos) * aspect;
+                float d = length(dVec);
+                float bubbleRadius = 0.095;
+                if (d < bubbleRadius * 2.8 && d > 0.0005) {
+                    float normD = d / bubbleRadius;
+                    // Gravitational lensing curve (Einstein ring space curvature)
+                    float lensForce = sin(normD * 3.14159) * exp(-normD * 1.1) * 0.032 * uWarpIntensity;
+                    totalOffset += (dVec / d) * lensForce / aspect;
+                }
+            }
+
+            // 2. Expanding Spacetime Gravitational Pulse Waves (Ripples in spacetime metric)
+            for (int i = 0; i < 8; i++) {
+                if (i >= uRippleCount) break;
+                vec3 r = uRipples[i]; // r.x, r.y = screen center, r.z = screen radius
+                if (r.z <= 0.001) continue;
+
+                vec2 dVec = (uv - r.xy) * aspect;
+                float dist = length(dVec);
+                float diff = dist - r.z;
+                float waveWidth = 0.048; // Breadth of gravitational shockwave band
+
+                if (abs(diff) < waveWidth && dist > 0.0005) {
+                    float waveProgress = clamp(r.z / 0.42, 0.0, 1.0);
+                    float strength = (1.0 - waveProgress); // Attenuates as wave disperses
+                    float waveShape = sin(diff / waveWidth * 3.14159);
+                    
+                    // General-relativistic radial refraction displacement
+                    float displaceMag = waveShape * strength * 0.042;
+                    totalOffset += (dVec / dist) * displaceMag / aspect;
+                }
+            }
+
+            // 3. Chromatic Gravitational Lensing (Prism Splitting in curved spacetime)
+            float offsetLen = length(totalOffset);
+            if (offsetLen > 0.0001) {
+                float rCol = texture2D(tDiffuse, uv + totalOffset * 1.35).r;
+                float gCol = texture2D(tDiffuse, uv + totalOffset).g;
+                float bCol = texture2D(tDiffuse, uv + totalOffset * 0.65).b;
+                float aCol = texture2D(tDiffuse, uv).a;
+
+                // Bioluminescent caustic gleam along wave crests
+                float causticIntensity = smoothstep(0.012, 0.038, offsetLen);
+                vec3 caustic = vec3(0.02, 0.22, 0.28) * causticIntensity;
+
+                gl_FragColor = vec4(rCol + caustic.r, gCol + caustic.g, bCol + caustic.b, aCol);
+            } else {
+                gl_FragColor = texture2D(tDiffuse, uv);
+            }
+        }
+    `
+};
+function initPostProcessing() {
+  if (!renderer || !scene || !camera)
+    return;
+  composer = new EffectComposer(renderer);
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
+  const distortionResolution = new Vector2(window.innerWidth, window.innerHeight);
+  SpacetimeDistortionShader.uniforms.uResolution.value.copy(distortionResolution);
+  distortionPass = new ShaderPass(SpacetimeDistortionShader);
+  composer.addPass(distortionPass);
+  const bloomResolution = new Vector2(window.innerWidth, window.innerHeight);
+  bloomPass = new UnrealBloomPass(bloomResolution, 0.55, 0.28, 0.88);
+  composer.addPass(bloomPass);
+  const outputPass = new OutputPass;
+  composer.addPass(outputPass);
+}
+function resizePostProcessing(width, height) {
+  if (composer) {
+    composer.setSize(width, height);
+  }
+  if (bloomPass) {
+    bloomPass.resolution.set(width, height);
+  }
+  if (distortionPass && distortionPass.uniforms.uResolution) {
+    distortionPass.uniforms.uResolution.value.set(width, height);
+  }
+}
+var lastDistortionTime = performance.now();
+function updateSpacetimeDistortion() {
+  if (!distortionPass || !camera)
+    return;
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastDistortionTime) * 0.001);
+  lastDistortionTime = now;
+  const uniforms = distortionPass.uniforms;
+  uniforms.uTime.value += dt;
+  if (typeof window !== "undefined" && window.innerWidth) {
+    uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+  }
+  if (STATE.playerPosition) {
+    const shipScreen = STATE.playerPosition.clone().project(camera);
+    const uvX = (shipScreen.x + 1) * 0.5;
+    const uvY = (shipScreen.y + 1) * 0.5;
+    uniforms.uWarpBubblePos.value.set(uvX, uvY);
+    const isThrusting = Boolean(STATE.isThrusting || STATE.keys && STATE.keys.w);
+    const targetWarp = isThrusting ? 1 : 0;
+    uniforms.uWarpIntensity.value = MathUtils.lerp(uniforms.uWarpIntensity.value, targetWarp, Math.min(1, dt * 9));
+  }
+  if (alienShipController && typeof alienShipController.getRipples === "function") {
+    const ripples = alienShipController.getRipples();
+    const count = Math.min(ripples.length, 8);
+    uniforms.uRippleCount.value = count;
+    const camHeight = Math.max(20, camera.position.y || 65);
+    for (let i = 0;i < count; i++) {
+      const r = ripples[i];
+      const screenPos = r.position.clone().project(camera);
+      const rX = (screenPos.x + 1) * 0.5;
+      const rY = (screenPos.y + 1) * 0.5;
+      const screenRadius = r.worldRadius / camHeight * 0.72;
+      uniforms.uRipples.value[i].set(rX, rY, screenRadius);
+    }
+  } else {
+    uniforms.uRippleCount.value = 0;
+  }
+}
+function renderPostProcessing() {
+  if (composer) {
+    updateSpacetimeDistortion();
+    composer.render();
+  } else if (renderer && scene && camera) {
+    renderer.render(scene, camera);
+  }
+}
+
+// src/engine/starfield.ts
+function createRealisticStarfield() {
+  const group = new Group;
+  const microCount = 4500;
+  const microGeo = new BufferGeometry;
+  const microPos = new Float32Array(microCount * 3);
+  const microCol = new Float32Array(microCount * 3);
+  for (let i = 0;i < microCount; i++) {
+    const r = Math.sqrt(Math.random()) * 650;
+    const theta = Math.random() * Math.PI * 2;
+    microPos[i * 3] = Math.cos(theta) * r;
+    microPos[i * 3 + 1] = -180 - Math.random() * 120;
+    microPos[i * 3 + 2] = Math.sin(theta) * r;
+    const rand = Math.random();
+    if (rand < 0.4) {
+      microCol[i * 3] = 0.95;
+      microCol[i * 3 + 1] = 0.95;
+      microCol[i * 3 + 2] = 1;
+    } else if (rand < 0.65) {
+      microCol[i * 3] = 1;
+      microCol[i * 3 + 1] = 0.9;
+      microCol[i * 3 + 2] = 0.65;
+    } else if (rand < 0.85) {
+      microCol[i * 3] = 0.45;
+      microCol[i * 3 + 1] = 0.85;
+      microCol[i * 3 + 2] = 1;
+    } else {
+      microCol[i * 3] = 1;
+      microCol[i * 3 + 1] = 0.55;
+      microCol[i * 3 + 2] = 0.45;
+    }
+  }
+  microGeo.setAttribute("position", new BufferAttribute(microPos, 3));
+  microGeo.setAttribute("color", new BufferAttribute(microCol, 3));
+  const microMat = new PointsMaterial({
+    size: 0.55,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.75,
+    depthWrite: false
+  });
+  const microPoints = new Points(microGeo, microMat);
+  group.add(microPoints);
+  const midCount = 1200;
+  const midGeo = new BufferGeometry;
+  const midPos = new Float32Array(midCount * 3);
+  const midCol = new Float32Array(midCount * 3);
+  for (let i = 0;i < midCount; i++) {
+    const r = Math.sqrt(Math.random()) * 600;
+    const theta = Math.random() * Math.PI * 2;
+    midPos[i * 3] = Math.cos(theta) * r;
+    midPos[i * 3 + 1] = -140 - Math.random() * 60;
+    midPos[i * 3 + 2] = Math.sin(theta) * r;
+    const rand = Math.random();
+    if (rand < 0.35) {
+      midCol[i * 3] = 1;
+      midCol[i * 3 + 1] = 1;
+      midCol[i * 3 + 2] = 1;
+    } else if (rand < 0.6) {
+      midCol[i * 3] = 0.35;
+      midCol[i * 3 + 1] = 0.88;
+      midCol[i * 3 + 2] = 1;
+    } else if (rand < 0.85) {
+      midCol[i * 3] = 1;
+      midCol[i * 3 + 1] = 0.82;
+      midCol[i * 3 + 2] = 0.35;
+    } else {
+      midCol[i * 3] = 0.95;
+      midCol[i * 3 + 1] = 0.45;
+      midCol[i * 3 + 2] = 0.85;
+    }
+  }
+  midGeo.setAttribute("position", new BufferAttribute(midPos, 3));
+  midGeo.setAttribute("color", new BufferAttribute(midCol, 3));
+  const midMat = new PointsMaterial({
+    size: 1.1,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false
+  });
+  const midPoints = new Points(midGeo, midMat);
+  group.add(midPoints);
+  const beaconCount = 120;
+  const beaconGeo = new BufferGeometry;
+  const beaconPos = new Float32Array(beaconCount * 3);
+  const beaconCol = new Float32Array(beaconCount * 3);
+  for (let i = 0;i < beaconCount; i++) {
+    const r = Math.sqrt(Math.random()) * 550;
+    const theta = Math.random() * Math.PI * 2;
+    beaconPos[i * 3] = Math.cos(theta) * r;
+    beaconPos[i * 3 + 1] = -110 - Math.random() * 40;
+    beaconPos[i * 3 + 2] = Math.sin(theta) * r;
+    const rand = Math.random();
+    if (rand < 0.4) {
+      beaconCol[i * 3] = 0.5;
+      beaconCol[i * 3 + 1] = 0.95;
+      beaconCol[i * 3 + 2] = 1;
+    } else if (rand < 0.7) {
+      beaconCol[i * 3] = 1;
+      beaconCol[i * 3 + 1] = 0.88;
+      beaconCol[i * 3 + 2] = 0.3;
+    } else {
+      beaconCol[i * 3] = 1;
+      beaconCol[i * 3 + 1] = 1;
+      beaconCol[i * 3 + 2] = 1;
+    }
+  }
+  beaconGeo.setAttribute("position", new BufferAttribute(beaconPos, 3));
+  beaconGeo.setAttribute("color", new BufferAttribute(beaconCol, 3));
+  const beaconMat = new PointsMaterial({
+    size: 1.7,
+    vertexColors: true,
+    transparent: true,
+    opacity: 1,
+    depthWrite: false
+  });
+  const beaconPoints = new Points(beaconGeo, beaconMat);
+  group.add(beaconPoints);
+  const nebulaCanvas = document.createElement("canvas");
+  nebulaCanvas.width = 256;
+  nebulaCanvas.height = 256;
+  const nCtx = nebulaCanvas.getContext("2d");
+  const gradient = nCtx.createRadialGradient(128, 128, 10, 128, 128, 128);
+  gradient.addColorStop(0, "rgba(168, 85, 247, 0.45)");
+  gradient.addColorStop(0.35, "rgba(56, 189, 248, 0.25)");
+  gradient.addColorStop(0.7, "rgba(15, 23, 42, 0.12)");
+  gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+  nCtx.fillStyle = gradient;
+  nCtx.fillRect(0, 0, 256, 256);
+  const nebulaTex = new CanvasTexture(nebulaCanvas);
+  const nebulaGeo = new PlaneGeometry(350, 350);
+  nebulaGeo.rotateX(-Math.PI / 2);
+  const nebulaColors = [6514417, 440020, 14239471, 3900150];
+  const nebulaMeshes = [];
+  for (let k = 0;k < 6; k++) {
+    const nMat = new MeshBasicMaterial({
+      map: nebulaTex,
+      color: nebulaColors[k % nebulaColors.length],
+      transparent: true,
+      opacity: 0.16,
+      depthWrite: false,
+      blending: AdditiveBlending,
+      side: DoubleSide
+    });
+    const nMesh = new Mesh(nebulaGeo, nMat);
+    const ang = k / 6 * Math.PI * 2 + 0.4;
+    const dist = 120 + k % 3 * 110;
+    nMesh.position.set(Math.cos(ang) * dist, -240 - k * 15, Math.sin(ang) * dist);
+    nMesh.rotation.y = k * 1.1;
+    group.add(nMesh);
+    nebulaMeshes.push(nMesh);
+  }
+  let totalTime = 0;
+  return {
+    group,
+    update: (dt, playerPos) => {
+      totalTime += dt;
+      group.rotation.y = totalTime * 0.0015;
+      if (playerPos) {
+        microPoints.position.x = playerPos.x * 0.015;
+        microPoints.position.z = playerPos.z * 0.015;
+        midPoints.position.x = playerPos.x * 0.035;
+        midPoints.position.z = playerPos.z * 0.035;
+        beaconPoints.position.x = playerPos.x * 0.06;
+        beaconPoints.position.z = playerPos.z * 0.06;
+      }
+    },
+    dispose: () => {
+      microGeo.dispose();
+      microMat.dispose();
+      midGeo.dispose();
+      midMat.dispose();
+      beaconGeo.dispose();
+      beaconMat.dispose();
+      nebulaGeo.dispose();
+      nebulaTex.dispose();
+      nebulaMeshes.forEach((m) => m.material.dispose());
+    }
+  };
+}
+
+// src/engine/scene.ts
+var scene = new Scene;
+var camera;
+var renderer;
+var starfieldController = null;
+function initScene(container) {
+  const target = container || document.getElementById("canvas-container") || document.body;
+  scene = new Scene;
+  camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 65, 0);
+  camera.lookAt(0, 0, 0);
+  renderer = new WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(66312, 1);
+  renderer.toneMapping = ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  target.appendChild(renderer.domElement);
+  const ambientLight = new AmbientLight(396312, 0.18);
+  scene.add(ambientLight);
+  starfieldController = createRealisticStarfield();
+  scene.add(starfieldController.group);
+  window.addEventListener("resize", onWindowResize);
+}
+function onWindowResize() {
+  if (!camera || !renderer)
+    return;
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  resizePostProcessing(window.innerWidth, window.innerHeight);
+}
+
+// src/engine/trajectory.ts
+var FLOW_SEGMENTS = 36;
+var FLOW_DT = 0.075;
+var DASH_RATIO = 0.72;
+var SOFTENING_SQ = 25;
+var trajectoryGeometry;
+var trajectoryLines;
+var trajectoryPositions;
+var trajectoryColors;
+var progradeGroup;
+var progradeRingMesh;
+var progradeDotMesh;
+var progradeChevronMesh;
+var progradeMaterial;
+var progradeDotMaterial;
+var _predPos = new Vector3;
+var _predVel = new Vector3;
+var _predAcc = new Vector3;
+var _segmentStart = new Vector3;
+var _segmentEnd = new Vector3;
+var _impactPos = new Vector3;
+var _reticleTargetPos = new Vector3;
+function initTrajectory() {
+  const vertexCount = FLOW_SEGMENTS * 2;
+  trajectoryGeometry = new BufferGeometry;
+  trajectoryPositions = new Float32Array(vertexCount * 3);
+  trajectoryColors = new Float32Array(vertexCount * 3);
+  trajectoryGeometry.setAttribute("position", new BufferAttribute(trajectoryPositions, 3));
+  trajectoryGeometry.setAttribute("color", new BufferAttribute(trajectoryColors, 3));
+  const lineMaterial = new LineBasicMaterial({
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.95,
+    linewidth: 2,
+    blending: AdditiveBlending,
+    depthWrite: false
+  });
+  trajectoryLines = new LineSegments(trajectoryGeometry, lineMaterial);
+  trajectoryLines.frustumCulled = false;
+  trajectoryLines.renderOrder = 999;
+  scene.add(trajectoryLines);
+  progradeGroup = new Group;
+  progradeGroup.renderOrder = 1000;
+  progradeMaterial = new MeshBasicMaterial({
+    color: 3718648,
+    transparent: true,
+    opacity: 0,
+    side: DoubleSide,
+    blending: AdditiveBlending,
+    depthWrite: false
+  });
+  progradeDotMaterial = new MeshBasicMaterial({
+    color: 1096065,
+    transparent: true,
+    opacity: 0,
+    blending: AdditiveBlending,
+    depthWrite: false
+  });
+  const ringGeo = new RingGeometry(0.65, 0.85, 32);
+  ringGeo.rotateX(Math.PI / 2);
+  progradeRingMesh = new Mesh(ringGeo, progradeMaterial);
+  progradeGroup.add(progradeRingMesh);
+  const dotGeo = new SphereGeometry(0.22, 16, 16);
+  progradeDotMesh = new Mesh(dotGeo, progradeDotMaterial);
+  progradeDotMesh.position.y = 0.25;
+  progradeGroup.add(progradeDotMesh);
+  const chevronGeo = new ConeGeometry(0.35, 0.8, 4);
+  chevronGeo.rotateX(Math.PI / 2);
+  progradeChevronMesh = new Mesh(chevronGeo, progradeMaterial);
+  progradeChevronMesh.position.set(0, 0.25, 0.95);
+  progradeGroup.add(progradeChevronMesh);
+  progradeGroup.visible = false;
+  scene.add(progradeGroup);
+}
+function calculateGravityAndCheckCollision(pos, simTime, outAcc, outImpactPoint) {
+  outAcc.set(0, 0, 0);
+  const sources = STATE.gravitySources;
+  const count = sources.length;
+  let collided = false;
+  for (let s = 0;s < count; s++) {
+    const source = sources[s];
+    if (source.isAbsorbed)
+      continue;
+    let sourceX = source.position.x;
+    let sourceZ = source.position.z;
+    if (source.type === "planet") {
+      const planetEntry = activePlanets.find((p) => p.source === source);
+      if (planetEntry && !planetEntry.isMoon) {
+        const futureAngle = planetEntry.angle + planetEntry.speed * simTime;
+        sourceX = planetEntry.distance * Math.cos(futureAngle);
+        sourceZ = planetEntry.distance * Math.sin(futureAngle);
+      }
+    }
+    const dx = sourceX - pos.x;
+    const dz = sourceZ - pos.z;
+    const distSq = dx * dx + dz * dz;
+    const impactClearance = source.type === "star" ? source.radius + 1.2 : source.radius + 0.6;
+    if (distSq <= impactClearance * impactClearance) {
+      collided = true;
+      if (outImpactPoint) {
+        const dist = Math.max(0.01, Math.sqrt(distSq));
+        outImpactPoint.set(sourceX - dx / dist * impactClearance, 0.25, sourceZ - dz / dist * impactClearance);
+      }
+      break;
+    }
+    const rangeSq = source.gravityRange * source.gravityRange;
+    if (distSq < rangeSq) {
+      const distance = Math.sqrt(distSq);
+      const forceStrength = STATE.gConstant * source.mass / (distSq + SOFTENING_SQ);
+      const invDist = 1 / Math.max(0.1, distance);
+      outAcc.x += dx * invDist * forceStrength;
+      outAcc.z += dz * invDist * forceStrength;
+    }
+  }
+  return collided;
+}
+function updateTrajectory() {
+  if (!trajectoryLines || !progradeGroup)
+    return;
+  const curSpeed = STATE.playerVelocity.length();
+  const speedFactor = Math.min(1, Math.max(0, (curSpeed - 0.8) / 4));
+  if (curSpeed < 0.6) {
+    trajectoryLines.visible = false;
+    progradeGroup.visible = false;
+    return;
+  }
+  trajectoryLines.visible = true;
+  progradeGroup.visible = true;
+  _predPos.copy(STATE.playerPosition);
+  _predVel.copy(STATE.playerVelocity);
+  let hasImpacted = false;
+  _reticleTargetPos.copy(STATE.playerPosition);
+  const timeNow = Date.now() * 0.001;
+  const wavePhase = timeNow * 4.2 % (Math.PI * 2);
+  for (let seg = 0;seg < FLOW_SEGMENTS; seg++) {
+    const v0 = seg * 2;
+    const v1 = seg * 2 + 1;
+    if (hasImpacted) {
+      trajectoryPositions[v0 * 3 + 0] = _impactPos.x;
+      trajectoryPositions[v0 * 3 + 1] = 0.25;
+      trajectoryPositions[v0 * 3 + 2] = _impactPos.z;
+      trajectoryPositions[v1 * 3 + 0] = _impactPos.x;
+      trajectoryPositions[v1 * 3 + 1] = 0.25;
+      trajectoryPositions[v1 * 3 + 2] = _impactPos.z;
+      trajectoryColors[v0 * 3 + 0] = 0;
+      trajectoryColors[v0 * 3 + 1] = 0;
+      trajectoryColors[v0 * 3 + 2] = 0;
+      trajectoryColors[v1 * 3 + 0] = 0;
+      trajectoryColors[v1 * 3 + 1] = 0;
+      trajectoryColors[v1 * 3 + 2] = 0;
+      continue;
+    }
+    const simTime = seg * FLOW_DT;
+    _segmentStart.copy(_predPos);
+    if (calculateGravityAndCheckCollision(_segmentStart, simTime, _predAcc, _impactPos)) {
+      hasImpacted = true;
+      _segmentStart.copy(_impactPos);
+      _segmentEnd.copy(_impactPos);
+      _reticleTargetPos.copy(_impactPos);
+    } else {
+      const dashDt = FLOW_DT * DASH_RATIO;
+      _predVel.addScaledVector(_predAcc, dashDt);
+      _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * dashDt));
+      _predPos.addScaledVector(_predVel, dashDt);
+      _segmentEnd.copy(_predPos);
+      _reticleTargetPos.copy(_segmentEnd);
+      if (calculateGravityAndCheckCollision(_segmentEnd, simTime + dashDt, _predAcc, _impactPos)) {
+        hasImpacted = true;
+        _segmentEnd.copy(_impactPos);
+        _reticleTargetPos.copy(_impactPos);
+      } else {
+        const gapDt = FLOW_DT * (1 - DASH_RATIO);
+        calculateGravityAndCheckCollision(_predPos, simTime + dashDt, _predAcc);
+        _predVel.addScaledVector(_predAcc, gapDt);
+        _predVel.multiplyScalar(Math.exp(-STATE.currentDrag * gapDt));
+        _predPos.addScaledVector(_predVel, gapDt);
+      }
+    }
+    trajectoryPositions[v0 * 3 + 0] = _segmentStart.x;
+    trajectoryPositions[v0 * 3 + 1] = 0.25;
+    trajectoryPositions[v0 * 3 + 2] = _segmentStart.z;
+    trajectoryPositions[v1 * 3 + 0] = _segmentEnd.x;
+    trajectoryPositions[v1 * 3 + 1] = 0.25;
+    trajectoryPositions[v1 * 3 + 2] = _segmentEnd.z;
+    const progress = seg / FLOW_SEGMENTS;
+    const distFade = Math.pow(1 - progress, 1.4);
+    const nearFade = Math.min(1, seg * 0.4);
+    const flowWave = Math.sin(seg * 0.5 - wavePhase);
+    const pulseBoost = flowWave > 0 ? flowWave * 0.45 : 0;
+    const totalAlpha = (distFade * nearFade * 0.75 + pulseBoost * 0.35) * speedFactor;
+    const r = 0.12 * totalAlpha;
+    const g = 0.85 * totalAlpha;
+    const b = 0.95 * totalAlpha;
+    trajectoryColors[v0 * 3 + 0] = r;
+    trajectoryColors[v0 * 3 + 1] = g;
+    trajectoryColors[v0 * 3 + 2] = b;
+    trajectoryColors[v1 * 3 + 0] = r;
+    trajectoryColors[v1 * 3 + 1] = g;
+    trajectoryColors[v1 * 3 + 2] = b;
+  }
+  trajectoryGeometry.attributes.position.needsUpdate = true;
+  trajectoryGeometry.attributes.color.needsUpdate = true;
+  if (progradeGroup) {
+    progradeGroup.position.set(_reticleTargetPos.x, 0.25, _reticleTargetPos.z);
+    const velHeading = Math.atan2(-STATE.playerVelocity.z, STATE.playerVelocity.x);
+    progradeGroup.rotation.y = velHeading - Math.PI / 2;
+    const reticleAlpha = speedFactor * (hasImpacted ? 0.95 : 0.8);
+    const pulseScale = 1 + Math.sin(timeNow * 6) * 0.08;
+    progradeGroup.scale.set(pulseScale, pulseScale, pulseScale);
+    if (hasImpacted) {
+      progradeMaterial.color.setHex(16007006);
+      progradeDotMaterial.color.setHex(16096779);
+    } else {
+      progradeMaterial.color.setHex(3718648);
+      progradeDotMaterial.color.setHex(1096065);
+    }
+    progradeMaterial.opacity = reticleAlpha;
+    progradeDotMaterial.opacity = reticleAlpha;
+  }
 }
 
 // src/engine/audio.ts

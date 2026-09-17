@@ -3,6 +3,12 @@ import { STATE } from '../core/state';
 import { scene } from '../engine/scene';
 import { createAlienCarapaceTexture, createAlienWingTexture, createAlienVeinTexture } from './textures';
 
+export interface SpacetimeRipple {
+    position: THREE.Vector3;
+    progress: number;
+    worldRadius: number;
+}
+
 export interface AlienShipController {
     group: THREE.Group;
     coreMesh: THREE.Mesh;
@@ -16,6 +22,7 @@ export interface AlienShipController {
     dorsalPlates: THREE.Mesh[];
     tendrils: THREE.Group[];
     pulseRingsGroup: THREE.Group;
+    getRipples: () => SpacetimeRipple[];
     update: (dt: number) => void;
 }
 
@@ -232,16 +239,19 @@ export function createAlienBioShip(): AlienShipController {
     }
 
     interface BioPulseRing {
-        mesh: THREE.Mesh;
+        group: THREE.Group;
         life: number;
         maxLife: number;
         velocity: THREE.Vector3;
-        mat: THREE.MeshBasicMaterial;
+        currentRadius: number;
+        mats: THREE.MeshBasicMaterial[];
     }
 
     const activePulseRings: BioPulseRing[] = [];
-    const pulseRingGeo = new THREE.RingGeometry(0.8, 1.3, 32);
+    const pulseRingGeo = new THREE.RingGeometry(0.85, 1.4, 36);
     pulseRingGeo.rotateX(Math.PI / 2); // Flat on X-Z plane, directly facing top-down camera
+    const pulseInnerEchoGeo = new THREE.RingGeometry(0.42, 0.72, 28);
+    pulseInnerEchoGeo.rotateX(Math.PI / 2);
 
     let pulseEmitTimer = 0;
     let animTime = 0;
@@ -259,6 +269,13 @@ export function createAlienBioShip(): AlienShipController {
         dorsalPlates,
         tendrils,
         pulseRingsGroup,
+        getRipples: () => {
+            return activePulseRings.map(r => ({
+                position: r.group.position,
+                progress: r.life / r.maxLife,
+                worldRadius: r.currentRadius
+            }));
+        },
         update: (dt: number) => {
             animTime += dt;
 
@@ -375,23 +392,36 @@ export function createAlienBioShip(): AlienShipController {
                     const forwardZ = -Math.sin(STATE.shipHeading);
                     const shipScale = STATE.playerGroup ? STATE.playerGroup.scale.x : 0.42;
 
-                    const ringMat = new THREE.MeshBasicMaterial({
+                    const ringGroup = new THREE.Group();
+                    const ringMat1 = new THREE.MeshBasicMaterial({
                         color: activeColor,
                         transparent: true,
-                        opacity: 0.88,
+                        opacity: 0.90,
+                        side: THREE.DoubleSide,
+                        blending: THREE.AdditiveBlending,
+                        depthWrite: false
+                    });
+                    const ringMat2 = new THREE.MeshBasicMaterial({
+                        color: 0x38bdf8,
+                        transparent: true,
+                        opacity: 0.60,
                         side: THREE.DoubleSide,
                         blending: THREE.AdditiveBlending,
                         depthWrite: false
                     });
 
-                    const ringMesh = new THREE.Mesh(pulseRingGeo, ringMat);
+                    const mesh1 = new THREE.Mesh(pulseRingGeo, ringMat1);
+                    const mesh2 = new THREE.Mesh(pulseInnerEchoGeo, ringMat2);
+                    ringGroup.add(mesh1);
+                    ringGroup.add(mesh2);
+
                     // Spawn at rear vents
-                    ringMesh.position.set(
+                    ringGroup.position.set(
                         STATE.playerPosition.x - forwardX * (3.0 * shipScale),
                         0.15,
                         STATE.playerPosition.z - forwardZ * (3.0 * shipScale)
                     );
-                    ringMesh.scale.set(0.65, 0.65, 0.65);
+                    ringGroup.scale.set(0.65, 0.65, 0.65);
 
                     // Counter-drift velocity with gentle wave dispersion
                     const driftVel = new THREE.Vector3(-forwardX * 3.4, 0, -forwardZ * 3.4);
@@ -399,13 +429,14 @@ export function createAlienBioShip(): AlienShipController {
                         driftVel.addScaledVector(STATE.playerVelocity, 0.15);
                     }
 
-                    pulseRingsGroup.add(ringMesh);
+                    pulseRingsGroup.add(ringGroup);
                     activePulseRings.push({
-                        mesh: ringMesh,
+                        group: ringGroup,
                         life: 0,
-                        maxLife: 0.65,
+                        maxLife: 0.68,
                         velocity: driftVel,
-                        mat: ringMat
+                        currentRadius: 1.2,
+                        mats: [ringMat1, ringMat2]
                     });
                 }
             }
@@ -416,16 +447,19 @@ export function createAlienBioShip(): AlienShipController {
                 ring.life += dt;
                 const progress = ring.life / ring.maxLife;
                 if (progress >= 1.0) {
-                    pulseRingsGroup.remove(ring.mesh);
-                    ring.mat.dispose();
+                    pulseRingsGroup.remove(ring.group);
+                    ring.mats.forEach(m => m.dispose());
                     activePulseRings.splice(i, 1);
                 } else {
                     // Wave ripple in scale (like ripples spreading across a pond)
-                    const waveRipple = Math.sin(progress * Math.PI * 3.0) * 0.22;
-                    const expandScale = THREE.MathUtils.lerp(0.65, 4.2, Math.pow(progress, 0.6)) + waveRipple;
-                    ring.mesh.scale.set(expandScale, expandScale, expandScale);
-                    ring.mesh.position.addScaledVector(ring.velocity, dt);
-                    ring.mat.opacity = Math.pow(1.0 - progress, 0.85) * (0.85 + Math.sin(progress * Math.PI * 4.0) * 0.12);
+                    const waveRipple = Math.sin(progress * Math.PI * 3.0) * 0.25;
+                    const expandScale = THREE.MathUtils.lerp(0.65, 4.8, Math.pow(progress, 0.58)) + waveRipple;
+                    ring.currentRadius = expandScale * 1.5;
+                    ring.group.scale.set(expandScale, expandScale, expandScale);
+                    ring.group.position.addScaledVector(ring.velocity, dt);
+                    const alpha = Math.pow(1.0 - progress, 0.85) * (0.85 + Math.sin(progress * Math.PI * 4.0) * 0.12);
+                    ring.mats[0].opacity = alpha;
+                    ring.mats[1].opacity = alpha * 0.65;
                 }
             }
         }
