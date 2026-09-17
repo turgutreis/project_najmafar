@@ -31137,7 +31137,7 @@ function createAlienBioShip() {
           const ringMat1 = new MeshBasicMaterial({
             color: activeColor,
             transparent: true,
-            opacity: 0.9,
+            opacity: 0.55,
             side: DoubleSide,
             blending: AdditiveBlending,
             depthWrite: false
@@ -31145,7 +31145,7 @@ function createAlienBioShip() {
           const ringMat2 = new MeshBasicMaterial({
             color: 3718648,
             transparent: true,
-            opacity: 0.6,
+            opacity: 0.35,
             side: DoubleSide,
             blending: AdditiveBlending,
             depthWrite: false
@@ -31185,9 +31185,9 @@ function createAlienBioShip() {
           ring.currentRadius = expandScale * 1.5;
           ring.group.scale.set(expandScale, expandScale, expandScale);
           ring.group.position.addScaledVector(ring.velocity, dt);
-          const alpha = Math.pow(1 - progress, 0.85) * (0.85 + Math.sin(progress * Math.PI * 4) * 0.12);
+          const alpha = Math.pow(1 - progress, 0.85) * (0.5 + Math.sin(progress * Math.PI * 4) * 0.08);
           ring.mats[0].opacity = alpha;
-          ring.mats[1].opacity = alpha * 0.65;
+          ring.mats[1].opacity = alpha * 0.55;
         }
       }
     }
@@ -31847,20 +31847,20 @@ var SpacetimeDistortionShader = {
             vec2 uv = vUv;
             vec2 totalOffset = vec2(0.0);
 
-            // 1. Spacetime Warp Bubble surrounding the accelerating bio-ship
+            // 1. Spacetime Warp Bubble surrounding the accelerating bio-ship (subtle lensing)
             if (uWarpIntensity > 0.001) {
                 vec2 dVec = (uv - uWarpBubblePos) * aspect;
                 float d = length(dVec);
-                float bubbleRadius = 0.095;
-                if (d < bubbleRadius * 2.8 && d > 0.0005) {
+                float bubbleRadius = 0.065;
+                if (d < bubbleRadius * 1.8 && d > 0.0005) {
                     float normD = d / bubbleRadius;
-                    // Gravitational lensing curve (Einstein ring space curvature)
-                    float lensForce = sin(normD * 3.14159) * exp(-normD * 1.1) * 0.032 * uWarpIntensity;
+                    // Delicate Einstein ring space curvature
+                    float lensForce = sin(normD * 3.14159) * exp(-normD * 1.5) * 0.0075 * uWarpIntensity;
                     totalOffset += (dVec / d) * lensForce / aspect;
                 }
             }
 
-            // 2. Expanding Spacetime Gravitational Pulse Waves (Ripples in spacetime metric)
+            // 2. Expanding Spacetime Gravitational Pulse Waves (Gentle refraction ripples)
             for (int i = 0; i < 8; i++) {
                 if (i >= uRippleCount) break;
                 vec3 r = uRipples[i]; // r.x, r.y = screen center, r.z = screen radius
@@ -31869,30 +31869,37 @@ var SpacetimeDistortionShader = {
                 vec2 dVec = (uv - r.xy) * aspect;
                 float dist = length(dVec);
                 float diff = dist - r.z;
-                float waveWidth = 0.048; // Breadth of gravitational shockwave band
+                float waveWidth = 0.032; // Narrower, crisper shockwave band
 
                 if (abs(diff) < waveWidth && dist > 0.0005) {
-                    float waveProgress = clamp(r.z / 0.42, 0.0, 1.0);
-                    float strength = (1.0 - waveProgress); // Attenuates as wave disperses
+                    float waveProgress = clamp(r.z / 0.40, 0.0, 1.0);
+                    float strength = (1.0 - waveProgress) * (1.0 - waveProgress); // Soft quadratic fade
                     float waveShape = sin(diff / waveWidth * 3.14159);
                     
-                    // General-relativistic radial refraction displacement
-                    float displaceMag = waveShape * strength * 0.042;
+                    // Gentle optical refraction displacement
+                    float displaceMag = waveShape * strength * 0.007;
                     totalOffset += (dVec / dist) * displaceMag / aspect;
                 }
             }
 
-            // 3. Chromatic Gravitational Lensing (Prism Splitting in curved spacetime)
+            // Cap total offset to guarantee subtlety and prevent visual jarring
+            float maxDisplace = 0.012;
+            float totalLen = length(totalOffset);
+            if (totalLen > maxDisplace) {
+                totalOffset = (totalOffset / totalLen) * maxDisplace;
+            }
+
+            // 3. Chromatic Gravitational Lensing (Delicate prism dispersion)
             float offsetLen = length(totalOffset);
-            if (offsetLen > 0.0001) {
-                float rCol = texture2D(tDiffuse, uv + totalOffset * 1.35).r;
+            if (offsetLen > 0.00005) {
+                float rCol = texture2D(tDiffuse, uv + totalOffset * 1.08).r;
                 float gCol = texture2D(tDiffuse, uv + totalOffset).g;
-                float bCol = texture2D(tDiffuse, uv + totalOffset * 0.65).b;
+                float bCol = texture2D(tDiffuse, uv + totalOffset * 0.92).b;
                 float aCol = texture2D(tDiffuse, uv).a;
 
-                // Bioluminescent caustic gleam along wave crests
-                float causticIntensity = smoothstep(0.012, 0.038, offsetLen);
-                vec3 caustic = vec3(0.02, 0.22, 0.28) * causticIntensity;
+                // Subtle bioluminescent refraction gleam along wave crests
+                float causticIntensity = smoothstep(0.003, 0.010, offsetLen);
+                vec3 caustic = vec3(0.01, 0.06, 0.09) * causticIntensity;
 
                 gl_FragColor = vec4(rCol + caustic.r, gCol + caustic.g, bCol + caustic.b, aCol);
             } else {

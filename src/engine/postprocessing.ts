@@ -55,20 +55,20 @@ export const SpacetimeDistortionShader = {
             vec2 uv = vUv;
             vec2 totalOffset = vec2(0.0);
 
-            // 1. Spacetime Warp Bubble surrounding the accelerating bio-ship
+            // 1. Spacetime Warp Bubble surrounding the accelerating bio-ship (subtle lensing)
             if (uWarpIntensity > 0.001) {
                 vec2 dVec = (uv - uWarpBubblePos) * aspect;
                 float d = length(dVec);
-                float bubbleRadius = 0.095;
-                if (d < bubbleRadius * 2.8 && d > 0.0005) {
+                float bubbleRadius = 0.065;
+                if (d < bubbleRadius * 1.8 && d > 0.0005) {
                     float normD = d / bubbleRadius;
-                    // Gravitational lensing curve (Einstein ring space curvature)
-                    float lensForce = sin(normD * 3.14159) * exp(-normD * 1.1) * 0.032 * uWarpIntensity;
+                    // Delicate Einstein ring space curvature
+                    float lensForce = sin(normD * 3.14159) * exp(-normD * 1.5) * 0.0075 * uWarpIntensity;
                     totalOffset += (dVec / d) * lensForce / aspect;
                 }
             }
 
-            // 2. Expanding Spacetime Gravitational Pulse Waves (Ripples in spacetime metric)
+            // 2. Expanding Spacetime Gravitational Pulse Waves (Gentle refraction ripples)
             for (int i = 0; i < 8; i++) {
                 if (i >= uRippleCount) break;
                 vec3 r = uRipples[i]; // r.x, r.y = screen center, r.z = screen radius
@@ -77,30 +77,37 @@ export const SpacetimeDistortionShader = {
                 vec2 dVec = (uv - r.xy) * aspect;
                 float dist = length(dVec);
                 float diff = dist - r.z;
-                float waveWidth = 0.048; // Breadth of gravitational shockwave band
+                float waveWidth = 0.032; // Narrower, crisper shockwave band
 
                 if (abs(diff) < waveWidth && dist > 0.0005) {
-                    float waveProgress = clamp(r.z / 0.42, 0.0, 1.0);
-                    float strength = (1.0 - waveProgress); // Attenuates as wave disperses
+                    float waveProgress = clamp(r.z / 0.40, 0.0, 1.0);
+                    float strength = (1.0 - waveProgress) * (1.0 - waveProgress); // Soft quadratic fade
                     float waveShape = sin(diff / waveWidth * 3.14159);
                     
-                    // General-relativistic radial refraction displacement
-                    float displaceMag = waveShape * strength * 0.042;
+                    // Gentle optical refraction displacement
+                    float displaceMag = waveShape * strength * 0.007;
                     totalOffset += (dVec / dist) * displaceMag / aspect;
                 }
             }
 
-            // 3. Chromatic Gravitational Lensing (Prism Splitting in curved spacetime)
+            // Cap total offset to guarantee subtlety and prevent visual jarring
+            float maxDisplace = 0.012;
+            float totalLen = length(totalOffset);
+            if (totalLen > maxDisplace) {
+                totalOffset = (totalOffset / totalLen) * maxDisplace;
+            }
+
+            // 3. Chromatic Gravitational Lensing (Delicate prism dispersion)
             float offsetLen = length(totalOffset);
-            if (offsetLen > 0.0001) {
-                float rCol = texture2D(tDiffuse, uv + totalOffset * 1.35).r;
+            if (offsetLen > 0.00005) {
+                float rCol = texture2D(tDiffuse, uv + totalOffset * 1.08).r;
                 float gCol = texture2D(tDiffuse, uv + totalOffset).g;
-                float bCol = texture2D(tDiffuse, uv + totalOffset * 0.65).b;
+                float bCol = texture2D(tDiffuse, uv + totalOffset * 0.92).b;
                 float aCol = texture2D(tDiffuse, uv).a;
 
-                // Bioluminescent caustic gleam along wave crests
-                float causticIntensity = smoothstep(0.012, 0.038, offsetLen);
-                vec3 caustic = vec3(0.02, 0.22, 0.28) * causticIntensity;
+                // Subtle bioluminescent refraction gleam along wave crests
+                float causticIntensity = smoothstep(0.003, 0.010, offsetLen);
+                vec3 caustic = vec3(0.01, 0.06, 0.09) * causticIntensity;
 
                 gl_FragColor = vec4(rCol + caustic.r, gCol + caustic.g, bCol + caustic.b, aCol);
             } else {

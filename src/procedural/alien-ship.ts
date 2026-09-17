@@ -396,7 +396,7 @@ export function createAlienBioShip(): AlienShipController {
                     const ringMat1 = new THREE.MeshBasicMaterial({
                         color: activeColor,
                         transparent: true,
-                        opacity: 0.90,
+                        opacity: 0.55,
                         side: THREE.DoubleSide,
                         blending: THREE.AdditiveBlending,
                         depthWrite: false
@@ -404,7 +404,7 @@ export function createAlienBioShip(): AlienShipController {
                     const ringMat2 = new THREE.MeshBasicMaterial({
                         color: 0x38bdf8,
                         transparent: true,
-                        opacity: 0.60,
+                        opacity: 0.35,
                         side: THREE.DoubleSide,
                         blending: THREE.AdditiveBlending,
                         depthWrite: false
@@ -457,9 +457,9 @@ export function createAlienBioShip(): AlienShipController {
                     ring.currentRadius = expandScale * 1.5;
                     ring.group.scale.set(expandScale, expandScale, expandScale);
                     ring.group.position.addScaledVector(ring.velocity, dt);
-                    const alpha = Math.pow(1.0 - progress, 0.85) * (0.85 + Math.sin(progress * Math.PI * 4.0) * 0.12);
+                    const alpha = Math.pow(1.0 - progress, 0.85) * (0.50 + Math.sin(progress * Math.PI * 4.0) * 0.08);
                     ring.mats[0].opacity = alpha;
-                    ring.mats[1].opacity = alpha * 0.65;
+                    ring.mats[1].opacity = alpha * 0.55;
                 }
             }
         }
