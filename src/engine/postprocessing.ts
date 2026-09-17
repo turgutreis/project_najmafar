@@ -55,20 +55,7 @@ export const SpacetimeDistortionShader = {
             vec2 uv = vUv;
             vec2 totalOffset = vec2(0.0);
 
-            // 1. Spacetime Warp Bubble surrounding the accelerating bio-ship (subtle lensing)
-            if (uWarpIntensity > 0.001) {
-                vec2 dVec = (uv - uWarpBubblePos) * aspect;
-                float d = length(dVec);
-                float bubbleRadius = 0.065;
-                if (d < bubbleRadius * 1.8 && d > 0.0005) {
-                    float normD = d / bubbleRadius;
-                    // Delicate Einstein ring space curvature
-                    float lensForce = sin(normD * 3.14159) * exp(-normD * 1.5) * 0.0075 * uWarpIntensity;
-                    totalOffset += (dVec / d) * lensForce / aspect;
-                }
-            }
-
-            // 2. Expanding Spacetime Gravitational Pulse Waves (Gentle refraction ripples)
+            // 1. Expanding Spacetime Gravitational Pulse Waves in the ship's wake
             for (int i = 0; i < 8; i++) {
                 if (i >= uRippleCount) break;
                 vec3 r = uRipples[i]; // r.x, r.y = screen center, r.z = screen radius
@@ -77,39 +64,40 @@ export const SpacetimeDistortionShader = {
                 vec2 dVec = (uv - r.xy) * aspect;
                 float dist = length(dVec);
                 float diff = dist - r.z;
-                float waveWidth = 0.032; // Narrower, crisper shockwave band
+                float waveWidth = 0.022; // Refined, clean wavefront band
 
                 if (abs(diff) < waveWidth && dist > 0.0005) {
-                    float waveProgress = clamp(r.z / 0.40, 0.0, 1.0);
-                    float strength = (1.0 - waveProgress) * (1.0 - waveProgress); // Soft quadratic fade
+                    float waveProgress = clamp(r.z / 0.35, 0.0, 1.0);
+                    float strength = (1.0 - waveProgress) * (1.0 - waveProgress); // Soft quadratic dispersion
                     float waveShape = sin(diff / waveWidth * 3.14159);
                     
-                    // Gentle optical refraction displacement
-                    float displaceMag = waveShape * strength * 0.007;
+                    // Subtle, authentic optical refraction ripple across background stars
+                    float displaceMag = waveShape * strength * 0.0035;
                     totalOffset += (dVec / dist) * displaceMag / aspect;
                 }
             }
 
+            // 2. CRITICAL: Absolute Ship Protection Mask
+            // Najmafar itself remains 100% crystal clear, sharp and completely undistorted
+            float distToShip = length((uv - uWarpBubblePos) * aspect);
+            float shipProtection = smoothstep(0.025, 0.065, distToShip);
+            totalOffset *= shipProtection;
+
             // Cap total offset to guarantee subtlety and prevent visual jarring
-            float maxDisplace = 0.012;
+            float maxDisplace = 0.0055;
             float totalLen = length(totalOffset);
             if (totalLen > maxDisplace) {
                 totalOffset = (totalOffset / totalLen) * maxDisplace;
             }
 
-            // 3. Chromatic Gravitational Lensing (Delicate prism dispersion)
+            // 3. Chromatic Gravitational Lensing (Delicate prism dispersion in the wake)
             float offsetLen = length(totalOffset);
             if (offsetLen > 0.00005) {
-                float rCol = texture2D(tDiffuse, uv + totalOffset * 1.08).r;
+                float rCol = texture2D(tDiffuse, uv + totalOffset * 1.03).r;
                 float gCol = texture2D(tDiffuse, uv + totalOffset).g;
-                float bCol = texture2D(tDiffuse, uv + totalOffset * 0.92).b;
+                float bCol = texture2D(tDiffuse, uv + totalOffset * 0.97).b;
                 float aCol = texture2D(tDiffuse, uv).a;
-
-                // Subtle bioluminescent refraction gleam along wave crests
-                float causticIntensity = smoothstep(0.003, 0.010, offsetLen);
-                vec3 caustic = vec3(0.01, 0.06, 0.09) * causticIntensity;
-
-                gl_FragColor = vec4(rCol + caustic.r, gCol + caustic.g, bCol + caustic.b, aCol);
+                gl_FragColor = vec4(rCol, gCol, bCol, aCol);
             } else {
                 gl_FragColor = texture2D(tDiffuse, uv);
             }

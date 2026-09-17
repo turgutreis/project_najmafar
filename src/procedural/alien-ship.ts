@@ -415,11 +415,11 @@ export function createAlienBioShip(): AlienShipController {
                     ringGroup.add(mesh1);
                     ringGroup.add(mesh2);
 
-                    // Spawn at rear vents
+                    // Spawn strictly behind and beneath the ship
                     ringGroup.position.set(
-                        STATE.playerPosition.x - forwardX * (3.0 * shipScale),
-                        0.15,
-                        STATE.playerPosition.z - forwardZ * (3.0 * shipScale)
+                        STATE.playerPosition.x - forwardX * (3.8 * shipScale),
+                        -0.35,
+                        STATE.playerPosition.z - forwardZ * (3.8 * shipScale)
                     );
                     ringGroup.scale.set(0.65, 0.65, 0.65);
 
